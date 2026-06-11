@@ -33,7 +33,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.{js,mjs,cjs}'],
+    // Tool config files sit outside the per-app tsconfigs — lint untyped.
+    files: ['**/*.{js,mjs,cjs}', '**/*.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
   {

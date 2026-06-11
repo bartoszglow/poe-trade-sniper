@@ -17,13 +17,17 @@
     "@nestjs/core": "^11.1.26",
     "@nestjs/platform-express": "^11.1.26",
     "@poe-sniper/shared": "workspace:*",
+    "better-sqlite3": "^12.10.0",
+    "drizzle-orm": "^0.45.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.2",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.22.4",
     "vitest": "^4.1.8"
   }
