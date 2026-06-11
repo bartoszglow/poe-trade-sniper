@@ -19,3 +19,23 @@ export async function apiGet<ResponseBody>(path: string): Promise<ResponseBody> 
   }
   return (await response.json()) as ResponseBody;
 }
+
+/** Mutating calls; surfaces the server's `message` so forms can show it. */
+export async function apiSend<ResponseBody>(
+  method: 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<ResponseBody> {
+  const response = await fetch(path, {
+    method,
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await response.text();
+  const payload = text ? (JSON.parse(text) as unknown) : null;
+  if (!response.ok) {
+    const serverMessage = (payload as { message?: string } | null)?.message;
+    throw new ApiError(response.status, serverMessage ?? `${method} ${path} → ${response.status}`);
+  }
+  return payload as ResponseBody;
+}

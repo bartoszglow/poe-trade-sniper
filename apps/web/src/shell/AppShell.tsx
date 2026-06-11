@@ -4,15 +4,19 @@ import { AppBar } from './AppBar';
 import { IconRail } from './IconRail';
 import { HitsPanel } from './HitsPanel';
 import { StatusBar } from './StatusBar';
+import { useEventStream } from '../hooks/EventStreamProvider';
 import { useHealth } from '../hooks/useHealth';
+import { useServerStatus } from '../hooks/useServerStatus';
 
 export function AppShell() {
   const health = useHealth();
+  const eventStream = useEventStream();
+  const { status } = useServerStatus();
 
   return (
     <div className="grid h-screen grid-rows-[2.5rem_1fr_2rem] grid-cols-[3rem_1fr] lg:grid-cols-[3rem_1fr_22rem]">
       <header className="col-span-full">
-        <AppBar serverHealthy={health.healthy} />
+        <AppBar serverHealthy={health.healthy} streamConnected={eventStream.connected} />
       </header>
 
       <IconRail />
@@ -30,7 +34,11 @@ export function AppShell() {
       </aside>
 
       <footer className="col-span-full">
-        <StatusBar serverHealthy={health.healthy} serverVersion={health.version} />
+        <StatusBar
+          serverHealthy={health.healthy}
+          serverVersion={health.version}
+          serverStatus={status}
+        />
       </footer>
     </div>
   );

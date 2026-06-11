@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { EventStreamProvider } from './hooks/EventStreamProvider';
 import { AppShell } from './shell/AppShell';
 import './index.css';
 
@@ -12,7 +13,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
-      <AppShell />
+      <EventStreamProvider>
+        <AppShell />
+      </EventStreamProvider>
     </BrowserRouter>
   </StrictMode>,
 );
