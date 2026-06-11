@@ -35,6 +35,11 @@ Read this first, every session.
 
 ## State of the build
 
-Phase 0 (foundation) — see the phased plan in the Vault master plan §11.
-Detection engines, trade-api, travel, session, SSE arrive in Phases 1–4;
-Electron in Phase 5.
+Phase 1 (detection core) shipped — headless detection via `/api/searches` +
+`/api/events` SSE; session via `pnpm session:import` or cookie paste. See the
+Vault master plan §11 for phases. Travel (Phase 2), web UI (Phase 3), session
+capture (Phase 4), Electron (Phase 5) pending.
+
+Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
+NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no
+decorator metadata).

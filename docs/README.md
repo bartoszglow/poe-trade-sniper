@@ -5,6 +5,8 @@ Grouped by purpose — open the folder that matches what you need.
 ## `architecture/` — how the system is built
 
 - [`architecture.md`](architecture/architecture.md) — repo layout, layering, the engine-registry contract, one-server-two-shells topology.
+- [`engines.md`](architecture/engines.md) — detection engines, the registry contract, the shared scheduler.
+- [`auth.md`](architecture/auth.md) — why no OAuth, the supported session sources, secret rules.
 - [`frontend.md`](architecture/frontend.md) — shell layout, nav registry, atomic-component rule, theme tokens, Electron readiness.
 
 ## `integration/` — the undocumented GGG API
