@@ -1,0 +1,22 @@
+{
+  "name": "poe-trade-sniper",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PoE2 trade sniper — detection + browser-free travel, one server, two shells (web + Electron)",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.5.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @poe-sniper/server --filter @poe-sniper/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:migrate": "pnpm --filter @poe-sniper/server db:migrate"
+  }
+}
