@@ -38,10 +38,16 @@ export class NoSessionError extends Error {
 export type FetchFunction = typeof fetch;
 export const HTTP_FETCH = Symbol('HTTP_FETCH');
 
-/** Rate-limit policy keys — search/fetch/account budgets are separate. */
+/** Rate-limit policy keys — search/fetch/whisper/account budgets are separate. */
 const POLICY_SEARCH = 'search';
 const POLICY_FETCH = 'fetch';
+const POLICY_WHISPER = 'whisper';
 const POLICY_ACCOUNT = 'account';
+
+/** The Referer the whisper endpoint expects — the search's trade page. */
+export function searchPageUrl(baseUrl: string, search: TradeSearchRef): string {
+  return `${baseUrl}/trade2/search/${search.realm}/${encodeURIComponent(search.league)}/${search.searchId}`;
+}
 
 /**
  * The ONLY module that talks to pathofexile.com. Owns the header discipline;
@@ -143,6 +149,46 @@ export class TradeApiClient {
       }
     }
     return listings;
+  }
+
+  /**
+   * Browser-free hideout travel. The `X-Requested-With: XMLHttpRequest`
+   * header is decisive — without it (and a search-page Referer) the endpoint
+   * answers 403 code 6 even from a logged-in context. Also bypasses the
+   * client-side "In demand. Teleport Anyway?" modal (api-notes).
+   */
+  async travel(hideoutToken: string, search: TradeSearchRef, correlationId: string): Promise<void> {
+    const response = await this.request(
+      POLICY_WHISPER,
+      this.config.TRAVEL_MIN_SPACING_MS,
+      `${this.config.POE_BASE_URL}/api/trade2/whisper`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          Referer: searchPageUrl(this.config.POE_BASE_URL, search),
+        },
+        body: JSON.stringify({ token: hideoutToken }),
+      },
+      correlationId,
+    );
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try {
+        const payload = (await response.json()) as { error?: { code?: number; message?: string } };
+        if (payload.error?.message) {
+          detail = `${detail}: ${payload.error.message} (code ${payload.error.code ?? '?'})`;
+        }
+      } catch {
+        // non-JSON error body — keep the bare status
+      }
+      throw new TradeApiError(response.status, `travel: ${detail}`);
+    }
+    const payload = (await response.json()) as { success?: boolean };
+    if (payload.success !== true) {
+      throw new TradeApiError(response.status, 'travel: response did not confirm success');
+    }
   }
 
   /** Login probe: /my-account answers 200 only for a real logged-in session. */

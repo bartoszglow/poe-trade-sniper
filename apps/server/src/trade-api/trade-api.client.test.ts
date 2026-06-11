@@ -144,6 +144,54 @@ describe('TradeApiClient', () => {
   });
 });
 
+describe('TradeApiClient.travel', () => {
+  it('sends the decisive header discipline and accepts {success:true}', async () => {
+    const fetchStub = vi.fn(() => Promise.resolve(jsonResponse({ success: true })));
+    const { client, database } = createClient(fetchStub);
+    try {
+      await expect(client.travel('jwt-token', SEARCH, 'cid')).resolves.toBeUndefined();
+
+      const [url, init] = fetchStub.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe('https://www.pathofexile.com/api/trade2/whisper');
+      const headers = init.headers as Record<string, string>;
+      expect(headers['X-Requested-With']).toBe('XMLHttpRequest');
+      expect(headers['Referer']).toBe(
+        'https://www.pathofexile.com/trade2/search/poe2/Standard/abc123',
+      );
+      expect(headers['Cookie']).toBe('POESESSID=secret');
+      expect(JSON.parse(init.body as string)).toEqual({ token: 'jwt-token' });
+    } finally {
+      database.$client.close();
+    }
+  });
+
+  it('surfaces the GGG error body on rejection (403 code 6)', async () => {
+    const fetchStub = vi.fn(() =>
+      Promise.resolve(jsonResponse({ error: { code: 6, message: 'Forbidden' } }, 403)),
+    );
+    const { client, database } = createClient(fetchStub);
+    try {
+      await expect(client.travel('jwt-token', SEARCH, 'cid')).rejects.toThrowError(
+        /403: Forbidden \(code 6\)/,
+      );
+    } finally {
+      database.$client.close();
+    }
+  });
+
+  it('rejects a 200 that does not confirm success', async () => {
+    const fetchStub = vi.fn(() => Promise.resolve(jsonResponse({ success: false })));
+    const { client, database } = createClient(fetchStub);
+    try {
+      await expect(client.travel('jwt-token', SEARCH, 'cid')).rejects.toThrowError(
+        /did not confirm/,
+      );
+    } finally {
+      database.$client.close();
+    }
+  });
+});
+
 describe('applyPurchaseMode', () => {
   it('overrides status for the verified instant mapping', () => {
     const application = applyPurchaseMode({ status: { option: 'any' }, q: 1 }, 'instant');
