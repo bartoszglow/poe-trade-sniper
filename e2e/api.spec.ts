@@ -62,6 +62,16 @@ test('session cookie paste lifecycle: set → status → clear', async ({ reques
   expect(after.hasSession).toBe(false);
 });
 
+test('manual travel validates its body and reports queue status', async ({ request }) => {
+  expect((await request.post('/api/travel', { data: {} })).status()).toBe(400);
+  expect((await request.post('/api/travel', { data: { token: 'too-short' } })).status()).toBe(400);
+
+  const status = (await (await request.get('/api/status')).json()) as {
+    travel: { queueLength: number; lastTravel: unknown };
+  };
+  expect(status.travel).toEqual({ queueLength: 0, lastTravel: null });
+});
+
 test('events endpoint streams SSE', async ({ request }) => {
   const response = await request
     .get('/api/events', {

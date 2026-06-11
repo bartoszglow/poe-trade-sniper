@@ -35,10 +35,11 @@ Read this first, every session.
 
 ## State of the build
 
-Phase 1 (detection core) shipped — headless detection via `/api/searches` +
-`/api/events` SSE; session via `pnpm session:import` or cookie paste. See the
-Vault master plan §11 for phases. Travel (Phase 2), web UI (Phase 3), session
-capture (Phase 4), Electron (Phase 5) pending.
+Phases 1–2 shipped — headless detection (`/api/searches`, `/api/events` SSE)
+plus browser-free travel (`TravelService` queue, auto-travel opt-in, manual
+`POST /api/travel`); session via `pnpm session:import` or cookie paste. See
+the Vault master plan §11. Web UI (Phase 3), session capture/in-app login
+(Phase 4), Electron (Phase 5) pending. NOT yet validated against live GGG.
 
 Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
 NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no

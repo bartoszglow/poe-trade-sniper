@@ -18,7 +18,12 @@ the browser session, not OAuth.
 ## Supported session sources (the `SessionSource` seam)
 
 The session is always the same thing — a cookie set + matching User-Agent.
-What differs is how the user hands it to us. All sources are equal citizens:
+What differs is how the user hands it to us. **The Settings UI commits to
+offering BOTH interactive paths** (decided with Bartosz 2026-06-12): a
+"Log in with Path of Exile" button (in-app login on the real GGG page —
+BrowserWindow on desktop, assisted system-browser capture on web) **and** the
+manual cookie-paste form for users who won't type credentials anywhere near a
+third-party app. Neither is a fallback for the other.
 
 | Source                                                                          | Mode          | Trust story                                                                                                                                                                                                                       |
 | ------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
