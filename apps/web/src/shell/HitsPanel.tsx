@@ -1,12 +1,43 @@
+import { useEffect, useState } from 'react';
 import { Zap } from 'lucide-react';
+import type { Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
+import { HitCard } from '../components/HitCard';
+import { useEventStream } from '../hooks/EventStreamProvider';
+import { useSearches } from '../hooks/useSearches';
+import { apiSend } from '../lib/api';
 
-/**
- * Persistent live-hits panel — always visible on lg+ viewports so a hit is
- * never hidden behind navigation. Receives the SSE feed in Phase 3; until
- * then it renders the empty state.
- */
+/** Client-side mirror of the server's stale-token guard (240 s). */
+const TOKEN_FRESH_MS = 240_000;
+/** Re-render cadence so Travel buttons grey out as tokens age. */
+const FRESHNESS_TICK_MS = 30_000;
+
 export function HitsPanel() {
+  const { connected, liveHits, travelStateByListingId } = useEventStream();
+  const { searches } = useSearches();
+  // Clock snapshot in state: render stays pure, buttons age out on the tick.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), FRESHNESS_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  function travel(listing: Listing): void {
+    const search = searches.find((candidate) => candidate.id === listing.searchId);
+    if (!search || !listing.hideoutToken) return;
+    void apiSend('POST', '/api/travel', {
+      token: listing.hideoutToken,
+      realm: search.realm,
+      league: search.league,
+      searchId: search.id,
+      listingId: listing.listingId,
+      itemName: listing.itemName,
+    }).catch(() => {
+      // Failure also arrives as a travel event on the stream; nothing to do here.
+    });
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-edge px-4 py-2.5">
@@ -15,13 +46,27 @@ export function HitsPanel() {
           Live hits
         </span>
         <div className="flex-1" />
-        <Badge tone="neutral">phase 3</Badge>
+        <Badge tone={connected ? 'ok' : 'danger'}>{connected ? 'live' : 'offline'}</Badge>
       </div>
-      <div className="flex flex-1 items-center justify-center px-6 text-center">
-        <p className="text-sm text-ink-faint">
-          Detected listings will stream here in real time once the detection engines land.
-        </p>
-      </div>
+      {liveHits.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-6 text-center">
+          <p className="text-sm text-ink-faint">
+            New listings stream here the moment an engine detects them.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto p-2">
+          {liveHits.map((listing) => (
+            <HitCard
+              key={listing.listingId}
+              listing={listing}
+              travelState={travelStateByListingId[listing.listingId]}
+              tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
+              onTravel={() => travel(listing)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
