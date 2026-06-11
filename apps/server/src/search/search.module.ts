@@ -1,0 +1,20 @@
+import { Module } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { SessionService } from '../session/session.service.js';
+import { TradeApiClient } from '../trade-api/trade-api.client.js';
+import { buildEngineRegistry, ENGINE_REGISTRY } from './engine-registry.js';
+import { SearchManager } from './search-manager.js';
+
+@Module({
+  providers: [
+    {
+      provide: ENGINE_REGISTRY,
+      inject: [APP_CONFIG, TradeApiClient, SessionService],
+      useFactory: (config: AppConfig, tradeApi: TradeApiClient, sessionService: SessionService) =>
+        buildEngineRegistry(config, tradeApi, sessionService),
+    },
+    SearchManager,
+  ],
+  exports: [SearchManager],
+})
+export class SearchModule {}

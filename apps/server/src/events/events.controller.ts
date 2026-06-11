@@ -1,7 +1,6 @@
 import { Controller, Inject, MessageEvent, Sse } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import type { DomainEvent } from '@poe-sniper/shared';
-import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { RealtimeBus } from './realtime-bus.js';
 
 /** Non-domain keepalive frame so proxies don't reap idle connections. */
@@ -13,10 +12,7 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 
 @Controller('events')
 export class EventsController {
-  constructor(
-    private readonly realtimeBus: RealtimeBus,
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
-  ) {}
+  constructor(@Inject(RealtimeBus) private readonly realtimeBus: RealtimeBus) {}
 
   @Sse()
   stream(): Observable<MessageEvent> {

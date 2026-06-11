@@ -53,10 +53,12 @@ export class TradeApiClient {
   private readonly logger = new Logger(TradeApiClient.name);
   private readonly fetchFn: FetchFunction;
 
+  // Explicit @Inject on every param: tsx/esbuild emits no decorator metadata,
+  // so implicit type-based injection breaks under the dev runner.
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-    private readonly sessionService: SessionService,
-    private readonly governor: RateLimitGovernor,
+    @Inject(SessionService) private readonly sessionService: SessionService,
+    @Inject(RateLimitGovernor) private readonly governor: RateLimitGovernor,
     @Optional() @Inject(HTTP_FETCH) fetchFn: FetchFunction | null,
   ) {
     this.fetchFn = fetchFn ?? fetch;

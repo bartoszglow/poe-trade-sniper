@@ -26,8 +26,8 @@ export const hits = sqliteTable('hits', {
   /** ListingPrice JSON or null when the listing carries no price. */
   price: text('price', { mode: 'json' }),
   seller: text('seller').notNull(),
-  /** Normalized ItemDetail JSON. */
-  item: text('item', { mode: 'json' }).notNull(),
+  /** Normalized ItemDetail JSON (null when the payload had no item object). */
+  item: text('item', { mode: 'json' }),
   detectedAt: text('detected_at').notNull(),
 });
 

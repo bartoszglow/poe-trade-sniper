@@ -51,4 +51,13 @@ export interface ManagedSearch {
 /** Engine currently serving a search's detection. */
 export type EngineKind = 'ws' | 'poll';
 
-export type EngineStatus = 'connecting' | 'active' | 'degraded' | 'stopped';
+export type EngineStatus = 'pending' | 'connecting' | 'active' | 'degraded' | 'stopped';
+
+/** A managed search plus its live detection state (GET /api/searches). */
+export interface SearchRuntimeInfo extends ManagedSearch {
+  engine: EngineKind | null;
+  status: EngineStatus;
+  statusDetail: string | null;
+  hitCount: number;
+  lastHitAt: string | null;
+}

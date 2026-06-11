@@ -17,7 +17,7 @@ const setCookiesSchema = z.object({
 @Controller('session')
 export class SessionController {
   constructor(
-    private readonly sessionService: SessionService,
+    @Inject(SessionService) private readonly sessionService: SessionService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 

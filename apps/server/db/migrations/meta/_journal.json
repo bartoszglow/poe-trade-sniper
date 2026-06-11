@@ -15,6 +15,13 @@
       "when": 1781218007893,
       "tag": "0001_purchase_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781218977102,
+      "tag": "0002_hits_item_nullable",
+      "breakpoints": true
     }
   ]
 }

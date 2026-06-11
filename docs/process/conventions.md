@@ -21,6 +21,10 @@
 - Strict everywhere incl. `noUncheckedIndexedAccess`; no `any` escapes.
 - Full descriptive identifiers — no `e`/`idx`/`val` abbreviations.
 - Comments state constraints the code can't show, nothing else.
+- **NestJS DI: every constructor param gets an explicit `@Inject(Token)`** —
+  the tsx dev runner (esbuild) emits no decorator metadata, so implicit
+  type-based injection resolves to `undefined` at runtime. Discovered
+  2026-06-12 the hard way; tests don't catch it (they construct manually).
 
 ## Testing
 

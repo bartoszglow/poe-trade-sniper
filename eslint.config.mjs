@@ -55,6 +55,8 @@ export default tseslint.config(
     files: ['**/*.{test,spec}.ts', 'e2e/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
+      // expect(mock.method) patterns trip unbound-method in tests only.
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
   prettier,
