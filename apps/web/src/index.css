@@ -1,0 +1,62 @@
+@import 'tailwindcss';
+
+/*
+ * Theme tokens — the single place visual tones live. PoE-flavored dark:
+ * near-black warm surfaces, warm gray text, gold accent, game rarity colors.
+ * Tune values here; components reference tokens only.
+ */
+@theme {
+  --color-surface-0: #0b0a08;
+  --color-surface-1: #141210;
+  --color-surface-2: #1d1a16;
+  --color-surface-3: #262219;
+  --color-edge: #2e2a22;
+  --color-edge-strong: #443d2f;
+
+  --color-ink: #d6cfc2;
+  --color-ink-muted: #8d8576;
+  --color-ink-faint: #5d574c;
+
+  --color-gold: #c9a85c;
+  --color-gold-bright: #e3c87e;
+
+  --color-ok: #6fae6f;
+  --color-warn: #c9974b;
+  --color-danger: #c25b4e;
+  --color-info: #6f9ec2;
+
+  --color-rarity-normal: #c8c8c8;
+  --color-rarity-magic: #8888ff;
+  --color-rarity-rare: #d9c850;
+  --color-rarity-unique: #af6025;
+  --color-rarity-currency: #aa9e82;
+
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+/* Compact operator-tool density: rem-based sizes scale from here. */
+html {
+  font-size: 14px;
+}
+
+body {
+  background-color: var(--color-surface-0);
+  color: var(--color-ink);
+}
+
+/*
+ * Frameless-window readiness (Phase 5): when the Electron shell sets
+ * data-shell="desktop", the app bar becomes the drag region and interactive
+ * elements inside it opt out. No effect in the browser.
+ */
+html[data-shell='desktop'] .app-drag-region {
+  -webkit-app-region: drag;
+}
+html[data-shell='desktop'] .app-no-drag {
+  -webkit-app-region: no-drag;
+}
+/* Reserved corner for OS window controls (overlay/custom) in desktop mode. */
+html[data-shell='desktop'] .app-window-controls {
+  width: 8.5rem;
+}

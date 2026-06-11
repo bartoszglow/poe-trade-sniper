@@ -10,6 +10,7 @@ async function bootstrap(): Promise<void> {
   const config = loadConfig();
 
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api');
   app.enableShutdownHooks();
   await app.listen(config.PORT);
   Logger.log(
