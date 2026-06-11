@@ -18,6 +18,26 @@ Evidence source for all 2026-06-11 entries: the working prototype
 | `POST /api/trade2/whisper` body `{token}`                    | **Browser-free travel.** Requires `X-Requested-With: XMLHttpRequest` + Referer = the search page; without the header → 403 code 6 even from a logged-in context. Returns `{success: true}`. Bypasses the client-side "In demand. Teleport Anyway?" modal. | 2026-06-11 |
 | `wss://…/api/trade2/live/<realm>/<league>/<id>`              | Push detection. **GGG backend 504s since ~patch 0.5.0** — probe and fall back to polling; auto-resume when it returns. **Tarpit:** unauthenticated handshakes hang forever — always send session cookies and enforce a connect timeout.                   | 2026-06-11 |
 
+## Purchase type — `status.option` values
+
+The trade-site status dropdown offers five purchase types. API values mapping
+(domain `PurchaseMode` → query `status.option`):
+
+| Dropdown label               | Domain value                 | `status.option` | Status                  |
+| ---------------------------- | ---------------------------- | --------------- | ----------------------- |
+| Instant Buyout               | `instant`                    | `securable`     | **Verified 2026-06-11** |
+| Instant Buyout and In Person | `instant_and_in_person`      | ?               | `TODO(verify)`          |
+| In Person (Online in League) | `in_person_online_in_league` | ?               | `TODO(verify)`          |
+| In Person (Online)           | `in_person_online`           | ?               | `TODO(verify)`          |
+| Any                          | `any`                        | ?               | `TODO(verify)`          |
+
+Capture plan: once a valid session is imported, save one trade-site search per
+dropdown option and call the resolve endpoint — the returned query carries the
+real `status.option` value. Until then the server only overrides a query's
+status for verified mappings; unverified modes keep the resolved query as-is
+(with a warning). League list for the Settings UI: likely
+`GET /api/trade2/data/leagues` — `TODO(verify)`, same capture session.
+
 ## Tokens & instant buyout
 
 - Query filter `status: {option: "securable"}` = Instant Buyout listings.

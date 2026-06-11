@@ -1,0 +1,1 @@
+ALTER TABLE `searches` ADD `purchase_mode` text;
