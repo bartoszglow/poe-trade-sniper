@@ -67,6 +67,11 @@ test('session probe without a session is a clean 400', async ({ request }) => {
   expect(response.status()).toBe(400);
 });
 
+test('league list without a session is a clean 400', async ({ request }) => {
+  const response = await request.get('/api/leagues');
+  expect(response.status()).toBe(400);
+});
+
 test('manual travel validates its body and reports queue status', async ({ request }) => {
   expect((await request.post('/api/travel', { data: {} })).status()).toBe(400);
   expect((await request.post('/api/travel', { data: { token: 'too-short' } })).status()).toBe(400);

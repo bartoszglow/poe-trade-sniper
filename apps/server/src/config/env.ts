@@ -43,6 +43,9 @@ export const envSchema = z.object({
   /** Bounded-growth cap for per-search seen-id sets. */
   SEEN_IDS_CAP: z.coerce.number().int().min(100).default(5_000),
 
+  /** League list barely changes — cache window for GET /api/leagues. */
+  LEAGUE_CACHE_TTL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
+
   // --- travel ---
   /** Minimum gap between whisper POSTs (separate GGG policy; travels are rare). */
   TRAVEL_MIN_SPACING_MS: z.coerce.number().int().min(0).default(2_000),

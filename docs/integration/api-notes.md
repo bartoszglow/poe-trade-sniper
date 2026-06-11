@@ -35,8 +35,13 @@ Capture plan: once a valid session is imported, save one trade-site search per
 dropdown option and call the resolve endpoint — the returned query carries the
 real `status.option` value. Until then the server only overrides a query's
 status for verified mappings; unverified modes keep the resolved query as-is
-(with a warning). League list for the Settings UI: likely
-`GET /api/trade2/data/leagues` — `TODO(verify)`, same capture session.
+(with a warning).
+
+**League list — VERIFIED 2026-06-12 (live probe with session):**
+`GET /api/trade2/data/leagues` → 200
+`{result: [{id, realm: "poe2", text}]}` — `id` is the URL league segment
+(observed: "Runes of Aldur", "HC Runes of Aldur", "Standard", "Hardcore").
+Served to the UI via cached `GET /api/leagues`.
 
 ## Tokens & instant buyout
 

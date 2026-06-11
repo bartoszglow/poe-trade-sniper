@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import type { Listing, SessionState } from '@poe-sniper/shared';
+import type { LeagueInfo, Listing, SessionState } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { normalizeListing } from '../items/item-normalizer.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
@@ -43,6 +43,7 @@ const POLICY_SEARCH = 'search';
 const POLICY_FETCH = 'fetch';
 const POLICY_WHISPER = 'whisper';
 const POLICY_ACCOUNT = 'account';
+const POLICY_DATA = 'data';
 
 /** The Referer the whisper endpoint expects — the search's trade page. */
 export function searchPageUrl(baseUrl: string, search: TradeSearchRef): string {
@@ -189,6 +190,29 @@ export class TradeApiClient {
     if (payload.success !== true) {
       throw new TradeApiError(response.status, 'travel: response did not confirm success');
     }
+  }
+
+  /**
+   * League list — `{result: [{id, realm, text}]}` where `id` is the URL
+   * league segment. Verified live 2026-06-12 (api-notes).
+   */
+  async fetchLeagues(correlationId: string): Promise<LeagueInfo[]> {
+    const response = await this.request(
+      POLICY_DATA,
+      0,
+      `${this.config.POE_BASE_URL}/api/trade2/data/leagues`,
+      {},
+      correlationId,
+    );
+    if (!response.ok) {
+      throw new TradeApiError(response.status, `leagues: HTTP ${response.status}`);
+    }
+    const payload = (await response.json()) as {
+      result?: Array<{ id?: string; text?: string }>;
+    };
+    return (payload.result ?? [])
+      .filter((entry): entry is { id: string; text?: string } => typeof entry.id === 'string')
+      .map((entry) => ({ id: entry.id, text: entry.text ?? entry.id }));
   }
 
   /** Login probe: /my-account answers 200 only for a real logged-in session. */

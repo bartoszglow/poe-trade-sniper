@@ -8,6 +8,7 @@ import { IconButton } from '../components/IconButton';
 import { Select } from '../components/Select';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
+import { useLeagues } from '../hooks/useLeagues';
 import { useSearches } from '../hooks/useSearches';
 import { ApiError } from '../lib/api';
 import { PURCHASE_MODE_OPTIONS, toPurchaseMode, UNVERIFIED_MODE_HINT } from '../lib/purchase-modes';
@@ -31,6 +32,7 @@ function AddSearchForm({
     purchaseMode: ReturnType<typeof toPurchaseMode>;
   }) => Promise<void>;
 }) {
+  const { leagues, loaded: leaguesLoaded } = useLeagues();
   const [input, setInput] = useState('');
   const [label, setLabel] = useState('');
   const [league, setLeague] = useState('');
@@ -43,11 +45,13 @@ function AddSearchForm({
     formEvent.preventDefault();
     setSubmitting(true);
     setErrorMessage(null);
+    // The select shows the first league before any change — submit must match.
+    const effectiveLeague = league.trim() || leagues[0]?.id || undefined;
     try {
       await onAdd({
         input: input.trim(),
         label: label.trim() || undefined,
-        league: league.trim() || undefined,
+        league: effectiveLeague,
         autoTravel,
         purchaseMode: toPurchaseMode(purchaseModeValue),
       });
@@ -82,12 +86,27 @@ function AddSearchForm({
             placeholder="T1 ES boots"
           />
         </Field>
-        <Field label="League" hint="empty = server default">
-          <TextInput
-            value={league}
-            onChange={(changeEvent) => setLeague(changeEvent.target.value)}
-            placeholder="Standard"
-          />
+        <Field
+          label="League"
+          hint={leagues.length > 0 ? 'used when adding by bare id' : 'empty = server default'}
+        >
+          {leagues.length > 0 ? (
+            <Select
+              value={league || (leagues[0]?.id ?? '')}
+              onChange={(changeEvent) => setLeague(changeEvent.target.value)}
+              options={leagues.map((leagueInfo) => ({
+                value: leagueInfo.id,
+                label: leagueInfo.text,
+              }))}
+            />
+          ) : (
+            <TextInput
+              value={league}
+              onChange={(changeEvent) => setLeague(changeEvent.target.value)}
+              placeholder="Standard"
+              disabled={!leaguesLoaded}
+            />
+          )}
         </Field>
         <Field label="Purchase type" hint={UNVERIFIED_MODE_HINT}>
           <Select

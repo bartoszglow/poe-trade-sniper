@@ -48,6 +48,12 @@ export interface ManagedSearch {
   addedAt: string;
 }
 
+/** One entry of the trade-site league list (id = the URL league segment). */
+export interface LeagueInfo {
+  id: string;
+  text: string;
+}
+
 /** Engine currently serving a search's detection. */
 export type EngineKind = 'ws' | 'poll';
 
