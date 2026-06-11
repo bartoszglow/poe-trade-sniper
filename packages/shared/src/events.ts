@@ -5,7 +5,12 @@ import type { Listing, EngineKind, EngineStatus, ManagedSearch } from './index.j
  * to the UI over SSE. Adding an event type = adding a member here; consumers
  * must switch exhaustively.
  */
-export type DomainEvent = HitEvent | SearchesChangedEvent | EngineStatusEvent | LogEvent;
+export type DomainEvent =
+  | HitEvent
+  | SearchesChangedEvent
+  | EngineStatusEvent
+  | TravelEvent
+  | LogEvent;
 
 export interface HitEvent {
   type: 'hit';
@@ -22,6 +27,18 @@ export interface EngineStatusEvent {
   searchId: string;
   engine: EngineKind;
   status: EngineStatus;
+}
+
+/** Lifecycle of one hideout travel — the UI renders these as toasts. */
+export interface TravelEvent {
+  type: 'travel';
+  phase: 'queued' | 'started' | 'success' | 'failed';
+  source: 'manual' | 'auto';
+  searchId: string | null;
+  listingId: string | null;
+  itemName: string | null;
+  detail: string | null;
+  at: string;
 }
 
 export interface LogEvent {

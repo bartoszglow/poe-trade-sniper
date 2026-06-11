@@ -43,6 +43,15 @@ export const envSchema = z.object({
   /** Bounded-growth cap for per-search seen-id sets. */
   SEEN_IDS_CAP: z.coerce.number().int().min(100).default(5_000),
 
+  // --- travel ---
+  /** Minimum gap between whisper POSTs (separate GGG policy; travels are rare). */
+  TRAVEL_MIN_SPACING_MS: z.coerce.number().int().min(0).default(2_000),
+  /**
+   * Queue entries older than this are dropped, not fired — hideout tokens
+   * expire at ~300 s and a stale travel would just 4xx.
+   */
+  TRAVEL_TOKEN_MAX_AGE_MS: z.coerce.number().int().min(10_000).default(240_000),
+
   // --- live WebSocket ---
   /** Tarpit guard: unauthenticated handshakes hang forever — always time out. */
   WS_HANDSHAKE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(10_000),
