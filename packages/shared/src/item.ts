@@ -1,0 +1,52 @@
+/** A name/values pair as rendered on the trade site (markup already cleaned). */
+export interface ItemProperty {
+  name: string;
+  values: string[];
+}
+
+/**
+ * Normalized item detail produced by `normalizeItemDetail()` from the raw
+ * trade-api fetch payload. Markup tags (`[tag|display]`) are stripped.
+ */
+export interface ItemDetail {
+  name: string;
+  baseType: string;
+  rarity: string;
+  itemLevel: number | null;
+  corrupted: boolean;
+  properties: ItemProperty[];
+  requirements: ItemProperty[];
+  implicitMods: string[];
+  explicitMods: string[];
+  runeMods: string[];
+  craftedMods: string[];
+}
+
+/** Price as listed (e.g. amount 5, currency 'divine'). */
+export interface ListingPrice {
+  amount: number;
+  currency: string;
+}
+
+/**
+ * A detected listing — the unit the engines emit and the hits feed renders.
+ */
+export interface Listing {
+  /** Trade-site listing id (stable per listing). */
+  listingId: string;
+  searchId: string;
+  itemName: string;
+  price: ListingPrice | null;
+  seller: string;
+  /** Present only on securable (instant-buyout) listings; TTL ~300 s. */
+  hideoutToken: string | null;
+  item: ItemDetail;
+  /** ISO-8601 timestamp of detection. */
+  detectedAt: string;
+}
+
+/** A persisted detection (row in the `hits` table). */
+export interface Hit extends Listing {
+  /** Database row id. */
+  id: number;
+}
