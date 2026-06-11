@@ -13,8 +13,11 @@ export interface SessionState {
   capturedAt: string;
 }
 
-/** What the UI is allowed to know about the session. */
+/** What the UI is allowed to know about the session — names, never values. */
 export interface SessionPublicStatus {
-  loggedIn: boolean;
+  hasSession: boolean;
   capturedAt: string | null;
+  cookieNames: string[];
+  /** Last /my-account probe result; null = not probed yet. */
+  probedValid: boolean | null;
 }

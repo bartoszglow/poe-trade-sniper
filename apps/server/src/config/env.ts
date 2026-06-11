@@ -16,6 +16,17 @@ export const envSchema = z.object({
   DEFAULT_LEAGUE: z.string().min(1).default('Standard'),
   /** Hard deadline for every outbound GGG call (AbortController). */
   OUTBOUND_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15_000),
+  /**
+   * UA used when the operator pastes cookies without one. When cf_clearance
+   * is pasted, the operator should supply their real browser UA instead —
+   * Cloudflare binds clearance to it.
+   */
+  FALLBACK_USER_AGENT: z
+    .string()
+    .min(1)
+    .default(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    ),
 
   // --- detection tunables ---
   /**
