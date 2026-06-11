@@ -210,6 +210,16 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }));
   }
 
+  /** Narrow read used by the TravelService's hit-event subscriber. */
+  isAutoTravelEnabled(searchId: string): boolean {
+    return this.watchers.get(searchId)?.row.autoTravel ?? false;
+  }
+
+  getSearchRef(searchId: string): TradeSearchRef | null {
+    const watcher = this.watchers.get(searchId);
+    return watcher ? this.toRef(watcher.row) : null;
+  }
+
   summary(): { total: number; byStatus: Record<string, number> } {
     const byStatus: Record<string, number> = {};
     for (const watcher of this.watchers.values()) {

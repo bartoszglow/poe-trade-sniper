@@ -6,6 +6,7 @@ import { EventsModule } from './events/events.module.js';
 import { RateLimitModule } from './ratelimit/ratelimit.module.js';
 import { SessionModule } from './session/session.module.js';
 import { TradeApiModule } from './trade-api/trade-api.module.js';
+import { TravelModule } from './travel/travel.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { TradeApiModule } from './trade-api/trade-api.module.js';
     SessionModule,
     RateLimitModule,
     TradeApiModule,
+    TravelModule,
     ApiModule,
   ],
 })
