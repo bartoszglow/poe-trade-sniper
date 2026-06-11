@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 3 web UI: live SSE event stream into the shell (one `EventSource`,
+  capped live-hits feed, per-listing travel states); Searches page (add by
+  id/URL, purchase-type + AUTO inline edits, live engine/status badges);
+  persistent live-hits panel with token-gated Travel button; Hits history
+  with item-detail accordion; Settings (session card with live probe via new
+  `POST /api/session/probe`, cookie-paste form, in-app login placeholder per
+  D-12, rate-limit budgets); status bar shows session/budget/travel queue.
 - Phase 2 travel: browser-free hideout travel (`/api/trade2/whisper` with the
   X-Requested-With header discipline) under a dedicated whisper rate-limit
   policy; `TravelService` FIFO queue (one travel at a time, stale tokens

@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Body, Controller, Delete, Get, Inject, Post } from '@nestjs/common';
 import { z } from 'zod';
 import type { SessionPublicStatus } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { NoSessionError, TradeApiClient } from '../trade-api/trade-api.client.js';
 import { SessionService } from './session.service.js';
 
 const setCookiesSchema = z.object({
@@ -18,11 +20,26 @@ const setCookiesSchema = z.object({
 export class SessionController {
   constructor(
     @Inject(SessionService) private readonly sessionService: SessionService,
+    @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   @Get('status')
   status(): SessionPublicStatus {
+    return this.sessionService.publicStatus();
+  }
+
+  /** Live /my-account probe — the only session endpoint that talks to GGG. */
+  @Post('probe')
+  async probe(): Promise<SessionPublicStatus> {
+    try {
+      await this.tradeApi.probeMyAccount(randomUUID());
+    } catch (error) {
+      if (error instanceof NoSessionError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
     return this.sessionService.publicStatus();
   }
 
