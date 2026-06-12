@@ -1,5 +1,7 @@
 # PoE Trade Sniper
 
+**English** · [Polski](README.pl.md)
+
 **Win the listing before anyone else.** A desktop app that watches your Path of
 Exile 2 trade searches, spots a new listing within **seconds** of it going live,
 pings you, and warps you straight to the seller's hideout — **no browser, no
