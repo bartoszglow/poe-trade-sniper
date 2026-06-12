@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 5 desktop: frameless window (traffic lights over the app bar,
+  data-shell switch via preload), server bundled to one CJS file (esbuild —
+  enabled by the explicit-@Inject rule), electron-builder .dmg (arm64,
+  unsigned) with web build + migrations as resources and better-sqlite3
+  rebuilt for Electron automatically.
 - Phase 4 session productionization: session encrypted at rest (AES-256-GCM,
   key in the OS keychain — D-7 closed); in-app "Log in with Path of Exile"
   for web mode (real Chrome + CDP cookie capture, probe-gated); boot-time
