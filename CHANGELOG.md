@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Live hits show a relative "x ago" time (recalculated live) next to the
+  absolute detection time, and a manual **Retry** button when an auto-travel
+  failed (enabled while the hideout token is still fresh).
 - Developer "Network" view + shareable log file: every GGG request/response and
   live-socket event is captured (redacted — never a cookie, User-Agent or
   hideout token) at the two existing choke points (`TradeApiClient.request`,

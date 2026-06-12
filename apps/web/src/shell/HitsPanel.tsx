@@ -10,8 +10,8 @@ import { apiSend } from '../lib/api';
 
 /** Client-side mirror of the server's stale-token guard (240 s). */
 const TOKEN_FRESH_MS = 240_000;
-/** Re-render cadence so Travel buttons grey out as tokens age. */
-const FRESHNESS_TICK_MS = 30_000;
+/** Re-render cadence: ages out Travel buttons AND ticks the "x ago" labels. */
+const FRESHNESS_TICK_MS = 5_000;
 
 export function HitsPanel() {
   const t = useT();
@@ -64,6 +64,7 @@ export function HitsPanel() {
               listing={listing}
               travelState={travelStateByListingId[listing.listingId]}
               tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
+              nowMs={nowMs}
               onTravel={() => travel(listing)}
             />
           ))}

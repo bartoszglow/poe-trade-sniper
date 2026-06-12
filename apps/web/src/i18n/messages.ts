@@ -109,10 +109,12 @@ export const EN = {
   'hitCard.traveling': 'traveling…',
   'hitCard.traveled': 'traveled ✓',
   'hitCard.failed': 'failed',
+  'hitCard.retry': 'Retry',
   'hitCard.travel': 'Travel',
   'hitCard.travelTitle': 'Travel to seller hideout',
   'hitCard.expired': 'expired',
   'hitCard.tokenExpired': 'token expired',
+  'common.ago': '{value} ago',
 
   // Searches page
   'searches.title': 'Searches',
@@ -323,10 +325,12 @@ export const PL: Record<MessageKey, string> = {
   'hitCard.traveling': 'podróż…',
   'hitCard.traveled': 'przeniesiono ✓',
   'hitCard.failed': 'niepowodzenie',
+  'hitCard.retry': 'Ponów',
   'hitCard.travel': 'Podróżuj',
   'hitCard.travelTitle': 'Podróżuj do kryjówki sprzedawcy',
   'hitCard.expired': 'wygasł',
   'hitCard.tokenExpired': 'token wygasł',
+  'common.ago': '{value} temu',
 
   // Searches page
   'searches.title': 'Wyszukiwania',
