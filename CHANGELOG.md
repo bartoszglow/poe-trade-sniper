@@ -94,6 +94,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hit count and last-hit time are restored from persisted hits on startup —
+  a long-running search no longer shows "0 hits" after every restart (the
+  counters were in-memory only and reset to zero on boot).
 - Auto-travel no longer re-fires for a listing that re-enters the live
   stream after traveling to it and returning without purchasing —
   successfully-traveled listing ids are remembered

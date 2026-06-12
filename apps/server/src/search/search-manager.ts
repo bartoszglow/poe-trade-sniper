@@ -98,7 +98,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   onApplicationBootstrap(): void {
     for (const row of this.database.select().from(searches).all()) {
-      this.watchers.set(row.id, this.createWatcher(this.rowToManagedSearch(row)));
+      const watcher = this.createWatcher(this.rowToManagedSearch(row));
+      // Hit count + last-hit are persisted in the hits table; without this the
+      // UI shows "0 hits" after every restart even on a long-running search.
+      this.hydrateHitStats(watcher);
+      this.watchers.set(row.id, watcher);
     }
     this.pruneHits();
     void this.startPendingWatchers();
@@ -517,6 +521,22 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const watcher = this.watchers.get(searchId);
     if (!watcher) throw new NotFoundException(`search ${searchId} is not watched`);
     return watcher;
+  }
+
+  /** Restore hitCount + lastHitAt from persisted hits (survives restarts). */
+  private hydrateHitStats(watcher: Watcher): void {
+    const stats = this.database
+      .select({
+        total: sql<number>`count(*)`,
+        last: sql<string | null>`max(${hits.detectedAt})`,
+      })
+      .from(hits)
+      .where(eq(hits.searchId, watcher.row.id))
+      .get();
+    if (stats) {
+      watcher.hitCount = stats.total ?? 0;
+      watcher.lastHitAt = stats.last ?? null;
+    }
   }
 
   private createWatcher(row: ManagedSearch): Watcher {

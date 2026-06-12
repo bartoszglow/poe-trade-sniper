@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Listing } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
+import { hits } from '../db/schema.js';
 import type {
   DetectionEngine,
   EngineCallbacks,
@@ -174,6 +175,58 @@ describe('SearchManager', () => {
       expect(info.enabled).toBe(true);
       await manager.runSchedulerTick();
       expect(executeSearch).toHaveBeenCalled();
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('restores hit count and last-hit from persisted hits on bootstrap', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      // Two hits as if detected in a previous run (UI must not reset to 0).
+      database
+        .insert(hits)
+        .values([
+          {
+            searchId: 'AbCdEf123',
+            listingId: 'l1',
+            itemName: 'Item A',
+            price: null,
+            seller: '',
+            item: null,
+            detectedAt: '2026-06-12T10:00:00.000Z',
+          },
+          {
+            searchId: 'AbCdEf123',
+            listingId: 'l2',
+            itemName: 'Item B',
+            price: null,
+            seller: '',
+            item: null,
+            detectedAt: '2026-06-12T11:00:00.000Z',
+          },
+        ])
+        .run();
+      manager.onApplicationShutdown();
+
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        {} as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        const info = reloaded.list().find((entry) => entry.id === 'AbCdEf123');
+        expect(info?.hitCount).toBe(2);
+        expect(info?.lastHitAt).toBe('2026-06-12T11:00:00.000Z');
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
     } finally {
       manager.onApplicationShutdown();
       database.$client.close();
