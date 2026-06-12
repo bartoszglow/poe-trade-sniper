@@ -227,6 +227,71 @@ describe('SearchManager', () => {
     }
   });
 
+  it('listHits filters by text + date range, sorts, and paginates', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      const rows: Array<[string, string, string, string]> = [
+        ['l1', 'Storm Veil', 'alice', '2026-06-10T10:00:00.000Z'],
+        ['l2', 'Storm Cloud', 'bob', '2026-06-11T10:00:00.000Z'],
+        ['l3', 'Sunder Axe', 'alice', '2026-06-12T10:00:00.000Z'],
+        ['l4', 'Storm Relic', 'carol', '2026-06-13T10:00:00.000Z'],
+      ];
+      database
+        .insert(hits)
+        .values(
+          rows.map(([listingId, itemName, seller, detectedAt]) => ({
+            searchId: 'AbCdEf123',
+            listingId,
+            itemName,
+            price: null,
+            seller,
+            item: null,
+            detectedAt,
+          })),
+        )
+        .run();
+      const baseQuery = {
+        searchId: null,
+        search: null,
+        from: null,
+        to: null,
+        sort: 'newest' as const,
+        limit: 50,
+        offset: 0,
+      };
+
+      // Text search matches item name OR seller.
+      expect(
+        manager.listHits({ ...baseQuery, search: 'Storm' }).map((hit) => hit.listingId),
+      ).toEqual(['l4', 'l2', 'l1']);
+      expect(
+        manager.listHits({ ...baseQuery, search: 'carol' }).map((hit) => hit.listingId),
+      ).toEqual(['l4']);
+
+      // Date range is inclusive.
+      expect(
+        manager
+          .listHits({
+            ...baseQuery,
+            from: '2026-06-11T00:00:00.000Z',
+            to: '2026-06-12T23:59:59.000Z',
+          })
+          .map((hit) => hit.listingId),
+      ).toEqual(['l3', 'l2']);
+
+      // Sort + pagination.
+      expect(manager.listHits({ ...baseQuery, sort: 'oldest' })[0]?.listingId).toBe('l1');
+      expect(manager.listHits({ ...baseQuery, sort: 'name' })[0]?.itemName).toBe('Storm Cloud');
+      expect(
+        manager.listHits({ ...baseQuery, limit: 2, offset: 2 }).map((hit) => hit.listingId),
+      ).toEqual(['l2', 'l1']);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('a paused search stays stopped after bootstrap reload', async () => {
     const { manager, database } = createManager();
     try {
@@ -339,7 +404,15 @@ describe('SearchManager', () => {
       expect(hitRows).toEqual([{ listing_id: 'fresh1', item_name: 'Storm Veil' }]);
       expect(events).toContain('hit');
 
-      const hitsViaApi = manager.listHits(null, 50);
+      const hitsViaApi = manager.listHits({
+        searchId: null,
+        search: null,
+        from: null,
+        to: null,
+        sort: 'newest',
+        limit: 50,
+        offset: 0,
+      });
       expect(hitsViaApi[0]?.listingId).toBe('fresh1');
       expect(hitsViaApi[0]?.hideoutToken).toBeNull();
     } finally {

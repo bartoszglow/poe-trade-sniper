@@ -159,15 +159,27 @@ export const EN = {
   'hits.title': 'Hits',
   'hits.allSearches': 'All searches',
   'hits.filterBySearch': 'Filter by search',
+  'hits.searchPlaceholder': 'Search item or seller…',
+  'hits.from': 'From',
+  'hits.to': 'To',
+  'hits.sort': 'Sort',
+  'hits.sortNewest': 'Newest',
+  'hits.sortOldest': 'Oldest',
+  'hits.sortName': 'Name A–Z',
+  'hits.loading': 'Loading…',
   'hits.empty':
     'No persisted detections yet. Hits land here (and in the live panel) once a watched search fires.',
   'hits.noItemPayload': 'no item payload recorded',
 
   // Item detail
+  'item.title': 'Item',
+  'item.base': 'Base',
+  'item.itemLevel': 'Item level',
+  'item.mods': 'Mods',
   'item.properties': 'Properties',
   'item.requirements': 'Requirements',
   'item.ilvl': 'ilvl {level}',
-  'item.corrupted': 'corrupted',
+  'item.corrupted': 'Corrupted',
   'item.noPrice': 'no price',
 
   // Settings
@@ -374,15 +386,27 @@ export const PL: Record<MessageKey, string> = {
   'hits.title': 'Trafienia',
   'hits.allSearches': 'Wszystkie wyszukiwania',
   'hits.filterBySearch': 'Filtruj po wyszukiwaniu',
+  'hits.searchPlaceholder': 'Szukaj przedmiotu lub sprzedawcy…',
+  'hits.from': 'Od',
+  'hits.to': 'Do',
+  'hits.sort': 'Sortuj',
+  'hits.sortNewest': 'Najnowsze',
+  'hits.sortOldest': 'Najstarsze',
+  'hits.sortName': 'Nazwa A–Z',
+  'hits.loading': 'Ładowanie…',
   'hits.empty':
     'Brak zapisanych wykryć. Trafienia pojawią się tutaj (i w panelu na żywo), gdy obserwowane wyszukiwanie zadziała.',
   'hits.noItemPayload': 'brak zapisanych danych przedmiotu',
 
   // Item detail
+  'item.title': 'Przedmiot',
+  'item.base': 'Baza',
+  'item.itemLevel': 'Poziom przedmiotu',
+  'item.mods': 'Modyfikatory',
   'item.properties': 'Właściwości',
   'item.requirements': 'Wymagania',
   'item.ilvl': 'ilvl {level}',
-  'item.corrupted': 'skażony',
+  'item.corrupted': 'Skażony',
   'item.noPrice': 'brak ceny',
 
   // Settings

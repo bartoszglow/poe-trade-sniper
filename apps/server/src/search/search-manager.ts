@@ -9,7 +9,7 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
 import type {
   EngineKind,
   EngineStatus,
@@ -50,6 +50,21 @@ export interface UpdateSearchOptions {
   autoTravel?: boolean;
   purchaseMode?: PurchaseMode | null;
   enabled?: boolean;
+}
+
+export type HitSort = 'newest' | 'oldest' | 'name';
+
+/** Filter + page descriptor for the Hits browse view. */
+export interface HitQuery {
+  searchId: string | null;
+  /** Free-text match on item name or seller. */
+  search: string | null;
+  /** ISO-8601 lower / upper bounds on detection time (inclusive). */
+  from: string | null;
+  to: string | null;
+  sort: HitSort;
+  limit: number;
+  offset: number;
 }
 
 /** Prune cadence — checking on every single hit would be wasted writes. */
@@ -241,11 +256,31 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.publishSearchesChanged();
   }
 
-  listHits(searchId: string | null, limit: number): Hit[] {
-    const base = this.database.select().from(hits);
-    const rows = (searchId === null ? base : base.where(eq(hits.searchId, searchId)))
-      .orderBy(desc(hits.id))
-      .limit(limit)
+  listHits(query: HitQuery): Hit[] {
+    const conditions = [];
+    if (query.searchId) conditions.push(eq(hits.searchId, query.searchId));
+    if (query.search) {
+      const needle = `%${query.search}%`;
+      conditions.push(or(like(hits.itemName, needle), like(hits.seller, needle)));
+    }
+    // detectedAt is stored ISO-8601, so lexicographic compare is chronological.
+    if (query.from) conditions.push(gte(hits.detectedAt, query.from));
+    if (query.to) conditions.push(lte(hits.detectedAt, query.to));
+
+    const order =
+      query.sort === 'oldest'
+        ? asc(hits.id)
+        : query.sort === 'name'
+          ? asc(hits.itemName)
+          : desc(hits.id);
+
+    const rows = this.database
+      .select()
+      .from(hits)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(order)
+      .limit(query.limit)
+      .offset(query.offset)
       .all();
     return rows.map((row) => ({
       id: row.id,

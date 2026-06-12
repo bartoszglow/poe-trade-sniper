@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Hits view overhaul: free-text search (item or seller), date-range filter,
+  sort (newest / oldest / name), and infinite scroll that lazy-loads 20 at a
+  time with a loading spinner — backed by a paginated, filtered, sorted
+  `GET /api/hits`. The expanded item detail now renders as the same group cards
+  as the search-criteria view (shared `DetailCard`), so the two read alike.
 - Live hits show a relative "x ago" time (recalculated live) next to the
   absolute detection time, and a manual **Retry** button when an auto-travel
   failed (enabled while the hideout token is still fresh).

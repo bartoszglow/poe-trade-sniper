@@ -53,7 +53,12 @@ const previewSearchSchema = z.object({
 
 const listHitsSchema = z.object({
   searchId: z.string().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  search: z.string().min(1).max(120).optional(),
+  from: z.string().min(1).optional(),
+  to: z.string().min(1).optional(),
+  sort: z.enum(['newest', 'oldest', 'name']).default('newest'),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 function parseOrBadRequest<Schema extends z.ZodType>(
@@ -116,6 +121,14 @@ export class SearchesController {
   @Get('hits')
   hits(@Query() query: Record<string, string>): Hit[] {
     const payload = parseOrBadRequest(listHitsSchema, query);
-    return this.searchManager.listHits(payload.searchId ?? null, payload.limit);
+    return this.searchManager.listHits({
+      searchId: payload.searchId ?? null,
+      search: payload.search ?? null,
+      from: payload.from ?? null,
+      to: payload.to ?? null,
+      sort: payload.sort,
+      limit: payload.limit,
+      offset: payload.offset,
+    });
   }
 }
