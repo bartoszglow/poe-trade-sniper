@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Lightweight in-app update check: the app polls `GET /api/update` (GitHub
+  Releases for a configurable `owner/repo`) and shows a "new version available
+  — download" banner that opens the installer in the real browser. No silent
+  install (that needs a signed/notarized build); dormant until the repo is set.
 - Hits view overhaul: free-text search (item or seller), date-range filter,
   sort (newest / oldest / name), and infinite scroll that lazy-loads 20 at a
   time with a loading spinner — backed by a paginated, filtered, sorted

@@ -11,6 +11,7 @@ import { RateLimitModule } from './ratelimit/ratelimit.module.js';
 import { SessionModule } from './session/session.module.js';
 import { TradeApiModule } from './trade-api/trade-api.module.js';
 import { TravelModule } from './travel/travel.module.js';
+import { UpdateModule } from './update/update.module.js';
 
 // Resolved at import time, not via DI: the module list itself depends on it.
 // Callers (CLI, Electron main) set the environment before importing.
@@ -31,6 +32,7 @@ const staticDir = loadConfig().STATIC_DIR;
     RateLimitModule,
     TradeApiModule,
     TravelModule,
+    UpdateModule,
     ApiModule,
   ],
 })

@@ -25,6 +25,13 @@ export const envSchema = z.object({
   LOG_MAX_BYTES: z.coerce.number().int().min(1_000).default(5_000_000),
   /** Network entries kept in memory for the dev view's initial load. */
   NETWORK_LOG_RING_SIZE: z.coerce.number().int().min(1).default(500),
+  /**
+   * `owner/repo` whose GitHub Releases drive the in-app update check. Empty =
+   * disabled (no remote yet); set once the repo exists to light up the banner.
+   */
+  GITHUB_RELEASES_REPO: z.string().default(''),
+  /** Cache window for the GitHub release lookup (GitHub's unauthed limit is 60/h). */
+  UPDATE_CHECK_TTL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
 
   // --- GGG trade API ---
   POE_BASE_URL: z.string().url().default('https://www.pathofexile.com'),

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import type { RunningServer } from '@poe-sniper/server';
 
 /**
@@ -71,8 +71,12 @@ function createWindow(url: string): BrowserWindow {
       sandbox: true,
     },
   });
-  // The renderer never opens or navigates to external content.
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // The renderer never navigates away, but http(s) links (e.g. the update
+  // download) open in the user's real browser instead of a child window.
+  window.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    if (/^https?:\/\//.test(targetUrl)) void shell.openExternal(targetUrl);
+    return { action: 'deny' };
+  });
   window.webContents.on('will-navigate', (navigationEvent, targetUrl) => {
     if (!targetUrl.startsWith(url)) navigationEvent.preventDefault();
   });

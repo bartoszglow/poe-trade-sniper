@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { GuardBanner } from './GuardBanner';
 import { LoginOverlay } from './LoginOverlay';
 import { SessionBanner } from './SessionBanner';
+import { UpdateBanner } from './UpdateBanner';
 import { IconRail } from './IconRail';
 import { HitsPanel } from './HitsPanel';
 import { StatusBar } from './StatusBar';
@@ -12,12 +13,14 @@ import { useEventStream } from '../hooks/EventStreamProvider';
 import { useHealth } from '../hooks/useHealth';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
+import { useUpdateCheck } from '../hooks/useUpdateCheck';
 
 export function AppShell() {
   const health = useHealth();
   const eventStream = useEventStream();
   const { status, refresh } = useServerStatus();
   const { searches } = useSearches();
+  const update = useUpdateCheck();
 
   // Global detection posture for the app bar — derived from the live searches
   // list (refetched on every engine-status SSE event), so it follows ws→poll
@@ -57,6 +60,7 @@ export function AppShell() {
       </header>
 
       <div className="col-span-full">
+        {update?.updateAvailable && <UpdateBanner update={update} />}
         {guardTripped && <GuardBanner reason={guardReason} onReset={refresh} />}
         {sessionInvalid && <SessionBanner />}
       </div>

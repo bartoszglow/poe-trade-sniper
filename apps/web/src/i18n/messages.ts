@@ -58,6 +58,10 @@ export const EN = {
   'detection.wsTitle': 'Live push (WebSocket) — instant detection',
   'detection.pollTitle': 'Polling fallback — periodic checks',
 
+  // Update banner
+  'update.available': 'A new version ({version}) is available.',
+  'update.download': 'Download',
+
   // Status bar
   'status.serverChecking': 'server …',
   'status.server': 'server',
@@ -284,6 +288,10 @@ export const PL: Record<MessageKey, string> = {
   // Detection mode (app bar pills)
   'detection.wsTitle': 'Push na żywo (WebSocket) — natychmiastowe wykrywanie',
   'detection.pollTitle': 'Tryb zapasowy (polling) — okresowe sprawdzanie',
+
+  // Update banner
+  'update.available': 'Dostępna jest nowa wersja ({version}).',
+  'update.download': 'Pobierz',
 
   // Status bar
   'status.serverChecking': 'serwer …',
