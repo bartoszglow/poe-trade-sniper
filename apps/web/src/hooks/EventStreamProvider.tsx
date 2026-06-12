@@ -6,6 +6,7 @@ import type {
   Listing,
   TravelEvent,
 } from '@poe-sniper/shared';
+import { isHitSoundEnabled, playHitSound } from '../lib/hit-sound';
 
 /** Bounded-growth cap for the live feed kept in memory. */
 const LIVE_HITS_CAP = 100;
@@ -103,6 +104,7 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (event.type === 'heartbeat') return;
+      if (event.type === 'hit' && isHitSoundEnabled()) playHitSound();
       setState((previous) => reduceEvent(previous, event));
     };
     return () => source.close();

@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { NAV_ENTRIES } from './nav';
 import { AppBar } from './AppBar';
 import { GuardBanner } from './GuardBanner';
+import { SessionBanner } from './SessionBanner';
 import { IconRail } from './IconRail';
 import { HitsPanel } from './HitsPanel';
 import { StatusBar } from './StatusBar';
@@ -17,22 +18,19 @@ export function AppShell() {
   // Live event wins; the status poll covers page loads after the trip.
   const guardTripped = eventStream.guard?.tripped ?? status?.guard.tripped ?? false;
   const guardReason = eventStream.guard?.reason ?? status?.guard.reason ?? null;
+  const sessionInvalid =
+    (status?.session.hasSession ?? false) && status?.session.probedValid === false;
 
   return (
-    <div
-      className={`grid h-screen grid-cols-[3rem_1fr] lg:grid-cols-[3rem_1fr_22rem] ${
-        guardTripped ? 'grid-rows-[2.5rem_2.75rem_1fr_2rem]' : 'grid-rows-[2.5rem_1fr_2rem]'
-      }`}
-    >
+    <div className="grid h-screen grid-rows-[2.5rem_auto_1fr_2rem] grid-cols-[3rem_1fr] lg:grid-cols-[3rem_1fr_22rem]">
       <header className="col-span-full">
         <AppBar serverHealthy={health.healthy} streamConnected={eventStream.connected} />
       </header>
 
-      {guardTripped && (
-        <div className="col-span-full">
-          <GuardBanner reason={guardReason} onReset={refresh} />
-        </div>
-      )}
+      <div className="col-span-full">
+        {guardTripped && <GuardBanner reason={guardReason} onReset={refresh} />}
+        {sessionInvalid && <SessionBanner />}
+      </div>
 
       <IconRail />
 

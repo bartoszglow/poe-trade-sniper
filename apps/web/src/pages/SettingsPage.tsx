@@ -1,12 +1,14 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { KeyRound, LogIn, ShieldCheck } from 'lucide-react';
+import { KeyRound, LogIn, ShieldCheck, Volume2 } from 'lucide-react';
 import type { SessionPublicStatus } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
+import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { ApiError, apiSend } from '../lib/api';
+import { isHitSoundEnabled, playHitSound, setHitSoundEnabled } from '../lib/hit-sound';
 
 function SettingsCard({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -54,6 +56,13 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => isHitSoundEnabled());
+
+  function toggleSound(enabled: boolean): void {
+    setHitSoundEnabled(enabled);
+    setSoundEnabled(enabled);
+    if (enabled) playHitSound();
+  }
 
   async function run(action: () => Promise<string>): Promise<void> {
     setBusy(true);
@@ -199,6 +208,21 @@ export function SettingsPage() {
             )}
           </div>
         </form>
+      </SettingsCard>
+
+      <SettingsCard title="Alerts">
+        <div className="flex items-center gap-3">
+          <Switch checked={soundEnabled} onChange={toggleSound} label="Hit sound" />
+          <span className="text-sm text-ink-muted">play a sound on every detected hit</span>
+          <div className="flex-1" />
+          <Button variant="ghost" onClick={playHitSound}>
+            <Volume2 className="h-4 w-4" />
+            Test
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-ink-faint">
+          Browsers unlock audio after the first interaction — hit Test once after opening the app.
+        </p>
       </SettingsCard>
 
       <SettingsCard title="Rate-limit budgets">
