@@ -40,6 +40,14 @@ html {
   font-size: 14px;
 }
 
+/* Every interactive control is clickable — one rule, no per-component drift.
+   Disabled stays excluded so cursor-not-allowed variants keep working. */
+button:not(:disabled),
+select:not(:disabled),
+[role='switch']:not(:disabled) {
+  cursor: pointer;
+}
+
 body {
   background-color: var(--color-surface-0);
   color: var(--color-ink);
