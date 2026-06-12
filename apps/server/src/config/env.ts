@@ -55,6 +55,8 @@ export const envSchema = z.object({
 
   /** League list barely changes — cache window for GET /api/leagues. */
   LEAGUE_CACHE_TTL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
+  /** Stat dictionary is static game data — cache window for GET /api/stats. */
+  STATS_CACHE_TTL_MS: z.coerce.number().int().min(3_600_000).default(86_400_000),
 
   // --- travel ---
   /** Minimum gap between whisper POSTs (separate GGG policy; travels are rare). */

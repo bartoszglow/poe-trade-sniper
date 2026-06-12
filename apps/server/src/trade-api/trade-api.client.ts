@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import type { LeagueInfo, Listing, SessionState } from '@poe-sniper/shared';
+import type { LeagueInfo, Listing, SessionState, StatDictionaryEntry } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
 import { normalizeListing } from '../items/item-normalizer.js';
@@ -222,6 +222,35 @@ export class TradeApiClient {
     return (payload.result ?? [])
       .filter((entry): entry is { id: string; text?: string } => typeof entry.id === 'string')
       .map((entry) => ({ id: entry.id, text: entry.text ?? entry.id }));
+  }
+
+  /**
+   * Stat dictionary — `{result: [{id, entries: [{id, text, type}]}]}`,
+   * flattened to one list. Static game data; callers cache it.
+   */
+  async fetchStatsDictionary(correlationId: string): Promise<StatDictionaryEntry[]> {
+    const response = await this.request(
+      POLICY_DATA,
+      0,
+      `${this.config.POE_BASE_URL}/api/trade2/data/stats`,
+      {},
+      correlationId,
+    );
+    if (!response.ok) {
+      throw new TradeApiError(response.status, `stats: HTTP ${response.status}`);
+    }
+    const payload = (await response.json()) as {
+      result?: Array<{ entries?: Array<{ id?: string; text?: string; type?: string }> }>;
+    };
+    const entries: StatDictionaryEntry[] = [];
+    for (const group of payload.result ?? []) {
+      for (const entry of group.entries ?? []) {
+        if (typeof entry.id === 'string' && typeof entry.text === 'string') {
+          entries.push({ id: entry.id, text: entry.text, type: entry.type ?? '' });
+        }
+      }
+    }
+    return entries;
   }
 
   /** Login probe: /my-account answers 200 only for a real logged-in session. */

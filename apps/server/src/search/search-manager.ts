@@ -17,6 +17,7 @@ import type {
   ManagedSearch,
   PurchaseMode,
   Realm,
+  SearchPreview,
   SearchRuntimeInfo,
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
@@ -112,6 +113,20 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   list(): SearchRuntimeInfo[] {
     return [...this.watchers.values()].map((watcher) => this.toRuntimeInfo(watcher));
+  }
+
+  /** Resolve an input to its query WITHOUT persisting — the add-form preview. */
+  async preview(input: string, league: string | undefined): Promise<SearchPreview> {
+    const ref = this.parseRef(input, league);
+    try {
+      const query = await this.tradeApi.resolveQuery(ref, randomUUID());
+      return { id: ref.searchId, realm: ref.realm as Realm, league: ref.league, query };
+    } catch (error) {
+      if (error instanceof NoSessionError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   async add(input: string, options: AddSearchOptions): Promise<SearchRuntimeInfo> {

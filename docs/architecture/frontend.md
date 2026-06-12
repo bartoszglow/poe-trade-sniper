@@ -84,6 +84,20 @@ light theme would be a token-set swap, not a component change.
 Density is compact: root font-size 14px, tight paddings — maximize visible
 hits/searches in a small Electron window.
 
+## Criteria view
+
+`QueryCriteriaView` renders a resolved trade query ("what does this search
+match"): item identity, purchase scope, price (gold), stat groups (AND/OR/
+COUNT with disabled rows struck through) and filter groups. The parser
+(`lib/query-criteria.ts`) follows one cardinal rule — **never hide data**:
+unrecognized keys/groups render raw key + JSON, because the GGG query schema
+is undocumented and evolves. Stat ids resolve through `useStatsDictionary`
+(`GET /api/stats`, server-cached static game data; raw ids shown while it
+loads or when no session exists). Used twice: an accordion on every search
+row (filters ship with `GET /api/searches` — zero GGG cost) and the add-form
+"Show criteria" preview (`POST /api/searches/preview` — resolve without
+persisting, one governor-controlled GGG call per click).
+
 ## Data fetching
 
 - `lib/api.ts` — typed fetch wrapper, **relative URLs only** (`/api/...`):

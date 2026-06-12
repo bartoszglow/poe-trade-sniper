@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Search criteria view: every search row gets a criteria accordion and the
+  add form a "Show criteria" preview (`POST /api/searches/preview`, resolve
+  without persisting). Stat ids resolve to human labels via the new
+  `GET /api/stats` dictionary (server-cached static game data); the renderer
+  never hides data — unrecognized query parts show as raw JSON.
+- Custom listbox Select matching the PoE theme (closes on selection,
+  keyboard navigation, gold check on the selected row) — replaces the
+  native dropdown that ignored the dark theme.
 - Full i18n (English + Polish) mirroring the card-bridge pattern: typed
   message catalog (`EN` as const drives the key set, `PL` compiler-checked),
   `I18nProvider` with localStorage persistence and `Intl.PluralRules`

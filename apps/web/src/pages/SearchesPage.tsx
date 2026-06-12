@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import type { EngineStatus, SearchRuntimeInfo } from '@poe-sniper/shared';
+import { ListFilter, Plus, Trash2 } from 'lucide-react';
+import type { EngineStatus, SearchPreview, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
 import { IconButton } from '../components/IconButton';
+import { QueryCriteriaView } from '../components/QueryCriteriaView';
 import { Select } from '../components/Select';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
@@ -12,7 +13,7 @@ import { useLeagues } from '../hooks/useLeagues';
 import { useSearches } from '../hooks/useSearches';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
-import { ApiError } from '../lib/api';
+import { ApiError, apiSend } from '../lib/api';
 
 const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   pending: 'neutral',
@@ -48,11 +49,35 @@ function AddSearchForm({
   const [autoTravel, setAutoTravel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [previewQuery, setPreviewQuery] = useState<unknown>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // The URL is the source of truth for league + purchase type (D-14).
   // Only a bare id needs a league — the resolve endpoint takes it in the path.
   const trimmedInput = input.trim();
   const inputIsBareId = trimmedInput !== '' && !/^(https?|wss?):\/\//.test(trimmedInput);
+
+  async function togglePreview(): Promise<void> {
+    if (previewOpen) {
+      setPreviewOpen(false);
+      return;
+    }
+    setPreviewLoading(true);
+    setErrorMessage(null);
+    try {
+      const preview = await apiSend<SearchPreview>('POST', '/api/searches/preview', {
+        input: trimmedInput,
+        league: inputIsBareId ? league.trim() || leagues[0]?.id || undefined : undefined,
+      });
+      setPreviewQuery(preview.query);
+      setPreviewOpen(true);
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   async function submit(formEvent: FormEvent) {
     formEvent.preventDefault();
@@ -88,7 +113,12 @@ function AddSearchForm({
         <Field label={t('searches.fieldInput')} hint={t('searches.fieldInputHint')}>
           <TextInput
             value={input}
-            onChange={(changeEvent) => setInput(changeEvent.target.value)}
+            onChange={(changeEvent) => {
+              setInput(changeEvent.target.value);
+              // A different input means a different query — the preview is stale.
+              setPreviewOpen(false);
+              setPreviewQuery(null);
+            }}
             placeholder={t('searches.fieldInputPlaceholder')}
             required
           />
@@ -121,6 +151,11 @@ function AddSearchForm({
           </Field>
         )}
       </div>
+      {previewOpen && previewQuery !== null && (
+        <div className="mt-3 rounded-md border border-edge bg-surface-2 p-3">
+          <QueryCriteriaView query={previewQuery} />
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <span className="flex items-center gap-2 text-sm text-ink-muted">
           <Switch checked={autoTravel} onChange={setAutoTravel} label={t('searches.autoTravel')} />
@@ -131,6 +166,19 @@ function AddSearchForm({
         </span>
         <div className="flex-1" />
         {errorMessage && <span className="text-sm text-danger">{errorMessage}</span>}
+        <Button
+          variant="ghost"
+          type="button"
+          disabled={trimmedInput === '' || previewLoading}
+          onClick={() => void togglePreview()}
+        >
+          <ListFilter className="h-4 w-4" />
+          {previewLoading
+            ? t('criteria.loading')
+            : previewOpen
+              ? t('criteria.hide')
+              : t('criteria.show')}
+        </Button>
         <Button variant="primary" type="submit" disabled={submitting || input.trim() === ''}>
           <Plus className="h-4 w-4" />
           {t('searches.watch')}
@@ -152,6 +200,7 @@ function SearchRow({
   const t = useT();
   const tn = useTn();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [criteriaOpen, setCriteriaOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function run(action: () => Promise<void>) {
@@ -181,6 +230,16 @@ function SearchRow({
           </div>
         </div>
         <div className="flex-1" />
+        <IconButton
+          variant="ghost"
+          aria-label={criteriaOpen ? t('criteria.hide') : t('criteria.show')}
+          title={criteriaOpen ? t('criteria.hide') : t('criteria.show')}
+          aria-expanded={criteriaOpen}
+          className={criteriaOpen ? 'text-gold' : undefined}
+          onClick={() => setCriteriaOpen((previous) => !previous)}
+        >
+          <ListFilter className="h-4 w-4" />
+        </IconButton>
         <span className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Switch
             checked={search.enabled}
@@ -218,6 +277,11 @@ function SearchRow({
         <div className="mt-1.5 text-xs text-ink-faint">{search.statusDetail}</div>
       )}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
+      {criteriaOpen && (
+        <div className="mt-2 border-t border-edge pt-2">
+          <QueryCriteriaView query={search.filters} />
+        </div>
+      )}
     </li>
   );
 }

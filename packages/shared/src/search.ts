@@ -56,6 +56,25 @@ export interface LeagueInfo {
   text: string;
 }
 
+/**
+ * One entry of the trade-site stat dictionary — maps an opaque query stat id
+ * (`explicit.stat_3299347043`) to its human label (`+#% to Fire Resistance`).
+ */
+export interface StatDictionaryEntry {
+  id: string;
+  text: string;
+  /** Stat group: explicit / implicit / rune / enchant / sanctum / … */
+  type: string;
+}
+
+/** A resolved-but-not-watched search — the add-form criteria preview. */
+export interface SearchPreview {
+  id: string;
+  realm: Realm;
+  league: string;
+  query: unknown;
+}
+
 /** Engine currently serving a search's detection. */
 export type EngineKind = 'ws' | 'poll';
 

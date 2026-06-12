@@ -6,11 +6,18 @@ import { HostGuardMiddleware } from './host-guard.middleware.js';
 import { HealthController } from './health.controller.js';
 import { LeaguesController } from './leagues.controller.js';
 import { SearchesController } from './searches.controller.js';
+import { StatsController } from './stats.controller.js';
 import { StatusController } from './status.controller.js';
 
 @Module({
   imports: [SearchModule, TravelModule],
-  controllers: [HealthController, LeaguesController, SearchesController, StatusController],
+  controllers: [
+    HealthController,
+    LeaguesController,
+    SearchesController,
+    StatsController,
+    StatusController,
+  ],
 })
 export class ApiModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

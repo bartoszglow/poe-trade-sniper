@@ -11,7 +11,12 @@ import {
   Query,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { PURCHASE_MODES, type Hit, type SearchRuntimeInfo } from '@poe-sniper/shared';
+import {
+  PURCHASE_MODES,
+  type Hit,
+  type SearchPreview,
+  type SearchRuntimeInfo,
+} from '@poe-sniper/shared';
 import { SearchManager } from '../search/search-manager.js';
 
 const purchaseModeSchema = z.enum(PURCHASE_MODES as [string, ...string[]]);
@@ -40,6 +45,11 @@ const updateSearchSchema = z
       body.enabled !== undefined,
     { message: 'nothing to update' },
   );
+
+const previewSearchSchema = z.object({
+  input: z.string().min(1),
+  league: z.string().min(1).optional(),
+});
 
 const listHitsSchema = z.object({
   searchId: z.string().min(1).optional(),
@@ -77,6 +87,13 @@ export class SearchesController {
       autoTravel: payload.autoTravel,
       purchaseMode: (payload.purchaseMode ?? null) as SearchRuntimeInfo['purchaseMode'],
     });
+  }
+
+  /** Resolve without persisting — powers the add-form criteria preview. */
+  @Post('searches/preview')
+  async preview(@Body() body: unknown): Promise<SearchPreview> {
+    const payload = parseOrBadRequest(previewSearchSchema, body);
+    return this.searchManager.preview(payload.input, payload.league);
   }
 
   @Patch('searches/:id')

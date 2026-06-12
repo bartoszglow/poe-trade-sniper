@@ -105,6 +105,23 @@ export const EN = {
   'searches.remove': 'Remove {label}',
   'searches.last': 'last {time}',
 
+  // Search criteria view
+  'criteria.show': 'Show criteria',
+  'criteria.hide': 'Hide criteria',
+  'criteria.item': 'Item',
+  'criteria.purchase': 'Purchase',
+  'criteria.price': 'Price',
+  'criteria.stats': 'Stats',
+  'criteria.disabledTag': 'disabled',
+  'criteria.group.type': 'Type',
+  'criteria.group.equipment': 'Equipment',
+  'criteria.group.requirements': 'Requirements',
+  'criteria.group.misc': 'Miscellaneous',
+  'criteria.group.trade': 'Trade',
+  'criteria.other': 'Other',
+  'criteria.empty': 'No criteria — this search matches everything.',
+  'criteria.loading': 'Resolving criteria…',
+
   // Hits page
   'hits.title': 'Hits',
   'hits.allSearches': 'All searches',
@@ -265,6 +282,23 @@ export const PL: Record<MessageKey, string> = {
   'searches.autoFor': 'Automatyczna podróż dla {label}',
   'searches.remove': 'Usuń {label}',
   'searches.last': 'ostatnie {time}',
+
+  // Search criteria view
+  'criteria.show': 'Pokaż kryteria',
+  'criteria.hide': 'Ukryj kryteria',
+  'criteria.item': 'Przedmiot',
+  'criteria.purchase': 'Zakup',
+  'criteria.price': 'Cena',
+  'criteria.stats': 'Staty',
+  'criteria.disabledTag': 'wyłączone',
+  'criteria.group.type': 'Typ',
+  'criteria.group.equipment': 'Ekwipunek',
+  'criteria.group.requirements': 'Wymagania',
+  'criteria.group.misc': 'Różne',
+  'criteria.group.trade': 'Handel',
+  'criteria.other': 'Inne',
+  'criteria.empty': 'Brak kryteriów — to wyszukiwanie pasuje do wszystkiego.',
+  'criteria.loading': 'Pobieranie kryteriów…',
 
   // Hits page
   'hits.title': 'Trafienia',
