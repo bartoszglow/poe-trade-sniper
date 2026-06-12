@@ -11,7 +11,6 @@ import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useSearches } from '../hooks/useSearches';
 import { ApiError } from '../lib/api';
-import { PURCHASE_MODE_OPTIONS, toPurchaseMode, UNVERIFIED_MODE_HINT } from '../lib/purchase-modes';
 
 const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   pending: 'neutral',
@@ -29,34 +28,35 @@ function AddSearchForm({
     label?: string;
     league?: string;
     autoTravel: boolean;
-    purchaseMode: ReturnType<typeof toPurchaseMode>;
   }) => Promise<void>;
 }) {
-  const { leagues, loaded: leaguesLoaded } = useLeagues();
+  const { leagues } = useLeagues();
   const [input, setInput] = useState('');
   const [label, setLabel] = useState('');
   const [league, setLeague] = useState('');
-  const [purchaseModeValue, setPurchaseModeValue] = useState('instant');
   const [autoTravel, setAutoTravel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // A full URL carries its own league segment — the select is ignored then.
-  const inputIsUrl = /^(https?|wss?):\/\//.test(input.trim());
+  // The URL is the source of truth for league + purchase type (D-14).
+  // Only a bare id needs a league — the resolve endpoint takes it in the path.
+  const trimmedInput = input.trim();
+  const inputIsBareId = trimmedInput !== '' && !/^(https?|wss?):\/\//.test(trimmedInput);
 
   async function submit(formEvent: FormEvent) {
     formEvent.preventDefault();
     setSubmitting(true);
     setErrorMessage(null);
     // The select shows the first league before any change — submit must match.
-    const effectiveLeague = league.trim() || leagues[0]?.id || undefined;
+    const effectiveLeague = inputIsBareId
+      ? league.trim() || leagues[0]?.id || undefined
+      : undefined;
     try {
       await onAdd({
-        input: input.trim(),
+        input: trimmedInput,
         label: label.trim() || undefined,
         league: effectiveLeague,
         autoTravel,
-        purchaseMode: toPurchaseMode(purchaseModeValue),
       });
       setInput('');
       setLabel('');
@@ -73,8 +73,11 @@ function AddSearchForm({
       onSubmit={(formEvent) => void submit(formEvent)}
       className="rounded-lg border border-edge bg-surface-1 p-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Field label="Search id or URL" hint="paste from the trade site">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <Field
+          label="Search id or URL"
+          hint="paste from the trade site — it defines the query, league and purchase type"
+        >
           <TextInput
             value={input}
             onChange={(changeEvent) => setInput(changeEvent.target.value)}
@@ -89,42 +92,26 @@ function AddSearchForm({
             placeholder="T1 ES boots"
           />
         </Field>
-        <Field
-          label="League"
-          hint={
-            inputIsUrl
-              ? 'taken from the URL'
-              : leagues.length > 0
-                ? 'used when adding by bare id'
-                : 'empty = server default'
-          }
-        >
-          {leagues.length > 0 ? (
-            <Select
-              value={league || (leagues[0]?.id ?? '')}
-              onChange={(changeEvent) => setLeague(changeEvent.target.value)}
-              options={leagues.map((leagueInfo) => ({
-                value: leagueInfo.id,
-                label: leagueInfo.text,
-              }))}
-              disabled={inputIsUrl}
-            />
-          ) : (
-            <TextInput
-              value={league}
-              onChange={(changeEvent) => setLeague(changeEvent.target.value)}
-              placeholder="Standard"
-              disabled={!leaguesLoaded || inputIsUrl}
-            />
-          )}
-        </Field>
-        <Field label="Purchase type" hint={UNVERIFIED_MODE_HINT}>
-          <Select
-            value={purchaseModeValue}
-            onChange={(changeEvent) => setPurchaseModeValue(changeEvent.target.value)}
-            options={PURCHASE_MODE_OPTIONS}
-          />
-        </Field>
+        {inputIsBareId && (
+          <Field label="League" hint="a bare id needs one">
+            {leagues.length > 0 ? (
+              <Select
+                value={league || (leagues[0]?.id ?? '')}
+                onChange={(changeEvent) => setLeague(changeEvent.target.value)}
+                options={leagues.map((leagueInfo) => ({
+                  value: leagueInfo.id,
+                  label: leagueInfo.text,
+                }))}
+              />
+            ) : (
+              <TextInput
+                value={league}
+                onChange={(changeEvent) => setLeague(changeEvent.target.value)}
+                placeholder="Standard"
+              />
+            )}
+          </Field>
+        )}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <span className="flex items-center gap-2 text-sm text-ink-muted">
@@ -153,10 +140,7 @@ function SearchRow({
   onRemove,
 }: {
   search: SearchRuntimeInfo;
-  onUpdate: (payload: {
-    autoTravel?: boolean;
-    purchaseMode?: ReturnType<typeof toPurchaseMode>;
-  }) => Promise<void>;
+  onUpdate: (payload: { autoTravel?: boolean }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -188,14 +172,6 @@ function SearchRow({
           </div>
         </div>
         <div className="flex-1" />
-        <Select
-          aria-label="Purchase type"
-          value={search.purchaseMode ?? ''}
-          onChange={(changeEvent) =>
-            void run(() => onUpdate({ purchaseMode: toPurchaseMode(changeEvent.target.value) }))
-          }
-          options={PURCHASE_MODE_OPTIONS}
-        />
         <span className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Switch
             checked={search.autoTravel}
