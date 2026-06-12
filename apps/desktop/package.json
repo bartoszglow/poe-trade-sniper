@@ -19,7 +19,6 @@
   "build": {
     "appId": "best.bartosz.poe-trade-sniper",
     "productName": "PoE Trade Sniper",
-    "executableName": "poe-trade-sniper",
     "directories": {
       "output": "release"
     },
@@ -69,6 +68,7 @@
       "allowToChangeInstallationDirectory": true
     },
     "linux": {
+      "executableName": "poe-trade-sniper",
       "target": [
         {
           "target": "AppImage",
