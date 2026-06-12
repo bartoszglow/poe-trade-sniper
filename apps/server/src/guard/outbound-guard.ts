@@ -54,6 +54,9 @@ export class OutboundGuard {
   reset(): GuardStatus {
     if (this.trippedReason !== null) {
       this.trippedReason = null;
+      // Fresh windows — otherwise the backlog would re-trip on the next call.
+      this.httpTimestamps.length = 0;
+      this.wsConnectTimestamps.length = 0;
       this.logger.warn('guard reset by operator — outbound re-armed');
       this.realtimeBus.publish({
         type: 'guard',
