@@ -13,7 +13,6 @@ type WsConfig = Pick<
   | 'WS_HANDSHAKE_TIMEOUT_MS'
   | 'WS_RECONNECT_LADDER_MS'
   | 'WS_STABLE_CONNECTION_MS'
-  | 'WS_KEEPALIVE_PING_MS'
   | 'MAX_FRESH_IDS_PER_TICK'
 >;
 
@@ -50,7 +49,6 @@ export class WsEngine implements DetectionEngine {
 
   private readonly logger = new Logger(WsEngine.name);
   private socket: WebSocket | null = null;
-  private keepaliveTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   /** Backoff ladder index — reset after a connection proves stable. */
   private reconnectAttempt = 0;
@@ -77,9 +75,7 @@ export class WsEngine implements DetectionEngine {
 
   stop(): void {
     this.stopped = true;
-    if (this.keepaliveTimer) clearInterval(this.keepaliveTimer);
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.keepaliveTimer = null;
     this.reconnectTimer = null;
     this.socket?.terminate();
     this.socket = null;
@@ -119,7 +115,12 @@ export class WsEngine implements DetectionEngine {
       this.connectedAtMs = Date.now();
       this.callbacks?.onStatus('active', 'live websocket connected');
       this.recordWs('ws-open', null, null);
-      this.keepaliveTimer = setInterval(() => socket.ping(), this.config.WS_KEEPALIVE_PING_MS);
+      // No client-initiated keepalive ping. A real browser CANNOT send ws ping
+      // frames (the WebSocket JS API exposes no ping), so GGG's live endpoint
+      // treats a client ping as a protocol/policy violation and closes with
+      // 1008 — which is exactly what killed every connection at the 30s ping
+      // mark. We mimic the browser: stay silent and let `ws` auto-pong GGG's
+      // server-side pings, which is what keeps the connection alive.
     });
 
     socket.on('message', (data: Buffer) => {
@@ -131,8 +132,6 @@ export class WsEngine implements DetectionEngine {
     });
 
     socket.on('close', (code: number) => {
-      if (this.keepaliveTimer) clearInterval(this.keepaliveTimer);
-      this.keepaliveTimer = null;
       if (this.stopped) return;
       const wasStable =
         this.connectedAtMs > 0 &&

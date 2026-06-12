@@ -100,7 +100,6 @@ export const envSchema = z.object({
     .regex(/^\d+(,\d+)*$/, 'comma-separated milliseconds, e.g. 1000,5000,20000,60000')
     .default('1000,5000,20000,60000')
     .transform((csv) => csv.split(',').map(Number)),
-  WS_KEEPALIVE_PING_MS: z.coerce.number().int().min(5_000).default(30_000),
   /**
    * A connection must survive this long to count as "stable" — the backoff
    * ladder resets only after a stable connection, so a connect→instant-drop
