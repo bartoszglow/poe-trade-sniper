@@ -9,6 +9,11 @@ export const envSchema = z.object({
   APP_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3500),
   DB_PATH: z.string().min(1).default('./data/dev.db'),
+  /**
+   * When set, the server serves this directory as the web UI (loopback,
+   * one origin — the desktop shell uses it). Unset in web dev: Vite serves.
+   */
+  STATIC_DIR: z.string().min(1).optional(),
 
   // --- GGG trade API ---
   POE_BASE_URL: z.string().url().default('https://www.pathofexile.com'),

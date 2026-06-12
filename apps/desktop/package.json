@@ -1,0 +1,24 @@
+{
+  "name": "@poe-sniper/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "pnpm build && SNIPER_DEV_URL=http://localhost:5180 electron .",
+    "preview": "pnpm build && pnpm abi:electron && electron .",
+    "abi:electron": "node scripts/sqlite-abi.mjs electron",
+    "abi:node": "node scripts/sqlite-abi.mjs node",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"no tests yet: thin shell\""
+  },
+  "dependencies": {
+    "@poe-sniper/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/node": "^25.9.2",
+    "electron": "^41.7.2"
+  }
+}

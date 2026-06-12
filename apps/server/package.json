@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./dist/server.js",
+  "exports": {
+    ".": "./dist/server.js"
+  },
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
@@ -17,6 +21,7 @@
     "@nestjs/common": "^11.1.26",
     "@nestjs/core": "^11.1.26",
     "@nestjs/platform-express": "^11.1.26",
+    "@nestjs/serve-static": "^5.0.5",
     "@poe-sniper/shared": "workspace:*",
     "better-sqlite3": "^12.10.0",
     "drizzle-orm": "^0.45.2",

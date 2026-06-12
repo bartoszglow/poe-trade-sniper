@@ -7,6 +7,7 @@ Grouped by purpose — open the folder that matches what you need.
 - [`architecture.md`](architecture/architecture.md) — repo layout, layering, the engine-registry contract, one-server-two-shells topology.
 - [`engines.md`](architecture/engines.md) — detection engines, the registry contract, the shared scheduler.
 - [`travel.md`](architecture/travel.md) — browser-free travel, the queue, auto-travel rules.
+- [`desktop.md`](architecture/desktop.md) — Electron shell, dev vs preview modes, the sqlite ABI swap.
 - [`auth.md`](architecture/auth.md) — why no OAuth, the supported session sources, secret rules.
 - [`frontend.md`](architecture/frontend.md) — shell layout, nav registry, atomic-component rule, theme tokens, Electron readiness.
 
