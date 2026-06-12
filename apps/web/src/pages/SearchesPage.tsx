@@ -105,7 +105,7 @@ function AddSearchForm({
             {leagues.length > 0 ? (
               <Select
                 value={league || (leagues[0]?.id ?? '')}
-                onChange={(changeEvent) => setLeague(changeEvent.target.value)}
+                onChange={setLeague}
                 options={leagues.map((leagueInfo) => ({
                   value: leagueInfo.id,
                   label: leagueInfo.text,

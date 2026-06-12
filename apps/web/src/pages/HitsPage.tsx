@@ -44,10 +44,11 @@ export function HitsPage() {
         <h1 className="text-lg font-semibold text-ink">{t('hits.title')}</h1>
         <div className="flex-1" />
         <Select
-          aria-label={t('hits.filterBySearch')}
+          ariaLabel={t('hits.filterBySearch')}
           value={searchFilter}
-          onChange={(changeEvent) => setSearchFilter(changeEvent.target.value)}
+          onChange={setSearchFilter}
           options={filterOptions}
+          className="w-48"
         />
         <Button variant="ghost" onClick={refresh}>
           <RefreshCw className="h-3.5 w-3.5" />

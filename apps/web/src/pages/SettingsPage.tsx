@@ -139,10 +139,11 @@ export function SettingsPage() {
       <SettingsCard title={t('settings.language')}>
         <div className="flex items-center gap-3">
           <Select
-            aria-label={t('settings.language')}
+            ariaLabel={t('settings.language')}
             value={language}
-            onChange={(changeEvent) => setLanguage(changeEvent.target.value as Language)}
+            onChange={(nextLanguage) => setLanguage(nextLanguage as Language)}
             options={LANGUAGES.map((entry) => ({ value: entry.code, label: entry.label }))}
+            className="w-40"
           />
           <span className="text-xs text-ink-faint">{t('settings.languageHint')}</span>
         </div>
