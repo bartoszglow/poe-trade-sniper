@@ -146,7 +146,7 @@ function SearchRow({
   onRemove,
 }: {
   search: SearchRuntimeInfo;
-  onUpdate: (payload: { autoTravel?: boolean }) => Promise<void>;
+  onUpdate: (payload: { autoTravel?: boolean; enabled?: boolean }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
   const t = useT();
@@ -181,6 +181,14 @@ function SearchRow({
           </div>
         </div>
         <div className="flex-1" />
+        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <Switch
+            checked={search.enabled}
+            onChange={(checked) => void run(() => onUpdate({ enabled: checked }))}
+            label={t('searches.activeFor', { label: search.label })}
+          />
+          {t('searches.activeToggle')}
+        </span>
         <span className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Switch
             checked={search.autoTravel}

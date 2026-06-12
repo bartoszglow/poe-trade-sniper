@@ -30,10 +30,14 @@ const updateSearchSchema = z
     label: z.string().min(1).max(80).optional(),
     autoTravel: z.boolean().optional(),
     purchaseMode: purchaseModeSchema.nullable().optional(),
+    enabled: z.boolean().optional(),
   })
   .refine(
     (body) =>
-      body.label !== undefined || body.autoTravel !== undefined || body.purchaseMode !== undefined,
+      body.label !== undefined ||
+      body.autoTravel !== undefined ||
+      body.purchaseMode !== undefined ||
+      body.enabled !== undefined,
     { message: 'nothing to update' },
   );
 
@@ -82,6 +86,7 @@ export class SearchesController {
       label: payload.label,
       autoTravel: payload.autoTravel,
       purchaseMode: payload.purchaseMode as SearchRuntimeInfo['purchaseMode'],
+      enabled: payload.enabled,
     });
   }
 

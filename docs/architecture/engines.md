@@ -48,3 +48,12 @@ automatically.
 
 `pending → connecting → active ⇄ degraded → stopped`, surfaced per search via
 `GET /api/searches` and the `engine-status` SSE event.
+
+## Pause (enabled flag)
+
+Every search carries a persisted `enabled` flag (`PATCH /api/searches/:id
+{enabled}`; the ACTIVE toggle in the UI). Disabling stops the engine and parks
+the watcher at `stopped`/`paused` — zero outbound traffic, config and hit
+history kept; re-enabling restarts detection through the normal registry
+probe. The flag survives restarts: a paused search boots straight to
+`stopped`.

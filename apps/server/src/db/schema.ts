@@ -8,6 +8,8 @@ export const searches = sqliteTable('searches', {
   league: text('league').notNull(),
   label: text('label').notNull(),
   autoTravel: integer('auto_travel', { mode: 'boolean' }).notNull().default(false),
+  /** Paused searches stay listed but run no detection engine. */
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   /** PurchaseMode override or null = keep the resolved query's status.option. */
   purchaseMode: text('purchase_mode'),
   /** Raw trade query JSON — opaque payload owned by the trade-api adapter. */

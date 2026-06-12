@@ -47,6 +47,7 @@ export interface UpdateSearchOptions {
   label?: string;
   autoTravel?: boolean;
   purchaseMode?: PurchaseMode | null;
+  enabled?: boolean;
 }
 
 /** Prune cadence — checking on every single hit would be wasted writes. */
@@ -139,6 +140,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       league: ref.league,
       label: options.label ?? ref.searchId,
       autoTravel,
+      enabled: true,
       purchaseMode,
       filters: resolvedQuery,
       addedAt: new Date().toISOString(),
@@ -162,12 +164,15 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       options.purchaseMode !== undefined ? options.purchaseMode : watcher.row.purchaseMode;
     const autoTravel = options.autoTravel ?? watcher.row.autoTravel;
     this.assertAutoTravelAllowed(autoTravel, watcher.row.filters, purchaseMode);
+    const wasEnabled = watcher.row.enabled;
+    const enabled = options.enabled ?? wasEnabled;
 
     watcher.row = {
       ...watcher.row,
       label: options.label ?? watcher.row.label,
       autoTravel,
       purchaseMode,
+      enabled,
     };
     this.database
       .update(searches)
@@ -175,12 +180,21 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         label: watcher.row.label,
         autoTravel: watcher.row.autoTravel,
         purchaseMode: watcher.row.purchaseMode,
+        enabled: watcher.row.enabled,
       })
       .where(eq(searches.id, searchId))
       .run();
 
-    // A purchase-mode change alters the executed query — restart detection.
-    if (options.purchaseMode !== undefined) {
+    if (!enabled && wasEnabled) {
+      // Paused: stop detection but keep the search and its config.
+      watcher.engine?.stop();
+      watcher.engine = null;
+      this.setStatus(watcher, 'stopped', 'paused');
+    } else if (enabled && !wasEnabled) {
+      this.setStatus(watcher, 'pending', null);
+      void this.startWatcher(watcher);
+    } else if (options.purchaseMode !== undefined && enabled) {
+      // A purchase-mode change alters the executed query — restart detection.
       watcher.engine?.stop();
       watcher.engine = null;
       watcher.status = 'pending';
@@ -277,6 +291,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   private async startPendingWatchers(): Promise<void> {
     for (const watcher of this.watchers.values()) {
+      if (!watcher.row.enabled) continue;
       if (watcher.engine === null && watcher.status !== 'stopped') {
         await this.startWatcher(watcher);
       }
@@ -440,8 +455,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return {
       row,
       engine: null,
-      status: 'pending',
-      statusDetail: null,
+      status: row.enabled ? 'pending' : 'stopped',
+      statusDetail: row.enabled ? null : 'paused',
       correlationId: randomUUID(),
       hitCount: 0,
       lastHitAt: null,
@@ -456,6 +471,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       league: row.league,
       label: row.label,
       autoTravel: row.autoTravel,
+      enabled: row.enabled,
       purchaseMode: (row.purchaseMode as PurchaseMode | null) ?? null,
       filters: row.filters,
       addedAt: row.addedAt,

@@ -117,6 +117,67 @@ describe('SearchManager', () => {
     }
   });
 
+  it('pause stops detection, resume restarts it, both survive scheduler ticks', async () => {
+    const { manager, database, executeSearch } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+
+      let info = manager.update('AbCdEf123', { enabled: false });
+      expect(info.enabled).toBe(false);
+      expect(info.status).toBe('stopped');
+      expect(info.engine).toBeNull();
+
+      // Paused searches must produce zero outbound traffic.
+      executeSearch.mockClear();
+      await manager.runSchedulerTick();
+      await manager.runSchedulerTick();
+      expect(executeSearch).not.toHaveBeenCalled();
+
+      // Pause is persisted — survives a restart.
+      const persisted = database.$client
+        .prepare('SELECT enabled FROM searches WHERE id = ?')
+        .get('AbCdEf123') as { enabled: number };
+      expect(persisted.enabled).toBe(0);
+
+      info = manager.update('AbCdEf123', { enabled: true });
+      expect(info.enabled).toBe(true);
+      await manager.runSchedulerTick();
+      expect(executeSearch).toHaveBeenCalled();
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('a paused search stays stopped after bootstrap reload', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      manager.update('AbCdEf123', { enabled: false });
+      manager.onApplicationShutdown();
+
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        {} as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        const info = reloaded.list().find((entry) => entry.id === 'AbCdEf123');
+        expect(info?.enabled).toBe(false);
+        expect(info?.status).toBe('stopped');
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('persists detected hits and publishes hit events', async () => {
     const { manager, database, tradeApi, events, executeSearch } = createManager();
     try {

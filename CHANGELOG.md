@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Alert volume control in Settings: gain-scaled WebAudio synth (0–100 %,
   persisted), themed `Slider` atom, preview on release. System notifications
   are sent `silent` so the slider governs all alert audio.
+- Per-search ACTIVE toggle: pause a search without deleting it (persisted
+  `enabled` flag, migration 0003) — the engine stops, config and hit history
+  stay, re-enabling restarts detection; paused searches boot as `stopped`.
 - Phase 5 desktop: frameless window (traffic lights over the app bar,
   data-shell switch via preload), server bundled to one CJS file (esbuild —
   enabled by the explicit-@Inject rule), electron-builder .dmg (arm64,

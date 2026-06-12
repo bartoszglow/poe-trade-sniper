@@ -36,6 +36,8 @@ export interface ManagedSearch {
   label: string;
   /** When true, a detected hit triggers an automatic hideout travel. Explicit opt-in. */
   autoTravel: boolean;
+  /** Paused (false) searches stay listed and configured but run no detection. */
+  enabled: boolean;
   /**
    * Overrides the query's `status.option` when set; null keeps the resolved
    * query's own status. Auto-travel only ever fires on securable hits — they

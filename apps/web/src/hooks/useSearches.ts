@@ -15,6 +15,7 @@ export interface UpdateSearchPayload {
   label?: string;
   autoTravel?: boolean;
   purchaseMode?: PurchaseMode | null;
+  enabled?: boolean;
 }
 
 /** Fetches the watched searches; refetches whenever SSE signals a change. */
