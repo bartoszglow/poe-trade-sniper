@@ -43,6 +43,17 @@ function createWindow(url: string): BrowserWindow {
     minHeight: 600,
     backgroundColor: '#0b0a08',
     title: 'poe-trade-sniper',
+    webPreferences: {
+      // Renderer is plain web content — no Node access, fully sandboxed.
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  // The renderer never opens or navigates to external content.
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', (navigationEvent, targetUrl) => {
+    if (!targetUrl.startsWith(url)) navigationEvent.preventDefault();
   });
   void window.loadURL(url);
   return window;

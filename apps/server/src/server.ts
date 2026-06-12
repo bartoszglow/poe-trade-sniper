@@ -23,6 +23,6 @@ export async function startServer(): Promise<RunningServer> {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();
-  await app.listen(config.PORT);
+  await app.listen(config.PORT, config.HOST);
   return { app, port: config.PORT, config };
 }
