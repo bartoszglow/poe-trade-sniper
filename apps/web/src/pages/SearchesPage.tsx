@@ -41,6 +41,9 @@ function AddSearchForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // A full URL carries its own league segment — the select is ignored then.
+  const inputIsUrl = /^(https?|wss?):\/\//.test(input.trim());
+
   async function submit(formEvent: FormEvent) {
     formEvent.preventDefault();
     setSubmitting(true);
@@ -88,7 +91,13 @@ function AddSearchForm({
         </Field>
         <Field
           label="League"
-          hint={leagues.length > 0 ? 'used when adding by bare id' : 'empty = server default'}
+          hint={
+            inputIsUrl
+              ? 'taken from the URL'
+              : leagues.length > 0
+                ? 'used when adding by bare id'
+                : 'empty = server default'
+          }
         >
           {leagues.length > 0 ? (
             <Select
@@ -98,13 +107,14 @@ function AddSearchForm({
                 value: leagueInfo.id,
                 label: leagueInfo.text,
               }))}
+              disabled={inputIsUrl}
             />
           ) : (
             <TextInput
               value={league}
               onChange={(changeEvent) => setLeague(changeEvent.target.value)}
               placeholder="Standard"
-              disabled={!leaguesLoaded}
+              disabled={!leaguesLoaded || inputIsUrl}
             />
           )}
         </Field>
