@@ -45,6 +45,11 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
+    // Electron preload runs in the renderer — browser globals.
+    files: ['apps/desktop/src/preload.cjs'],
+    languageOptions: { globals: { ...globals.browser } },
+  },
+  {
     files: ['apps/web/**/*.{ts,tsx}'],
     languageOptions: {
       globals: { ...globals.browser },
