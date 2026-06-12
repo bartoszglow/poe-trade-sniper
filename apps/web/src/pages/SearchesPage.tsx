@@ -152,7 +152,7 @@ function AddSearchForm({
         )}
       </div>
       {previewOpen && previewQuery !== null && (
-        <div className="mt-3 rounded-md border border-edge bg-surface-2 p-3">
+        <div className="mt-3 rounded-md border border-edge bg-surface-1 p-3">
           <QueryCriteriaView query={previewQuery} />
         </div>
       )}

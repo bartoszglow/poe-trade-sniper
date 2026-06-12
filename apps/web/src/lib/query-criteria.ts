@@ -91,6 +91,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** null/undefined = "not set" — GGG stores empty bounds as null (`min: null`). */
+function present(value: unknown): boolean {
+  return value !== undefined && value !== null;
+}
+
 /** `gem_level` → `Gem Level` for keys outside the known map. */
 function prettifyKey(key: string): string {
   return key
@@ -114,29 +119,39 @@ function humanOption(option: unknown): string {
  * {min,max}, {input}, combinations); leftovers are appended as raw JSON.
  */
 export function formatFilterValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
+  if (!present(value)) return '';
   if (!isRecord(value)) return scalarText(value);
   const parts: string[] = [];
-  if (value['option'] !== undefined) parts.push(humanOption(value['option']));
-  if (value['min'] !== undefined) parts.push(`min ${scalarText(value['min'])}`);
-  if (value['max'] !== undefined) parts.push(`max ${scalarText(value['max'])}`);
-  if (value['input'] !== undefined) parts.push(scalarText(value['input']));
-  if (value['weight'] !== undefined) parts.push(`weight ${scalarText(value['weight'])}`);
-  const leftoverKeys = Object.keys(value).filter((key) => !KNOWN_VALUE_KEYS.has(key));
+  if (present(value['option'])) parts.push(humanOption(value['option']));
+  if (present(value['min'])) parts.push(`min ${scalarText(value['min'])}`);
+  if (present(value['max'])) parts.push(`max ${scalarText(value['max'])}`);
+  if (present(value['input'])) parts.push(scalarText(value['input']));
+  if (present(value['weight'])) parts.push(`weight ${scalarText(value['weight'])}`);
+  const leftoverKeys = Object.keys(value).filter(
+    (key) => !KNOWN_VALUE_KEYS.has(key) && present(value[key]),
+  );
   if (leftoverKeys.length > 0 || parts.length === 0) {
     parts.push(JSON.stringify(Object.fromEntries(leftoverKeys.map((key) => [key, value[key]]))));
   }
   return parts.join(' · ');
 }
 
-/** Price reads better as "min/max first, currency last": `max 400 exalted`. */
+/**
+ * Price reads as a range with the currency last: `≤ 100 exalted`, `5–40 divine`.
+ * The currency lives in `option` and is often absent (no currency picked) —
+ * then we show the bare bound, never an invented unit.
+ */
 function formatPrice(value: unknown): string {
   if (!isRecord(value)) return formatFilterValue(value);
-  const parts: string[] = [];
-  if (value['min'] !== undefined) parts.push(`min ${scalarText(value['min'])}`);
-  if (value['max'] !== undefined) parts.push(`max ${scalarText(value['max'])}`);
-  if (value['option'] !== undefined) parts.push(scalarText(value['option']));
-  return parts.length > 0 ? parts.join(' ') : formatFilterValue(value);
+  const min = value['min'];
+  const max = value['max'];
+  const currency = present(value['option']) ? scalarText(value['option']) : '';
+  let range = '';
+  if (present(min) && present(max)) range = `${scalarText(min)}–${scalarText(max)}`;
+  else if (present(max)) range = `≤ ${scalarText(max)}`;
+  else if (present(min)) range = `≥ ${scalarText(min)}`;
+  const combined = [range, currency].filter(Boolean).join(' ');
+  return combined || formatFilterValue(value);
 }
 
 /** name/type can be a string or `{option, discriminator}`. */

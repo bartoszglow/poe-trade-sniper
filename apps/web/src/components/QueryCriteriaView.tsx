@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useStatsDictionary } from '../hooks/useStatsDictionary';
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
@@ -26,30 +26,68 @@ const GROUP_TITLE_KEYS: Record<string, MessageKey> = {
   trade_filters: 'criteria.group.trade',
 };
 
-function SectionLabel({ text }: { text: string }) {
+/** One bordered group box — the responsive grid arranges these. */
+function CriteriaCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <span className="w-24 shrink-0 text-[0.65rem] font-semibold tracking-widest text-ink-faint uppercase">
-      {text}
-    </span>
+    <div className="rounded-md border border-edge bg-surface-2 p-3">
+      <div className="mb-2 text-[0.6rem] font-semibold tracking-widest text-ink-faint uppercase">
+        {title}
+      </div>
+      <dl className="flex flex-col gap-1">{children}</dl>
+    </div>
   );
 }
 
-function RowList({ rows, disabledTag }: { rows: CriteriaRow[]; disabledTag: string }) {
+/** key (left, muted) / value (right) — wraps gracefully in a narrow column. */
+function CriteriaItem({
+  label,
+  value,
+  disabled = false,
+  accent = false,
+  disabledTag,
+}: {
+  label: string;
+  value?: string;
+  disabled?: boolean;
+  accent?: boolean;
+  disabledTag?: string;
+}) {
   return (
-    <ul className="min-w-0 flex-1">
-      {rows.map((row, index) => (
-        <li
-          key={`${row.label}-${index}`}
-          className={`flex flex-wrap items-baseline gap-x-2 text-xs ${
-            row.disabled ? 'text-ink-faint line-through' : 'text-ink-muted'
+    <div
+      className={`flex items-baseline justify-between gap-3 text-xs ${
+        disabled ? 'text-ink-faint line-through' : ''
+      }`}
+    >
+      <dt className={`min-w-0 break-words ${disabled ? '' : 'text-ink-muted'}`}>
+        {label}
+        {disabled && disabledTag && <span className="no-underline"> ({disabledTag})</span>}
+      </dt>
+      {value && (
+        <dd
+          className={`shrink-0 text-right ${
+            accent ? 'font-mono text-gold-bright' : disabled ? '' : 'text-ink'
           }`}
         >
-          <span>{row.label}</span>
-          {row.value && <span className={row.disabled ? '' : 'text-ink'}>{row.value}</span>}
-          {row.disabled && <span className="no-underline">({disabledTag})</span>}
-        </li>
+          {value}
+        </dd>
+      )}
+    </div>
+  );
+}
+
+function RowItems({ rows, disabledTag }: { rows: CriteriaRow[]; disabledTag: string }) {
+  return (
+    <>
+      {rows.map((row, index) => (
+        <CriteriaItem
+          key={`${row.label}-${index}`}
+          label={row.label}
+          value={row.value}
+          disabled={row.disabled}
+          disabledTag={disabledTag}
+        />
       ))}
-    </ul>
+    </>
   );
 }
 
@@ -66,9 +104,10 @@ function hasAnyContent(criteria: ParsedCriteria): boolean {
 
 /**
  * Humanized rendering of a resolved trade query — the "what does this search
- * actually match" panel. Unrecognized parts render raw (lib/query-criteria
- * never drops data); stat ids resolve via the cached dictionary and fall back
- * to raw ids while it loads.
+ * actually match" panel, laid out as group boxes in a responsive grid
+ * (1 → 2 → 3 columns). Unrecognized parts render raw (lib/query-criteria never
+ * drops data); stat ids resolve via the cached dictionary, falling back to raw
+ * ids while it loads.
  */
 export function QueryCriteriaView({ query }: { query: unknown }) {
   const t = useT();
@@ -79,78 +118,70 @@ export function QueryCriteriaView({ query }: { query: unknown }) {
     return <p className="text-xs text-ink-faint">{t('criteria.empty')}</p>;
   }
 
+  const disabledTag = t('criteria.disabledTag');
   const statusLabel = criteria.statusOption
     ? (STATUS_OPTION_LABELS[criteria.statusOption] ?? criteria.statusOption)
     : null;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {criteria.itemRows.length > 0 && (
-        <div className="flex gap-2">
-          <SectionLabel text={t('criteria.item')} />
-          <RowList rows={criteria.itemRows} disabledTag={t('criteria.disabledTag')} />
-        </div>
+        <CriteriaCard title={t('criteria.item')}>
+          <RowItems rows={criteria.itemRows} disabledTag={disabledTag} />
+        </CriteriaCard>
       )}
 
-      {statusLabel && (
-        <div className="flex gap-2">
-          <SectionLabel text={t('criteria.purchase')} />
-          <span className="text-xs text-ink-muted">
-            {statusLabel}
-            {statusLabel !== criteria.statusOption && (
-              <span className="text-ink-faint"> ({criteria.statusOption})</span>
-            )}
-          </span>
-        </div>
-      )}
-
-      {criteria.price && (
-        <div className="flex gap-2">
-          <SectionLabel text={t('criteria.price')} />
-          <span className="font-mono text-xs text-gold-bright">{criteria.price}</span>
-        </div>
+      {(statusLabel || criteria.price) && (
+        <CriteriaCard title={t('criteria.purchase')}>
+          {statusLabel && (
+            <CriteriaItem
+              label={statusLabel}
+              value={
+                statusLabel !== criteria.statusOption
+                  ? `(${criteria.statusOption ?? ''})`
+                  : undefined
+              }
+            />
+          )}
+          {criteria.price && (
+            <CriteriaItem label={t('criteria.price')} value={criteria.price} accent />
+          )}
+        </CriteriaCard>
       )}
 
       {criteria.statGroups.map((group, index) => (
-        <div key={`stats-${index}`} className="flex gap-2">
-          <SectionLabel
-            text={`${t('criteria.stats')} (${group.heading})${group.disabled ? ' ✕' : ''}`}
-          />
-          <RowList
+        <CriteriaCard key={`stats-${index}`} title={`${t('criteria.stats')} · ${group.heading}`}>
+          <RowItems
             rows={
               group.disabled ? group.rows.map((row) => ({ ...row, disabled: true })) : group.rows
             }
-            disabledTag={t('criteria.disabledTag')}
+            disabledTag={disabledTag}
           />
-        </div>
+        </CriteriaCard>
       ))}
 
       {criteria.filterGroups.map((group) => {
         const titleKey = GROUP_TITLE_KEYS[group.key];
         return (
-          <div key={group.key} className="flex gap-2">
-            <SectionLabel text={titleKey ? t(titleKey) : filterLabel(group.key)} />
-            <RowList
+          <CriteriaCard key={group.key} title={titleKey ? t(titleKey) : filterLabel(group.key)}>
+            <RowItems
               rows={
                 group.disabled ? group.rows.map((row) => ({ ...row, disabled: true })) : group.rows
               }
-              disabledTag={t('criteria.disabledTag')}
+              disabledTag={disabledTag}
             />
-          </div>
+          </CriteriaCard>
         );
       })}
 
       {criteria.unknownRows.length > 0 && (
-        <div className="flex gap-2">
-          <SectionLabel text={t('criteria.other')} />
-          <ul className="min-w-0 flex-1">
-            {criteria.unknownRows.map((row) => (
-              <li key={row.label} className="font-mono text-[0.65rem] break-all text-ink-faint">
-                {row.label}: {row.value}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <CriteriaCard title={t('criteria.other')}>
+          {criteria.unknownRows.map((row) => (
+            <div key={row.label} className="font-mono text-[0.65rem] break-all text-ink-faint">
+              {row.label}: {row.value}
+            </div>
+          ))}
+        </CriteriaCard>
       )}
     </div>
   );
