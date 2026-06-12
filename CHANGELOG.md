@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Outbound safety guard (runaway watchdog): hard per-minute ceilings on all
+  GGG HTTP/ws traffic, trip-and-halt with red UI banner and manual reset
+  (`POST /api/guard/reset`); ws reconnect ladder resets only after a stable
+  connection; close code 1013 jumps to max backoff; ws→poll demotion after
+  repeated unstable cycles; hit-history pruning (`HITS_MAX_ROWS`); hit alert
+  sound with Settings toggle; expired-session banner.
+- Preliminary Electron desktop shell (`apps/desktop`): embedded NestJS server
+  in the main process serving the web build over loopback (one origin); dev
+  mode (`SNIPER_DEV_URL`) rides the Vite/tsx watch stack with full HMR;
+  `preview` mode runs the embedded server with the better-sqlite3 Electron-ABI
+  swap (`abi:electron`/`abi:node`). Live ws reconnect ladder + league select
+  from live trade data + D-14 URL-as-source-of-truth form simplification.
 - Phase 3 web UI: live SSE event stream into the shell (one `EventSource`,
   capped live-hits feed, per-listing travel states); Searches page (add by
   id/URL, purchase-type + AUTO inline edits, live engine/status badges);
