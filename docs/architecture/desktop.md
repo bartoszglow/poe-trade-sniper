@@ -31,9 +31,17 @@ One compiled binary lives in `node_modules`; Node and Electron need different
 ABIs. `pnpm --filter @poe-sniper/desktop abi:electron` / `abi:node` swap it
 via prebuild-install (seconds, no compiler). `preview` runs the electron swap
 automatically; **run `abi:node` before unit tests / web-dev** if a preview ran
-last. Packaging (electron-builder) will bundle its own rebuilt copy, ending
-the dance. Electron major is pinned to one with better-sqlite3 prebuilds
+last. Electron major is pinned to one with better-sqlite3 prebuilds
 (41 / ABI 145 — Electron 42's V8 breaks the better-sqlite3 12.x source build).
+
+**Packaging gotcha (bitten 2026-06-12):** electron-builder's own
+@electron/rebuild step can silently no-op and pack whatever ABI currently
+sits in `node_modules` — a node-ABI binary then ships inside `app.asar.unpacked`
+and the packaged app dies on boot with `NODE_MODULE_VERSION 127 vs 145`.
+The `dist` script therefore swaps explicitly: `abi:electron` **before**
+electron-builder and `abi:node` after, so the working tree is always left
+test-ready. If a packaged app fails to boot, check the ABI error in its
+stdout first (run the binary in `Contents/MacOS/` directly).
 
 ## Deferred (full Phase 5)
 
