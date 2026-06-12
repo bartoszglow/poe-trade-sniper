@@ -60,7 +60,32 @@ html[data-shell='desktop'] .app-no-drag {
 html[data-shell='desktop'] .app-window-controls {
   width: 0;
 }
-/* macOS traffic lights overlay the app bar's left edge (hiddenInset). */
+/* macOS traffic lights overlay the app bar's left edge (hiddenInset).
+   px on purpose: the lights are pixel-positioned, our root rem is 14px. */
 html[data-shell='desktop'] .app-drag-region {
-  padding-left: 4.75rem;
+  padding-left: 84px;
+}
+
+/* Themed scrollbars — default white browser bars break the dark shell. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-3) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 5px;
+  border: 2px solid var(--color-surface-0);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-edge-strong);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }

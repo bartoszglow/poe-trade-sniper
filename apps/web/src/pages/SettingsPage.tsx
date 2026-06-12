@@ -7,8 +7,10 @@ import { Field } from '../components/Field';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
-import { ApiError, apiGet, apiSend } from '../lib/api';
+import { useLoginCapture } from '../hooks/useLoginCapture';
+import { ApiError, apiSend } from '../lib/api';
 import { isHitSoundEnabled, playHitSound, setHitSoundEnabled } from '../lib/hit-sound';
+import { isNotifyEnabled, setNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
 function SettingsCard({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -57,8 +59,13 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => isHitSoundEnabled());
-  const [loginState, setLoginState] = useState<string>('idle');
-  const [loginDetail, setLoginDetail] = useState<string | null>(null);
+  const [notifyEnabled, setNotifyEnabledState] = useState(() => isNotifyEnabled());
+  const {
+    loginState,
+    loginDetail,
+    start: startLoginCapture,
+    cancel: cancelLoginCapture,
+  } = useLoginCapture(refresh);
 
   function toggleSound(enabled: boolean): void {
     setHitSoundEnabled(enabled);
@@ -66,27 +73,10 @@ export function SettingsPage() {
     if (enabled) playHitSound();
   }
 
-  function startLoginCapture(): void {
-    void apiSend<{ state: string; detail: string | null }>('POST', '/api/session/login/start')
-      .then((started) => {
-        setLoginState(started.state);
-        setLoginDetail(started.detail);
-        const poll = setInterval(() => {
-          void apiGet<{ state: string; detail: string | null }>('/api/session/login')
-            .then((current) => {
-              setLoginState(current.state);
-              setLoginDetail(current.detail);
-              if (current.state !== 'waiting-login') {
-                clearInterval(poll);
-                refresh();
-              }
-            })
-            .catch(() => clearInterval(poll));
-        }, 3000);
-      })
-      .catch((error: unknown) => {
-        setLoginDetail(error instanceof ApiError ? error.message : 'failed to start');
-      });
+  function toggleNotify(enabled: boolean): void {
+    setNotifyEnabled(enabled);
+    setNotifyEnabledState(enabled);
+    if (enabled) showSystemNotification('PoE Trade Sniper', 'System notifications enabled');
   }
 
   async function run(action: () => Promise<string>): Promise<void> {
@@ -190,14 +180,7 @@ export function SettingsPage() {
           {loginState === 'waiting-login' && (
             <>
               <Badge tone="gold">waiting for login…</Badge>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  void apiSend('POST', '/api/session/login/cancel').then(() =>
-                    setLoginState('idle'),
-                  );
-                }}
-              >
+              <Button variant="ghost" onClick={cancelLoginCapture}>
                 Cancel
               </Button>
             </>
@@ -259,10 +242,20 @@ export function SettingsPage() {
           <Switch checked={soundEnabled} onChange={toggleSound} label="Hit sound" />
           <span className="text-sm text-ink-muted">play a sound on every detected hit</span>
           <div className="flex-1" />
-          <Button variant="ghost" onClick={playHitSound}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              playHitSound();
+              showSystemNotification('PoE Trade Sniper', 'Test alert — this is how a hit looks');
+            }}
+          >
             <Volume2 className="h-4 w-4" />
             Test
           </Button>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <Switch checked={notifyEnabled} onChange={toggleNotify} label="System notifications" />
+          <span className="text-sm text-ink-muted">system notification on every hit</span>
         </div>
         <p className="mt-2 text-xs text-ink-faint">
           Browsers unlock audio after the first interaction — hit Test once after opening the app.

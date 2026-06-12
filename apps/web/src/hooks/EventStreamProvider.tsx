@@ -7,6 +7,7 @@ import type {
   TravelEvent,
 } from '@poe-sniper/shared';
 import { isHitSoundEnabled, playHitSound } from '../lib/hit-sound';
+import { isNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
 /** Bounded-growth cap for the live feed kept in memory. */
 const LIVE_HITS_CAP = 100;
@@ -104,7 +105,16 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (event.type === 'heartbeat') return;
-      if (event.type === 'hit' && isHitSoundEnabled()) playHitSound();
+      if (event.type === 'hit') {
+        if (isHitSoundEnabled()) playHitSound();
+        if (isNotifyEnabled()) {
+          const { listing } = event;
+          const price = listing.price
+            ? `${listing.price.amount} ${listing.price.currency}`
+            : 'no price';
+          showSystemNotification(`Hit: ${listing.itemName}`, `${price} · ${listing.seller ?? '?'}`);
+        }
+      }
       setState((previous) => reduceEvent(previous, event));
     };
     return () => source.close();

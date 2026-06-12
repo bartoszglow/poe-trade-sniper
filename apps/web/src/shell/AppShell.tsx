@@ -1,7 +1,9 @@
 import { Route, Routes } from 'react-router-dom';
 import { NAV_ENTRIES } from './nav';
 import { AppBar } from './AppBar';
+import { useState } from 'react';
 import { GuardBanner } from './GuardBanner';
+import { LoginOverlay } from './LoginOverlay';
 import { SessionBanner } from './SessionBanner';
 import { IconRail } from './IconRail';
 import { HitsPanel } from './HitsPanel';
@@ -20,6 +22,10 @@ export function AppShell() {
   const guardReason = eventStream.guard?.reason ?? status?.guard.reason ?? null;
   const sessionInvalid =
     (status?.session.hasSession ?? false) && status?.session.probedValid === false;
+  // Boot login prompt: no session at all, or stored cookies failed the probe.
+  const [loginOverlayDismissed, setLoginOverlayDismissed] = useState(false);
+  const needsLogin =
+    status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
   return (
     <div className="grid h-screen grid-rows-[2.5rem_auto_1fr_2rem] grid-cols-[3rem_1fr] lg:grid-cols-[3rem_1fr_22rem]">
@@ -45,6 +51,14 @@ export function AppShell() {
       <aside className="hidden border-l border-edge bg-surface-1 lg:block">
         <HitsPanel />
       </aside>
+
+      {needsLogin && !loginOverlayDismissed && (
+        <LoginOverlay
+          expired={status.session.hasSession}
+          onRefresh={refresh}
+          onClose={() => setLoginOverlayDismissed(true)}
+        />
+      )}
 
       <footer className="col-span-full">
         <StatusBar
