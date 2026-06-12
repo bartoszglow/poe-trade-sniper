@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
 import { DbSessionStore } from './db-session-store.js';
+import { SessionCipher } from './session-cipher.js';
 import { SessionService } from './session.service.js';
 
 // Bootstrap CLI: `pnpm session:import [path]` — imports the prototype's
@@ -25,7 +26,7 @@ if (!parsed.success) {
 const config = loadConfig();
 const database = openDatabase(config.DB_PATH);
 try {
-  const sessionService = new SessionService(new DbSessionStore(database));
+  const sessionService = new SessionService(new DbSessionStore(database, new SessionCipher()));
   const status = sessionService.importFromPrototypeExport(parsed.data);
   console.warn(
     `Imported ${status.cookieNames.length} pathofexile.com cookie(s): ${status.cookieNames.join(', ')}`,

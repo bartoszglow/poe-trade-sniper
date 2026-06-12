@@ -5,6 +5,7 @@ import { RealtimeBus } from '../events/realtime-bus.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { DbSessionStore } from '../session/db-session-store.js';
+import { SessionCipher } from '../session/session-cipher.js';
 import { SessionService } from '../session/session.service.js';
 import { applyPurchaseMode } from './purchase-mode.js';
 import {
@@ -25,7 +26,9 @@ function jsonResponse(body: unknown, status = 200, headers: Record<string, strin
 
 function createClient(fetchStub: FetchFunction, withSession = true) {
   const database = openDatabase(':memory:');
-  const sessionService = new SessionService(new DbSessionStore(database));
+  const sessionService = new SessionService(
+    new DbSessionStore(database, new SessionCipher(() => null)),
+  );
   if (withSession) {
     sessionService.setFromCookies({ POESESSID: 'secret' }, 'TestAgent/1.0');
   }

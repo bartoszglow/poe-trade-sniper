@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/migrate.js';
 import { DbSessionStore } from './db-session-store.js';
+import { SessionCipher } from './session-cipher.js';
 import { SessionService } from './session.service.js';
+
+// Fixed key — unit tests must never touch the real OS keychain.
+const TEST_CIPHER = new SessionCipher(() => Buffer.alloc(32, 7));
 
 function createService() {
   const database = openDatabase(':memory:');
-  return { service: new SessionService(new DbSessionStore(database)), database };
+  return { service: new SessionService(new DbSessionStore(database, TEST_CIPHER)), database };
 }
 
 describe('SessionService', () => {
@@ -44,6 +48,30 @@ describe('SessionService', () => {
       service.setFromCookies({ POESESSID: 'super-secret' }, 'UA');
       const serialized = JSON.stringify(service.publicStatus());
       expect(serialized).not.toContain('super-secret');
+    } finally {
+      database.$client.close();
+    }
+  });
+
+  it('persists the session encrypted at rest (D-7) and reads legacy plaintext', () => {
+    const { service, database } = createService();
+    try {
+      service.setFromCookies({ POESESSID: 'super-secret' }, 'UA');
+      const rawRow = database.$client
+        .prepare("SELECT value FROM app_state WHERE key = 'session'")
+        .get() as { value: string };
+      expect(rawRow.value).not.toContain('super-secret');
+      expect(JSON.parse(rawRow.value)).toMatchObject({ __enc: 1 });
+      // round-trip through decryption
+      expect(service.getSession()?.cookies['POESESSID']).toBe('super-secret');
+
+      // legacy plaintext row stays readable
+      database.$client
+        .prepare("UPDATE app_state SET value = ? WHERE key = 'session'")
+        .run(
+          JSON.stringify({ cookies: { POESESSID: 'legacy' }, userAgent: 'UA', capturedAt: 'x' }),
+        );
+      expect(service.getSession()?.cookies['POESESSID']).toBe('legacy');
     } finally {
       database.$client.close();
     }
