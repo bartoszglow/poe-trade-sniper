@@ -87,16 +87,18 @@ export const envSchema = z.object({
     .regex(/^\d+(,\d+)*$/, 'comma-separated milliseconds, e.g. 1000,5000,20000,60000')
     .default('1000,5000,20000,60000')
     .transform((csv) => csv.split(',').map(Number)),
-  /** How often a poll-mode search re-probes ws for an upgrade. */
+  /**
+   * Cadence of the SINGLE shared background probe that checks whether GGG's
+   * live ws backend is up — one probe answers for every poll-mode search.
+   */
   WS_UPGRADE_PROBE_INTERVAL_MS: z.coerce.number().int().min(10_000).default(120_000),
   WS_KEEPALIVE_PING_MS: z.coerce.number().int().min(5_000).default(30_000),
   /**
-   * A connection must survive this long before the reconnect ladder resets —
-   * otherwise a connect→instant-drop loop retries at the fastest rung forever.
+   * A connection must survive this long to count as "stable". A drop after
+   * that is a routine periodic GGG drop (one quick reconnect); a drop before
+   * it means the backend is cooling off (demote straight to poll, no dark wait).
    */
   WS_STABLE_CONNECTION_MS: z.coerce.number().int().min(5_000).default(60_000),
-  /** After this many consecutive unstable ws cycles the search demotes to poll. */
-  WS_DEMOTE_AFTER_FAILURES: z.coerce.number().int().min(1).default(3),
 
   // --- in-app login capture (web mode, D-12) ---
   /** Real Chrome binary used for the login window. */

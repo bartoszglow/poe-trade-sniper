@@ -4,7 +4,7 @@ import type { SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import type { DetectionEngine, EngineCallbacks, EngineContext } from './detection-engine.js';
-import { parseLiveMessage, reconnectDelayForClose } from './live-message.js';
+import { parseLiveMessage } from './live-message.js';
 
 type WsConfig = Pick<
   AppConfig,
@@ -12,7 +12,6 @@ type WsConfig = Pick<
   | 'WS_HANDSHAKE_TIMEOUT_MS'
   | 'WS_RECONNECT_LADDER_MS'
   | 'WS_STABLE_CONNECTION_MS'
-  | 'WS_DEMOTE_AFTER_FAILURES'
   | 'WS_KEEPALIVE_PING_MS'
   | 'MAX_FRESH_IDS_PER_TICK'
 >;
@@ -76,9 +75,7 @@ export class WsEngine implements DetectionEngine {
   private socket: WebSocket | null = null;
   private keepaliveTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  /** Consecutive unstable connections (ladder index). */
-  private reconnectAttempt = 0;
-  /** When the current connection opened — gates the ladder reset. */
+  /** When the current connection opened — distinguishes routine vs unstable drops. */
   private connectedAtMs = 0;
   private stopped = false;
   private context: EngineContext | null = null;
@@ -131,9 +128,6 @@ export class WsEngine implements DetectionEngine {
     this.socket = socket;
 
     socket.on('open', () => {
-      // NOT resetting the ladder here: a connect→instant-drop loop would
-      // otherwise hammer the fastest rung forever. Reset happens on close,
-      // only if the connection proved stable.
       this.connectedAtMs = Date.now();
       this.callbacks?.onStatus('active', 'live websocket connected');
       this.keepaliveTimer = setInterval(() => socket.ping(), this.config.WS_KEEPALIVE_PING_MS);
@@ -155,26 +149,22 @@ export class WsEngine implements DetectionEngine {
         this.connectedAtMs > 0 &&
         Date.now() - this.connectedAtMs >= this.config.WS_STABLE_CONNECTION_MS;
       this.connectedAtMs = 0;
-      if (wasStable) this.reconnectAttempt = 0;
-      this.reconnectAttempt += 1;
 
-      // Repeatedly unstable → hand the search back; poll keeps detection
-      // alive while GGG's live backend cools off (upgrade probe retries ws).
-      if (this.reconnectAttempt >= this.config.WS_DEMOTE_AFTER_FAILURES) {
-        this.callbacks?.onDemote(
-          `${this.reconnectAttempt} unstable ws connections (last close: code ${code})`,
-        );
+      // 1013 = "Try Again Later" (server says back off), or a drop before the
+      // connection proved stable = GGG's live backend cooling off. Either way
+      // DON'T sit dark on a reconnect ladder — hand the search straight back to
+      // poll so detection keeps running at a safe cadence. The SearchManager's
+      // shared, background live-backend monitor re-promotes every search at
+      // once when a single probe confirms ws is up again.
+      if (code === 1013 || !wasStable) {
+        this.callbacks?.onDemote(`unstable ws (close code ${code})`);
         return;
       }
 
-      const delayMs = reconnectDelayForClose(
-        code,
-        this.config.WS_RECONNECT_LADDER_MS,
-        this.reconnectAttempt - 1,
-      );
-      // The close code is the diagnostic: 1006 = dropped without handshake
-      // (typical GGG periodic drop), 1013 = server says back off (top rung),
-      // 1000 = clean close, 4xx = policy/auth.
+      // A connection that ran stable then dropped is a routine periodic GGG
+      // drop — exactly what the real client silently reconnects from. One
+      // quick reconnect; if THAT proves unstable the branch above demotes us.
+      const delayMs = this.config.WS_RECONNECT_LADDER_MS[0] ?? 1_000;
       this.callbacks?.onStatus(
         'degraded',
         `live connection lost (code ${code}) — reconnecting in ${delayMs / 1000}s`,

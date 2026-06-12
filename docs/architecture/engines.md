@@ -40,9 +40,33 @@ always-available fallback (its probe is constant-true).
 One `setInterval(POLL_INTERVAL_MS)` in the SearchManager — **one search POST
 per tick, round-robin across all polled searches**, because the search budget
 is per-IP, not per-search. The tick also retries pending watchers (e.g. after
-a session import) and re-probes ws for one poll watcher per
-`WS_RECONNECT_MAX_MS` window — when GGG live returns, searches upgrade to push
-automatically.
+a session import).
+
+## One ws connection per search, one shared availability probe
+
+GGG's live endpoint is keyed by search id in the URL
+(`/api/trade2/live/<realm>/<league>/<id>`) — there is no multiplexing
+protocol, so **each search has its own ws connection** when push is up. This
+matches the real trade site (one socket per open live search). N searches = N
+sockets, exactly like the site; our guard ceilings cap reconnect storms, not
+steady state.
+
+But the live backend is up or down **globally**, so checking whether it
+recovered is a single shared concern, not per-search:
+
+- A **single background probe** (`WS_UPGRADE_PROBE_INTERVAL_MS`) runs on its
+  **own timer, off the poll tick** — a slow handshake never delays detection.
+  One probe answers for every poll-mode search.
+- On success it flips a flag; the next poll tick promotes poll searches to ws
+  **synchronously** (so it never races the poll loop), throttled by the guard's
+  ws-connect ceiling (the rest defer to the next window).
+- **No dark reconnect ladder.** When a ws connection drops: a drop after a
+  stable run is a routine GGG drop → one quick reconnect (like the real
+  client); a drop before stable, or close code **1013** ("Try Again Later"), →
+  the search demotes **straight to poll** so detection keeps running at a safe
+  cadence. The shared probe re-promotes it once the backend is confirmed up.
+  The old per-search upgrade probe and the long reconnect-ladder dark wait are
+  gone.
 
 ## Status model
 

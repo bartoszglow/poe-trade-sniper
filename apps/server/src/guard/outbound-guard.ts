@@ -78,6 +78,17 @@ export class OutboundGuard {
     };
   }
 
+  /**
+   * Ws connections still allowed this minute WITHOUT consuming budget — lets
+   * the SearchManager promote only as many searches to ws as fit under the
+   * ceiling, deferring the rest instead of tripping the guard.
+   */
+  wsConnectBudgetRemaining(): number {
+    const cutoff = Date.now() - WINDOW_MS;
+    const used = this.wsConnectTimestamps.filter((at) => at > cutoff).length;
+    return Math.max(0, this.config.GUARD_MAX_WS_CONNECTS_PER_MINUTE - used);
+  }
+
   private allow(timestamps: number[], ceiling: number, kind: string, detail: string): boolean {
     if (this.tripped) return false;
     const now = Date.now();

@@ -62,7 +62,6 @@ interface Watcher {
   correlationId: string;
   hitCount: number;
   lastHitAt: string | null;
-  lastWsUpgradeProbeAtMs: number;
 }
 
 /**
@@ -76,8 +75,16 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private readonly logger = new Logger(SearchManager.name);
   private readonly watchers = new Map<string, Watcher>();
   private schedulerTimer: NodeJS.Timeout | null = null;
+  private wsProbeTimer: NodeJS.Timeout | null = null;
   private roundRobinIndex = 0;
   private tickInFlight = false;
+  private wsProbeInFlight = false;
+  /**
+   * Set by the background live-backend probe, consumed by the next poll tick:
+   * promotion happens INSIDE the guarded tick (synchronous) so it never races
+   * the poll loop, while the slow probe itself stays off the tick.
+   */
+  private liveBackendConfirmedUp = false;
   private hitsSincePrune = 0;
 
   constructor(
@@ -98,6 +105,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.schedulerTimer = setInterval(() => {
       void this.runSchedulerTick();
     }, this.config.POLL_INTERVAL_MS);
+    // The ws-availability probe runs on its OWN timer, independent of the poll
+    // tick — a slow handshake must never delay detection.
+    this.wsProbeTimer = setInterval(() => {
+      void this.probeLiveBackend();
+    }, this.config.WS_UPGRADE_PROBE_INTERVAL_MS);
     this.logger.log(
       `watching ${this.watchers.size} search(es); scheduler tick ${this.config.POLL_INTERVAL_MS}ms`,
     );
@@ -105,7 +117,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   onApplicationShutdown(): void {
     if (this.schedulerTimer) clearInterval(this.schedulerTimer);
+    if (this.wsProbeTimer) clearInterval(this.wsProbeTimer);
     this.schedulerTimer = null;
+    this.wsProbeTimer = null;
     for (const watcher of this.watchers.values()) {
       watcher.engine?.stop();
     }
@@ -275,7 +289,12 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         return;
       }
       await this.startPendingWatchers();
-      await this.upgradeOnePollWatcher();
+      // Promote here (not in the probe) so it's synchronous and never races the
+      // poll loop below; the probe only flips the flag.
+      if (this.liveBackendConfirmedUp) {
+        this.liveBackendConfirmedUp = false;
+        this.promotePollWatchersToWs();
+      }
 
       const pollWatchers = [...this.watchers.values()].filter(
         (watcher) => watcher.engine instanceof PollEngine,
@@ -313,24 +332,60 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
   }
 
-  /** Poll → ws upgrade: re-probe one watcher per cadence window. */
-  private async upgradeOnePollWatcher(): Promise<void> {
-    const now = Date.now();
-    const candidate = [...this.watchers.values()].find(
-      (watcher) =>
-        watcher.engine instanceof PollEngine &&
-        now - watcher.lastWsUpgradeProbeAtMs > this.config.WS_UPGRADE_PROBE_INTERVAL_MS,
+  private pollWatchers(): Watcher[] {
+    return [...this.watchers.values()].filter(
+      (watcher) => watcher.row.enabled && watcher.engine instanceof PollEngine,
     );
-    if (!candidate) return;
-    candidate.lastWsUpgradeProbeAtMs = now;
+  }
 
+  /**
+   * The single shared "is GGG's live ws backend up?" probe. The backend is up
+   * or down globally, so ONE probe answers for every poll-mode search — no
+   * per-search probing. Runs on its own timer, fully off the poll tick, and
+   * only flips a flag; the next tick does the (synchronous) promotion.
+   * Public for tests; production runs it on the ws-probe timer.
+   */
+  async probeLiveBackend(): Promise<void> {
+    if (this.wsProbeInFlight || this.guard.tripped) return;
+    const candidates = this.pollWatchers();
+    if (candidates.length === 0) return;
     const wsFactory = this.engineRegistry.find((factory) => factory.kind === 'ws');
     if (!wsFactory) return;
-    if (await wsFactory.probe(this.toRef(candidate.row))) {
-      this.logger.log(`${candidate.row.id}: live ws is back — upgrading from poll`);
-      candidate.engine?.stop();
-      candidate.engine = null;
-      await this.startWatcher(candidate, wsFactory);
+
+    this.wsProbeInFlight = true;
+    try {
+      if (await wsFactory.probe(this.toRef(candidates[0]!.row))) {
+        this.liveBackendConfirmedUp = true;
+      }
+    } finally {
+      this.wsProbeInFlight = false;
+    }
+  }
+
+  /**
+   * Move poll-mode searches onto ws after the shared probe confirmed the
+   * backend is up. Respects the guard's ws-connect ceiling: promote only as
+   * many as fit this minute, leaving the rest for the next probe window.
+   */
+  private promotePollWatchersToWs(): void {
+    const wsFactory = this.engineRegistry.find((factory) => factory.kind === 'ws');
+    if (!wsFactory) return;
+    const candidates = this.pollWatchers();
+    if (candidates.length === 0) return;
+
+    const budget = this.guard.wsConnectBudgetRemaining();
+    const toPromote = candidates.slice(0, budget);
+    const deferred = candidates.length - toPromote.length;
+    this.logger.log(
+      `live ws backend is back — promoting ${toPromote.length}/${candidates.length} search(es) from poll` +
+        (deferred > 0
+          ? ` (${deferred} deferred to the next probe window — ws-connect ceiling)`
+          : ''),
+    );
+    for (const watcher of toPromote) {
+      watcher.engine?.stop();
+      watcher.engine = null;
+      void this.startWatcher(watcher, wsFactory);
     }
   }
 
@@ -372,9 +427,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
-   * The engine gave up (e.g. ws repeatedly unstable) — fall back to the
-   * registry's last-resort strategy so detection keeps running; the periodic
-   * upgrade probe will move it back when the better engine recovers.
+   * The engine handed the search back (ws unstable / 1013) — fall to the
+   * registry's last-resort strategy (poll) so detection keeps running. The
+   * shared background probe re-promotes it to ws when the backend recovers.
    */
   private demoteWatcher(watcher: Watcher, reason: string): void {
     const fallbackFactory = this.engineRegistry[this.engineRegistry.length - 1];
@@ -386,8 +441,6 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     );
     watcher.engine?.stop();
     watcher.engine = null;
-    // Full upgrade-probe window before retrying the demoted engine.
-    watcher.lastWsUpgradeProbeAtMs = Date.now();
     void this.startWatcher(watcher, fallbackFactory);
   }
 
@@ -475,7 +528,6 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       correlationId: randomUUID(),
       hitCount: 0,
       lastHitAt: null,
-      lastWsUpgradeProbeAtMs: 0,
     };
   }
 

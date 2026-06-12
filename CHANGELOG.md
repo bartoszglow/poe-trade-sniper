@@ -79,6 +79,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Per-search auto-travel toggle is now labeled "TRAVEL" (was "AUTO").
+- WS recovery is now a single shared background probe (own timer, off the poll
+  tick) instead of a per-search probe inside the tick — one probe answers for
+  all searches and a slow handshake no longer stutters poll. On success every
+  poll search is promoted at once, throttled by the guard ws-connect ceiling.
+- WS drops no longer sit on a dark reconnect ladder: an unstable drop or close
+  code 1013 demotes the search straight to poll (detection keeps running);
+  only a routine post-stable drop does one quick reconnect. One ws connection
+  per search is unchanged (matches the real trade site; the live endpoint is
+  per-search-id).
 
 ### Fixed
 
