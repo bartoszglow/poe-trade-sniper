@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- App-bar detection pills (WS / POLL) showing the global push-vs-poll posture,
+  lit from the live searches list — they follow ws→poll demotions and
+  re-promotions in real time.
 - Search criteria view: every search row gets a criteria accordion and the
   add form a "Show criteria" preview (`POST /api/searches/preview`, resolve
   without persisting). Stat ids resolve to human labels via the new

@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { NAV_ENTRIES } from './nav';
 import { AppBar } from './AppBar';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { GuardBanner } from './GuardBanner';
 import { LoginOverlay } from './LoginOverlay';
 import { SessionBanner } from './SessionBanner';
@@ -10,12 +10,31 @@ import { HitsPanel } from './HitsPanel';
 import { StatusBar } from './StatusBar';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useHealth } from '../hooks/useHealth';
+import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 
 export function AppShell() {
   const health = useHealth();
   const eventStream = useEventStream();
   const { status, refresh } = useServerStatus();
+  const { searches } = useSearches();
+
+  // Global detection posture for the app bar — derived from the live searches
+  // list (refetched on every engine-status SSE event), so it follows ws→poll
+  // demotions and re-promotions without its own polling.
+  const detection = useMemo(() => {
+    let ws = 0;
+    let poll = 0;
+    let total = 0;
+    for (const search of searches) {
+      if (!search.enabled) continue;
+      total += 1;
+      if (search.status === 'stopped') continue;
+      if (search.engine === 'ws') ws += 1;
+      else if (search.engine === 'poll') poll += 1;
+    }
+    return { ws, poll, total };
+  }, [searches]);
 
   // Live event wins; the status poll covers page loads after the trip.
   const guardTripped = eventStream.guard?.tripped ?? status?.guard.tripped ?? false;
@@ -30,7 +49,11 @@ export function AppShell() {
   return (
     <div className="grid h-screen grid-rows-[2.5rem_auto_1fr_2rem] grid-cols-[3rem_1fr] lg:grid-cols-[3rem_1fr_22rem]">
       <header className="col-span-full">
-        <AppBar serverHealthy={health.healthy} streamConnected={eventStream.connected} />
+        <AppBar
+          serverHealthy={health.healthy}
+          streamConnected={eventStream.connected}
+          detection={detection}
+        />
       </header>
 
       <div className="col-span-full">

@@ -27,6 +27,10 @@ export const EN = {
   'nav.hits': 'Hits',
   'nav.settings': 'Settings',
 
+  // Detection mode (app bar pills)
+  'detection.wsTitle': 'Live push (WebSocket) — instant detection',
+  'detection.pollTitle': 'Polling fallback — periodic checks',
+
   // Status bar
   'status.serverChecking': 'server …',
   'status.server': 'server',
@@ -204,6 +208,10 @@ export const PL: Record<MessageKey, string> = {
   'nav.searches': 'Wyszukiwania',
   'nav.hits': 'Trafienia',
   'nav.settings': 'Ustawienia',
+
+  // Detection mode (app bar pills)
+  'detection.wsTitle': 'Push na żywo (WebSocket) — natychmiastowe wykrywanie',
+  'detection.pollTitle': 'Tryb zapasowy (polling) — okresowe sprawdzanie',
 
   // Status bar
   'status.serverChecking': 'serwer …',
