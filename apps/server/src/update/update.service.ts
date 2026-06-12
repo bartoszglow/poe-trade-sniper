@@ -9,6 +9,13 @@ interface GithubRelease {
   assets?: Array<{ name?: string; browser_download_url?: string }>;
 }
 
+/** Installer extension this OS can open — so the banner links the right asset. */
+function installerSuffixForPlatform(platform: NodeJS.Platform): string {
+  if (platform === 'darwin') return '.dmg';
+  if (platform === 'win32') return '.exe';
+  return '.AppImage';
+}
+
 /** `v1.2.3` / `1.2.3-rc1` → `[1,2,3]` (pre-release suffix dropped for compare). */
 function parseVersion(raw: string): number[] {
   return raw
@@ -73,13 +80,16 @@ export class UpdateService {
       }
       const release = (await response.json()) as GithubRelease;
       const latestVersion = release.tag_name?.replace(/^v/i, '') ?? null;
-      const dmg = release.assets?.find((asset) => asset.name?.endsWith('.dmg'));
+      // Pick the asset for the OS the app runs on (server shares the process);
+      // fall back to the release page when no matching installer is attached.
+      const suffix = installerSuffixForPlatform(process.platform);
+      const installer = release.assets?.find((asset) => asset.name?.endsWith(suffix));
       const status: UpdateStatus = {
         currentVersion: APP_VERSION,
         latestVersion,
         updateAvailable: latestVersion ? isNewerVersion(latestVersion, APP_VERSION) : false,
         releaseUrl: release.html_url ?? null,
-        downloadUrl: dmg?.browser_download_url ?? null,
+        downloadUrl: installer?.browser_download_url ?? release.html_url ?? null,
       };
       this.cache = { status, fetchedAtMs: Date.now() };
       return status;

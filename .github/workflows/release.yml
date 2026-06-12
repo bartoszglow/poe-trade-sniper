@@ -1,0 +1,47 @@
+name: Release
+
+# Push a SemVer tag (`v0.1.0`) to build installers for all three desktop
+# platforms and upload them to a DRAFT GitHub Release. The tag is the single
+# source of truth for the version (scripts/set-version.mjs stamps it in).
+# Review the draft on GitHub, then hit "Publish" — only then does the in-app
+# update check (GET /api/update against /releases/latest) surface it to users.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # create the release and upload installer assets
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14 # Apple Silicon → arm64 .dmg
+          - os: windows-latest # x64 NSIS .exe installer
+          - os: ubuntu-latest # x64 .AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Stamp the pushed tag's version into version.ts + desktop package.json
+      # so the built app reports the right version no matter what's committed.
+      - run: node scripts/set-version.mjs ${{ github.ref_name }}
+
+      # Build web + server bundle + native better-sqlite3 (Electron ABI) and
+      # run electron-builder for THIS host OS, publishing to the draft release.
+      - run: pnpm --filter @poe-sniper/desktop dist:ci
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

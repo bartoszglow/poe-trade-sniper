@@ -26,6 +26,9 @@ function configureEnvironment(): void {
   process.env['DB_PATH'] ??= join(app.getPath('userData'), 'sniper.db');
   // Redacted GGG network log — a user can share this file for debugging.
   process.env['LOG_DIR'] ??= join(app.getPath('logs'), 'network');
+  // In-app update check: only the packaged desktop app polls GitHub Releases.
+  // Dev/web/test stay dormant (no GITHUB_RELEASES_REPO → no outbound check).
+  if (app.isPackaged) process.env['GITHUB_RELEASES_REPO'] ??= 'bartoszglow/poe-trade-sniper';
   if (app.isPackaged) {
     process.env['STATIC_DIR'] ??= join(process.resourcesPath, 'web');
     process.env['MIGRATIONS_DIR'] ??= join(process.resourcesPath, 'migrations');

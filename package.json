@@ -1,6 +1,6 @@
 {
   "name": "poe-trade-sniper",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "PoE2 trade sniper — detection + browser-free travel, one server, two shells (web + Electron)",
   "license": "UNLICENSED",

@@ -21,5 +21,7 @@ if (runtime === 'electron') {
   const electronVersion = desktopRequire('electron/package.json').version;
   args.push('--runtime', 'electron', '--target', electronVersion, '--arch', process.arch);
 }
-execFileSync('npx', args, { cwd: sqliteDir, stdio: 'inherit' });
+// shell:true so Windows resolves `npx.cmd` (execFile alone only finds a bare
+// executable on PATH — fine on macOS/Linux, misses the .cmd shim on Windows).
+execFileSync('npx', args, { cwd: sqliteDir, stdio: 'inherit', shell: true });
 console.warn(`better-sqlite3 rebuilt for ${runtime}`);

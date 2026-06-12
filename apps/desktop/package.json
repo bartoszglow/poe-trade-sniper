@@ -1,15 +1,16 @@
 {
   "name": "@poe-sniper/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/preload.cjs','dist/preload.cjs')\"",
     "bundle:server": "esbuild ../server/src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=bundle/server.cjs --external:better-sqlite3 --external:@nestjs/microservices --external:@nestjs/websockets/socket-module --external:@nestjs/platform-socket.io --external:class-validator --external:class-transformer --external:class-transformer/storage --external:@fastify/static",
     "dev": "pnpm build && SNIPER_DEV_URL=http://localhost:5180 electron .",
     "preview": "pnpm build && pnpm abi:electron && electron .",
     "dist": "pnpm abi:electron && pnpm --filter @poe-sniper/web build && pnpm build && pnpm bundle:server && electron-builder --mac --arm64 && pnpm abi:node",
+    "dist:ci": "pnpm abi:electron && pnpm --filter @poe-sniper/web build && pnpm build && pnpm bundle:server && electron-builder --publish always",
     "abi:electron": "node scripts/sqlite-abi.mjs electron",
     "abi:node": "node scripts/sqlite-abi.mjs node",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -50,6 +51,38 @@
       ],
       "category": "public.app-category.utilities",
       "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Utility"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "bartoszglow",
+      "repo": "poe-trade-sniper",
+      "releaseType": "draft"
     }
   },
   "devDependencies": {

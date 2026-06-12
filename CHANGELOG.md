@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-13
+
+First public release: cross-platform desktop installers (Windows, macOS,
+Linux) published via GitHub Releases, with a lightweight in-app update check.
+
 ### Added
 
 - Lightweight in-app update check: the app polls `GET /api/update` (GitHub
