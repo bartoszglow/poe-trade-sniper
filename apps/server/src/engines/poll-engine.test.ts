@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Listing } from '@poe-sniper/shared';
 import type { EngineCallbacks, EngineContext } from './detection-engine.js';
-import { parseLiveMessage, reconnectDelayFromLadder } from './live-message.js';
+import {
+  parseLiveMessage,
+  reconnectDelayForClose,
+  reconnectDelayFromLadder,
+} from './live-message.js';
 import { PollEngine, type PollTradeApi } from './poll-engine.js';
 
 const CONTEXT: EngineContext = {
@@ -42,7 +46,7 @@ function createEngine(idsPerTick: string[][]) {
   };
   const onListings = vi.fn();
   const onStatus = vi.fn();
-  const callbacks: EngineCallbacks = { onListings, onStatus };
+  const callbacks: EngineCallbacks = { onListings, onStatus, onDemote: vi.fn() };
   const engine = new PollEngine(CONFIG, tradeApi);
   engine.start(CONTEXT, callbacks);
   return { engine, tradeApi, onListings, onStatus };
@@ -83,7 +87,7 @@ describe('PollEngine', () => {
     };
     const onStatus = vi.fn();
     const engine = new PollEngine(CONFIG, tradeApi);
-    engine.start(CONTEXT, { onListings: vi.fn(), onStatus });
+    engine.start(CONTEXT, { onListings: vi.fn(), onStatus, onDemote: vi.fn() });
     await engine.tick();
     expect(onStatus).toHaveBeenCalledWith('degraded', expect.stringContaining('rate-limited'));
     expect(tradeApi.fetchListings).not.toHaveBeenCalled();
@@ -106,6 +110,19 @@ describe('parseLiveMessage', () => {
     expect(parseLiveMessage('ping')).toBeNull();
     expect(parseLiveMessage('{"auth":true}')).toBeNull();
     expect(parseLiveMessage('{"new":[]}')).toBeNull();
+  });
+});
+
+describe('reconnectDelayForClose', () => {
+  const ladder = [1_000, 5_000, 20_000, 60_000];
+
+  it('1013 (Try Again Later) jumps straight to the top rung', () => {
+    expect(reconnectDelayForClose(1013, ladder, 0)).toBe(60_000);
+  });
+
+  it('other codes follow the ladder', () => {
+    expect(reconnectDelayForClose(1006, ladder, 0)).toBe(1_000);
+    expect(reconnectDelayForClose(1006, ladder, 2)).toBe(20_000);
   });
 });
 

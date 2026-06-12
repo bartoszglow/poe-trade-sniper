@@ -12,6 +12,11 @@ export interface EngineContext {
 export interface EngineCallbacks {
   onListings(listings: Listing[]): void;
   onStatus(status: EngineStatus, detail: string | null): void;
+  /**
+   * The engine gives up on itself (e.g. ws repeatedly unstable) and asks the
+   * manager to switch the search to the next strategy in the registry.
+   */
+  onDemote(reason: string): void;
 }
 
 /**

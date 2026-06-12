@@ -4,7 +4,7 @@ import type { SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import type { DetectionEngine, EngineCallbacks, EngineContext } from './detection-engine.js';
-import { parseLiveMessage, reconnectDelayFromLadder } from './live-message.js';
+import { parseLiveMessage, reconnectDelayForClose } from './live-message.js';
 
 type WsConfig = Pick<
   AppConfig,
@@ -12,6 +12,7 @@ type WsConfig = Pick<
   | 'WS_HANDSHAKE_TIMEOUT_MS'
   | 'WS_RECONNECT_LADDER_MS'
   | 'WS_STABLE_CONNECTION_MS'
+  | 'WS_DEMOTE_AFTER_FAILURES'
   | 'WS_KEEPALIVE_PING_MS'
   | 'MAX_FRESH_IDS_PER_TICK'
 >;
@@ -155,13 +156,25 @@ export class WsEngine implements DetectionEngine {
         Date.now() - this.connectedAtMs >= this.config.WS_STABLE_CONNECTION_MS;
       this.connectedAtMs = 0;
       if (wasStable) this.reconnectAttempt = 0;
-      const delayMs = reconnectDelayFromLadder(
-        this.config.WS_RECONNECT_LADDER_MS,
-        this.reconnectAttempt,
-      );
       this.reconnectAttempt += 1;
+
+      // Repeatedly unstable → hand the search back; poll keeps detection
+      // alive while GGG's live backend cools off (upgrade probe retries ws).
+      if (this.reconnectAttempt >= this.config.WS_DEMOTE_AFTER_FAILURES) {
+        this.callbacks?.onDemote(
+          `${this.reconnectAttempt} unstable ws connections (last close: code ${code})`,
+        );
+        return;
+      }
+
+      const delayMs = reconnectDelayForClose(
+        code,
+        this.config.WS_RECONNECT_LADDER_MS,
+        this.reconnectAttempt - 1,
+      );
       // The close code is the diagnostic: 1006 = dropped without handshake
-      // (typical GGG periodic drop), 1000 = clean close, 4xx = policy/auth.
+      // (typical GGG periodic drop), 1013 = server says back off (top rung),
+      // 1000 = clean close, 4xx = policy/auth.
       this.callbacks?.onStatus(
         'degraded',
         `live connection lost (code ${code}) — reconnecting in ${delayMs / 1000}s`,

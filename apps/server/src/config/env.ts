@@ -82,6 +82,12 @@ export const envSchema = z.object({
    * otherwise a connect→instant-drop loop retries at the fastest rung forever.
    */
   WS_STABLE_CONNECTION_MS: z.coerce.number().int().min(5_000).default(60_000),
+  /** After this many consecutive unstable ws cycles the search demotes to poll. */
+  WS_DEMOTE_AFTER_FAILURES: z.coerce.number().int().min(1).default(3),
+
+  // --- persistence hygiene ---
+  /** Hit history is pruned to the newest N rows (bounded growth). */
+  HITS_MAX_ROWS: z.coerce.number().int().min(100).default(10_000),
 
   // --- outbound safety guard (the runaway watchdog) ---
   /** Hard ceiling on ALL GGG HTTP requests per rolling minute. */

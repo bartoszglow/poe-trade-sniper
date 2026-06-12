@@ -9,7 +9,7 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import type {
   EngineStatus,
   Hit,
@@ -49,6 +49,9 @@ export interface UpdateSearchOptions {
   purchaseMode?: PurchaseMode | null;
 }
 
+/** Prune cadence — checking on every single hit would be wasted writes. */
+const PRUNE_EVERY_HITS = 100;
+
 interface Watcher {
   row: ManagedSearch;
   engine: DetectionEngine | null;
@@ -73,6 +76,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private schedulerTimer: NodeJS.Timeout | null = null;
   private roundRobinIndex = 0;
   private tickInFlight = false;
+  private hitsSincePrune = 0;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -87,6 +91,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     for (const row of this.database.select().from(searches).all()) {
       this.watchers.set(row.id, this.createWatcher(this.rowToManagedSearch(row)));
     }
+    this.pruneHits();
     void this.startPendingWatchers();
     this.schedulerTimer = setInterval(() => {
       void this.runSchedulerTick();
@@ -331,8 +336,29 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       {
         onListings: (listings) => this.recordHits(watcher, listings),
         onStatus: (status, detail) => this.setStatus(watcher, status, detail),
+        onDemote: (reason) => this.demoteWatcher(watcher, reason),
       },
     );
+  }
+
+  /**
+   * The engine gave up (e.g. ws repeatedly unstable) — fall back to the
+   * registry's last-resort strategy so detection keeps running; the periodic
+   * upgrade probe will move it back when the better engine recovers.
+   */
+  private demoteWatcher(watcher: Watcher, reason: string): void {
+    const fallbackFactory = this.engineRegistry[this.engineRegistry.length - 1];
+    if (!fallbackFactory) return;
+    this.publishLog(
+      'warn',
+      `${watcher.row.id}: demoting to ${fallbackFactory.kind} — ${reason}`,
+      watcher.correlationId,
+    );
+    watcher.engine?.stop();
+    watcher.engine = null;
+    // Full upgrade-probe window before retrying the demoted engine.
+    watcher.lastWsUpgradeProbeAtMs = Date.now();
+    void this.startWatcher(watcher, fallbackFactory);
   }
 
   private recordHits(watcher: Watcher, listings: Listing[]): void {
@@ -351,9 +377,24 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         .run();
       watcher.hitCount += 1;
       watcher.lastHitAt = listing.detectedAt;
+      this.hitsSincePrune += 1;
       this.realtimeBus.publish({ type: 'hit', listing });
       // autoTravel: the TravelService consumes hit events in Phase 2.
     }
+    if (this.hitsSincePrune >= PRUNE_EVERY_HITS) {
+      this.hitsSincePrune = 0;
+      this.pruneHits();
+    }
+  }
+
+  /** Bounded growth: keep only the newest HITS_MAX_ROWS rows. */
+  private pruneHits(): void {
+    this.database.run(sql`
+      DELETE FROM hits WHERE id <= (
+        SELECT id FROM hits ORDER BY id DESC
+        LIMIT 1 OFFSET ${this.config.HITS_MAX_ROWS}
+      )
+    `);
   }
 
   private setStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {

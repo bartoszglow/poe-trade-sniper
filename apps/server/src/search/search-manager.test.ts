@@ -169,6 +169,43 @@ describe('SearchManager', () => {
     }
   });
 
+  it('prunes hit history beyond HITS_MAX_ROWS', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      const insert = database.$client.prepare(
+        `INSERT INTO hits (search_id, listing_id, item_name, price, seller, item, detected_at)
+         VALUES ('AbCdEf123', ?, 'Item', NULL, 's', NULL, '2026-06-12T10:00:00.000Z')`,
+      );
+      for (let index = 0; index < 150; index += 1) insert.run(`listing-${index}`);
+
+      manager.onApplicationShutdown();
+      const reloaded = new SearchManager(
+        loadConfig({ HITS_MAX_ROWS: '100' }),
+        database,
+        [],
+        { resolveQuery: vi.fn() } as unknown as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+      );
+      reloaded.onApplicationBootstrap(); // bootstrap prunes
+      try {
+        const count = database.$client.prepare('SELECT COUNT(*) AS c FROM hits').get() as {
+          c: number;
+        };
+        expect(count.c).toBe(100);
+        const newest = database.$client
+          .prepare('SELECT listing_id FROM hits ORDER BY id DESC LIMIT 1')
+          .get() as { listing_id: string };
+        expect(newest.listing_id).toBe('listing-149'); // newest survive
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      database.$client.close();
+    }
+  });
+
   it('reloads persisted searches on bootstrap', async () => {
     const { manager, database } = createManager();
     try {

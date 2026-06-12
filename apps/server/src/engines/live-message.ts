@@ -21,3 +21,19 @@ export function parseLiveMessage(text: string): string[] | null {
 export function reconnectDelayFromLadder(ladderMs: number[], attemptIndex: number): number {
   return ladderMs[Math.min(attemptIndex, ladderMs.length - 1)] ?? 5_000;
 }
+
+/**
+ * Close-code-aware delay: 1013 ("Try Again Later") is the server explicitly
+ * asking for backoff — jump straight to the ladder's top rung instead of
+ * climbing through the fast ones.
+ */
+export function reconnectDelayForClose(
+  closeCode: number,
+  ladderMs: number[],
+  attemptIndex: number,
+): number {
+  if (closeCode === 1013) {
+    return ladderMs[ladderMs.length - 1] ?? 60_000;
+  }
+  return reconnectDelayFromLadder(ladderMs, attemptIndex);
+}
