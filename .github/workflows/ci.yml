@@ -22,9 +22,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm verify
-
+      # Build the workspace libraries first (shared/server emit dist/, which is
+      # gitignored) so typecheck/test in `verify` can resolve @poe-sniper/*.
       - run: pnpm build
+
+      - run: pnpm verify
 
       - run: pnpm test:e2e
 
