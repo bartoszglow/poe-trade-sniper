@@ -6,6 +6,7 @@ import type {
   Listing,
   TravelEvent,
 } from '@poe-sniper/shared';
+import { translateStatic } from '../i18n/i18n';
 import { isHitSoundEnabled, playHitSound } from '../lib/hit-sound';
 import { isNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
@@ -109,10 +110,14 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
         if (isHitSoundEnabled()) playHitSound();
         if (isNotifyEnabled()) {
           const { listing } = event;
+          // translateStatic: this callback lives outside the React tree.
           const price = listing.price
             ? `${listing.price.amount} ${listing.price.currency}`
-            : 'no price';
-          showSystemNotification(`Hit: ${listing.itemName}`, `${price} · ${listing.seller ?? '?'}`);
+            : translateStatic('item.noPrice');
+          showSystemNotification(
+            translateStatic('notify.hitTitle', { item: listing.itemName }),
+            `${price} · ${listing.seller ?? '?'}`,
+          );
         }
       }
       setState((previous) => reduceEvent(previous, event));

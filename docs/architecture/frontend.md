@@ -36,9 +36,35 @@ Nothing else in the shell may assume a browser chrome exists.
 
 ## Nav registry (open/closed)
 
-`src/shell/nav.ts` is the single registry: `{ id, path, label, icon, page }`.
+`src/shell/nav.ts` is the single registry: `{ id, path, labelKey, icon, page }`.
 Rail, routes and titles derive from it. Adding a page = adding an entry;
-shell components never change.
+shell components never change. `labelKey` is an i18n catalog key — hooks can't
+run at module scope, so the rail resolves it with `useT()`.
+
+## i18n (mirrors card-bridge)
+
+English (`en`) and Polish (`pl`); the operator switches language from Settings
+(persisted to `localStorage` under `sniper.language`, default `en`, `pl`
+auto-detected from the browser locale).
+
+> **Whenever you add text that is shown to the user, it MUST be a label in the
+> message catalog with a translation for every supported language.**
+
+- Catalog: `src/i18n/messages.ts`. `EN` is the source of truth for the key set
+  (`as const` → `MessageKey`); `PL` is typed `Record<MessageKey, string>`, so a
+  missing or stray key is a **build error**. Adding a language = one record +
+  one `LANGUAGES` row (open/closed).
+- Singular text — `useT()` → `t('key')`, `{name}` placeholders interpolate.
+- Counted text — `useTn()` → `tn('searches.hitCount', count)`; plural forms
+  resolve via `Intl.PluralRules` (Polish one/few/many). Never hand-build
+  `count + (n === 1 ? '' : 's')`.
+- Static data (nav entries, option lists) — store `labelKey`, translate inside
+  the component.
+- Outside the React tree (SSE hit → system notification) — `translateStatic()`
+  reads the persisted language directly.
+- Server-supplied detail strings (engine `statusDetail`, API error `message`,
+  login-capture `detail`) render as-is — the server speaks English; translating
+  free-form diagnostics would hide information.
 
 ## Atomic components
 

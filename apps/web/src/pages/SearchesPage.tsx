@@ -10,6 +10,8 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useSearches } from '../hooks/useSearches';
+import { useT, useTn } from '../i18n/i18n';
+import type { MessageKey } from '../i18n/messages';
 import { ApiError } from '../lib/api';
 
 const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
@@ -18,6 +20,14 @@ const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   active: 'ok',
   degraded: 'danger',
   stopped: 'neutral',
+};
+
+const STATUS_LABEL_KEYS: Record<EngineStatus, MessageKey> = {
+  pending: 'engineStatus.pending',
+  connecting: 'engineStatus.connecting',
+  active: 'engineStatus.active',
+  degraded: 'engineStatus.degraded',
+  stopped: 'engineStatus.stopped',
 };
 
 function AddSearchForm({
@@ -30,6 +40,7 @@ function AddSearchForm({
     autoTravel: boolean;
   }) => Promise<void>;
 }) {
+  const t = useT();
   const { leagues } = useLeagues();
   const [input, setInput] = useState('');
   const [label, setLabel] = useState('');
@@ -62,7 +73,7 @@ function AddSearchForm({
       setLabel('');
       setAutoTravel(false);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : 'request failed');
+      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -74,26 +85,23 @@ function AddSearchForm({
       className="rounded-lg border border-edge bg-surface-1 p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Field
-          label="Search id or URL"
-          hint="paste from the trade site — it defines the query, league and purchase type"
-        >
+        <Field label={t('searches.fieldInput')} hint={t('searches.fieldInputHint')}>
           <TextInput
             value={input}
             onChange={(changeEvent) => setInput(changeEvent.target.value)}
-            placeholder="AbCdEf123 or https://…/trade2/search/…"
+            placeholder={t('searches.fieldInputPlaceholder')}
             required
           />
         </Field>
-        <Field label="Label">
+        <Field label={t('searches.fieldLabel')}>
           <TextInput
             value={label}
             onChange={(changeEvent) => setLabel(changeEvent.target.value)}
-            placeholder="T1 ES boots"
+            placeholder={t('searches.fieldLabelPlaceholder')}
           />
         </Field>
         {inputIsBareId && (
-          <Field label="League" hint="a bare id needs one">
+          <Field label={t('searches.fieldLeague')} hint={t('searches.fieldLeagueHint')}>
             {leagues.length > 0 ? (
               <Select
                 value={league || (leagues[0]?.id ?? '')}
@@ -115,19 +123,17 @@ function AddSearchForm({
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <span className="flex items-center gap-2 text-sm text-ink-muted">
-          <Switch checked={autoTravel} onChange={setAutoTravel} label="Auto travel" />
-          auto-travel
+          <Switch checked={autoTravel} onChange={setAutoTravel} label={t('searches.autoTravel')} />
+          {t('searches.autoTravelInline')}
           {autoTravel && (
-            <span className="text-xs text-warn">
-              teleports your character — Instant Buyout only
-            </span>
+            <span className="text-xs text-warn">{t('searches.autoTravelWarning')}</span>
           )}
         </span>
         <div className="flex-1" />
         {errorMessage && <span className="text-sm text-danger">{errorMessage}</span>}
         <Button variant="primary" type="submit" disabled={submitting || input.trim() === ''}>
           <Plus className="h-4 w-4" />
-          Watch search
+          {t('searches.watch')}
         </Button>
       </div>
     </form>
@@ -143,6 +149,8 @@ function SearchRow({
   onUpdate: (payload: { autoTravel?: boolean }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
+  const t = useT();
+  const tn = useTn();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -151,7 +159,7 @@ function SearchRow({
     try {
       await action();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : 'request failed');
+      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
     }
   }
 
@@ -161,14 +169,15 @@ function SearchRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-ink">{search.label}</span>
-            <Badge tone={STATUS_TONES[search.status]}>{search.status}</Badge>
+            <Badge tone={STATUS_TONES[search.status]}>{t(STATUS_LABEL_KEYS[search.status])}</Badge>
             {search.engine && (
               <Badge tone={search.engine === 'ws' ? 'gold' : 'neutral'}>{search.engine}</Badge>
             )}
           </div>
           <div className="mt-0.5 text-xs text-ink-faint">
-            {search.id} · {search.league} · {search.hitCount} hit{search.hitCount === 1 ? '' : 's'}
-            {search.lastHitAt && ` · last ${new Date(search.lastHitAt).toLocaleTimeString()}`}
+            {search.id} · {search.league} · {tn('searches.hitCount', search.hitCount)}
+            {search.lastHitAt &&
+              ` · ${t('searches.last', { time: new Date(search.lastHitAt).toLocaleTimeString() })}`}
           </div>
         </div>
         <div className="flex-1" />
@@ -176,18 +185,18 @@ function SearchRow({
           <Switch
             checked={search.autoTravel}
             onChange={(checked) => void run(() => onUpdate({ autoTravel: checked }))}
-            label={`Auto travel for ${search.label}`}
+            label={t('searches.autoFor', { label: search.label })}
           />
-          AUTO
+          {t('searches.travelToggle')}
         </span>
         {confirmingDelete ? (
           <Button variant="danger" onClick={() => void run(onRemove)}>
-            Confirm
+            {t('common.confirm')}
           </Button>
         ) : (
           <IconButton
             variant="danger"
-            aria-label={`Remove ${search.label}`}
+            aria-label={t('searches.remove', { label: search.label })}
             onClick={() => {
               setConfirmingDelete(true);
               setTimeout(() => setConfirmingDelete(false), 3000);
@@ -206,16 +215,15 @@ function SearchRow({
 }
 
 export function SearchesPage() {
+  const t = useT();
   const { searches, loaded, add, update, remove } = useSearches();
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-ink">Searches</h1>
+      <h1 className="text-lg font-semibold text-ink">{t('searches.title')}</h1>
       <AddSearchForm onAdd={add} />
       {loaded && searches.length === 0 && (
-        <p className="text-sm text-ink-faint">
-          No watched searches yet — paste a trade search id or URL above.
-        </p>
+        <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
       )}
       <ul className="flex flex-col gap-2">
         {searches.map((search) => (

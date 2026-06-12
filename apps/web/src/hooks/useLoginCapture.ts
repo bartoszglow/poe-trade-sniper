@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { translateStatic } from '../i18n/i18n';
 import { ApiError, apiGet, apiSend } from '../lib/api';
 
 interface CaptureStatus {
@@ -43,7 +44,9 @@ export function useLoginCapture(onFinished: () => void) {
         }, STATUS_POLL_MS);
       })
       .catch((error: unknown) => {
-        setLoginDetail(error instanceof ApiError ? error.message : 'failed to start');
+        setLoginDetail(
+          error instanceof ApiError ? error.message : translateStatic('login.failedToStart'),
+        );
       });
   }, [onFinished]);
 

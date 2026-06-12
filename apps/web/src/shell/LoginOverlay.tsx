@@ -5,6 +5,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { IconButton } from '../components/IconButton';
 import { useLoginCapture } from '../hooks/useLoginCapture';
+import { useT } from '../i18n/i18n';
 
 interface LoginOverlayProps {
   /** true = stored cookies failed the probe; false = no session at all. */
@@ -15,6 +16,7 @@ interface LoginOverlayProps {
 
 /** Blocking-but-dismissible prompt shown on boot when the app can't snipe. */
 export function LoginOverlay({ expired, onRefresh, onClose }: LoginOverlayProps) {
+  const t = useT();
   const { loginState, loginDetail, start, cancel } = useLoginCapture(onRefresh);
   const [busy] = useState(false);
 
@@ -23,7 +25,7 @@ export function LoginOverlay({ expired, onRefresh, onClose }: LoginOverlayProps)
       <div className="relative w-full max-w-md rounded-lg border border-edge bg-surface-1 p-6 shadow-2xl">
         <IconButton
           variant="ghost"
-          aria-label="Close"
+          aria-label={t('common.close')}
           className="absolute top-3 right-3"
           onClick={onClose}
         >
@@ -33,13 +35,11 @@ export function LoginOverlay({ expired, onRefresh, onClose }: LoginOverlayProps)
         <div className="flex items-center gap-2">
           <KeyRound className="h-5 w-5 text-gold" />
           <h2 className="text-base font-semibold text-ink">
-            {expired ? 'Your PoE session expired' : 'Not logged in to Path of Exile'}
+            {expired ? t('login.titleExpired') : t('login.titleMissing')}
           </h2>
         </div>
         <p className="mt-2 text-sm text-ink-muted">
-          {expired
-            ? 'The stored cookies no longer work — detection and travel are paused until you log in again.'
-            : 'The sniper needs a PoE session to watch searches and travel. Log in once and you are set.'}
+          {expired ? t('login.bodyExpired') : t('login.bodyMissing')}
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -49,26 +49,26 @@ export function LoginOverlay({ expired, onRefresh, onClose }: LoginOverlayProps)
             onClick={start}
           >
             <LogIn className="h-4 w-4" />
-            {expired ? 'Log in again' : 'Log in with Path of Exile'}
+            {expired ? t('login.again') : t('login.withPoe')}
           </Button>
           {loginState === 'waiting-login' && (
             <>
-              <Badge tone="gold">waiting for login…</Badge>
+              <Badge tone="gold">{t('login.waiting')}</Badge>
               <Button variant="ghost" onClick={cancel}>
-                Cancel
+                {t('common.cancel')}
               </Button>
             </>
           )}
         </div>
         {loginDetail && <p className="mt-2 text-xs text-ink-faint">{loginDetail}</p>}
         <p className="mt-3 text-xs text-ink-faint">
-          Prefer not to log in here?{' '}
+          {t('login.preferNot')}{' '}
           <Link
             className="text-gold underline-offset-2 hover:underline"
             to="/settings"
             onClick={onClose}
           >
-            Paste cookies in Settings
+            {t('login.pasteInSettings')}
           </Link>
         </p>
       </div>

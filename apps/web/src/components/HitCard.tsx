@@ -1,6 +1,8 @@
 import { Zap } from 'lucide-react';
 import type { Listing } from '@poe-sniper/shared';
 import type { TravelState } from '../hooks/EventStreamProvider';
+import { useT } from '../i18n/i18n';
+import type { MessageKey } from '../i18n/messages';
 import { Button } from './Button';
 import { PriceTag } from './PriceTag';
 import { RarityName } from './RarityName';
@@ -13,15 +15,16 @@ interface HitCardProps {
   onTravel: () => void;
 }
 
-const TRAVEL_LABELS: Record<string, string> = {
-  queued: 'queued…',
-  started: 'traveling…',
-  success: 'traveled ✓',
-  failed: 'failed',
+const TRAVEL_LABEL_KEYS: Record<string, MessageKey> = {
+  queued: 'hitCard.queued',
+  started: 'hitCard.traveling',
+  success: 'hitCard.traveled',
+  failed: 'hitCard.failed',
 };
 
 export function HitCard({ listing, travelState, tokenFresh, onTravel }: HitCardProps) {
-  const travelLabel = travelState ? TRAVEL_LABELS[travelState.phase] : null;
+  const t = useT();
+  const travelLabelKey = travelState ? TRAVEL_LABEL_KEYS[travelState.phase] : null;
   const travelBusy = travelState?.phase === 'queued' || travelState?.phase === 'started';
 
   return (
@@ -39,7 +42,7 @@ export function HitCard({ listing, travelState, tokenFresh, onTravel }: HitCardP
         )}
         <div className="flex-1" />
         {listing.hideoutToken &&
-          (travelLabel && travelState ? (
+          (travelLabelKey && travelState ? (
             <span
               className={`text-xs ${
                 travelState.phase === 'failed'
@@ -50,18 +53,18 @@ export function HitCard({ listing, travelState, tokenFresh, onTravel }: HitCardP
               }`}
               title={travelState.detail ?? undefined}
             >
-              {travelLabel}
+              {t(travelLabelKey)}
             </span>
           ) : (
             <Button
               variant="primary"
               className="!px-2 !py-0.5 text-xs"
               disabled={!tokenFresh || travelBusy}
-              title={tokenFresh ? 'Travel to seller hideout' : 'token expired'}
+              title={tokenFresh ? t('hitCard.travelTitle') : t('hitCard.tokenExpired')}
               onClick={onTravel}
             >
               <Zap className="h-3 w-3" />
-              {tokenFresh ? 'Travel' : 'expired'}
+              {tokenFresh ? t('hitCard.travel') : t('hitCard.expired')}
             </Button>
           ))}
       </div>

@@ -1,0 +1,354 @@
+/**
+ * i18n message catalog. EVERY user-facing string in the web app lives here as a
+ * label, with a translation for each supported language (see docs/frontend.md).
+ *
+ * `EN` is the source of truth for the key set (`as const` → `MessageKey`); `PL`
+ * is typed as `Record<MessageKey, string>` so the compiler rejects any missing
+ * or stray key. Pluralised phrases live in the `*_PLURALS` catalogs and are
+ * resolved with `Intl.PluralRules` (handles Polish one/few/many correctly).
+ */
+
+// --- Singular messages (source of truth: EN) ---
+
+export const EN = {
+  // Common
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.confirm': 'Confirm',
+  'common.refresh': 'Refresh',
+  'common.test': 'Test',
+  'common.requestFailed': 'request failed',
+  'common.live': 'live',
+  'common.offline': 'offline',
+  'common.connecting': 'connecting',
+
+  // Navigation
+  'nav.searches': 'Searches',
+  'nav.hits': 'Hits',
+  'nav.settings': 'Settings',
+
+  // Status bar
+  'status.serverChecking': 'server …',
+  'status.server': 'server',
+  'status.serverDown': 'server down',
+  'status.noSession': 'no session',
+  'status.session': 'session',
+  'status.sessionInvalid': 'session invalid',
+  'status.sessionUnprobed': 'session unprobed',
+  'status.rateLimitedUntil': 'rate-limited until {time}',
+  'status.searchBudget': 'search {budget}',
+  'status.travelQueue': 'travel queue: {count}',
+
+  // Outbound safety guard
+  'guard.tripped': 'Safety guard tripped — all PoE traffic halted.',
+  'guard.unknownReason': 'unknown reason',
+  'guard.reset': 'Reset guard',
+
+  // Expired-session banner
+  'sessionBanner.expired': 'PoE session looks expired — detection cannot reach the trade API.',
+  'sessionBanner.fix': 'Fix in Settings',
+
+  // Login overlay / capture
+  'login.titleExpired': 'Your PoE session expired',
+  'login.titleMissing': 'Not logged in to Path of Exile',
+  'login.bodyExpired':
+    'The stored cookies no longer work — detection and travel are paused until you log in again.',
+  'login.bodyMissing':
+    'The sniper needs a PoE session to watch searches and travel. Log in once and you are set.',
+  'login.again': 'Log in again',
+  'login.withPoe': 'Log in with Path of Exile',
+  'login.waiting': 'waiting for login…',
+  'login.preferNot': 'Prefer not to log in here?',
+  'login.pasteInSettings': 'Paste cookies in Settings',
+  'login.failedToStart': 'failed to start',
+
+  // Engine status badges (closed EngineStatus union)
+  'engineStatus.pending': 'pending',
+  'engineStatus.connecting': 'connecting',
+  'engineStatus.active': 'active',
+  'engineStatus.degraded': 'degraded',
+  'engineStatus.stopped': 'stopped',
+
+  // Live hits panel
+  'hitsPanel.title': 'Live hits',
+  'hitsPanel.empty': 'New listings stream here the moment an engine detects them.',
+
+  // Hit card / travel
+  'hitCard.queued': 'queued…',
+  'hitCard.traveling': 'traveling…',
+  'hitCard.traveled': 'traveled ✓',
+  'hitCard.failed': 'failed',
+  'hitCard.travel': 'Travel',
+  'hitCard.travelTitle': 'Travel to seller hideout',
+  'hitCard.expired': 'expired',
+  'hitCard.tokenExpired': 'token expired',
+
+  // Searches page
+  'searches.title': 'Searches',
+  'searches.fieldInput': 'Search id or URL',
+  'searches.fieldInputHint':
+    'paste from the trade site — it defines the query, league and purchase type',
+  'searches.fieldInputPlaceholder': 'AbCdEf123 or https://…/trade2/search/…',
+  'searches.fieldLabel': 'Label',
+  'searches.fieldLabelPlaceholder': 'T1 ES boots',
+  'searches.fieldLeague': 'League',
+  'searches.fieldLeagueHint': 'a bare id needs one',
+  'searches.autoTravel': 'Auto travel',
+  'searches.autoTravelInline': 'auto-travel',
+  'searches.autoTravelWarning': 'teleports your character — Instant Buyout only',
+  'searches.watch': 'Watch search',
+  'searches.empty': 'No watched searches yet — paste a trade search id or URL above.',
+  'searches.travelToggle': 'TRAVEL',
+  'searches.autoFor': 'Auto travel for {label}',
+  'searches.remove': 'Remove {label}',
+  'searches.last': 'last {time}',
+
+  // Hits page
+  'hits.title': 'Hits',
+  'hits.allSearches': 'All searches',
+  'hits.filterBySearch': 'Filter by search',
+  'hits.empty':
+    'No persisted detections yet. Hits land here (and in the live panel) once a watched search fires.',
+  'hits.noItemPayload': 'no item payload recorded',
+
+  // Item detail
+  'item.properties': 'Properties',
+  'item.requirements': 'Requirements',
+  'item.ilvl': 'ilvl {level}',
+  'item.corrupted': 'corrupted',
+  'item.noPrice': 'no price',
+
+  // Settings
+  'settings.title': 'Settings',
+  'settings.language': 'Language',
+  'settings.languageHint': 'Interface language — applies immediately.',
+  'settings.session': 'PoE session',
+  'settings.noSession': 'No session stored.',
+  'settings.loggedIn': 'logged in',
+  'settings.invalid': 'invalid',
+  'settings.notVerified': 'not verified',
+  'settings.captured': 'captured {date}',
+  'settings.verify': 'Verify session',
+  'settings.probeFailed': 'probe failed — session looks stale',
+  'settings.clear': 'Clear session',
+  'settings.confirmClear': 'Confirm clear',
+  'settings.cleared': 'session cleared',
+  'settings.loginCard': 'Log in with Path of Exile',
+  'settings.loginCardBody':
+    'Opens the real pathofexile.com page in your Chrome — credentials go only to GGG; once you finish logging in there, the session is captured and the window closes itself.',
+  'settings.pasteCard': 'Paste cookies instead',
+  'settings.pasteCardBody':
+    'Prefer not to log in inside the app? Copy the cookies from your own browser (devtools → Application → Cookies → pathofexile.com). Values are stored locally, never displayed and never logged.',
+  'settings.hintRequired': 'required',
+  'settings.hintCfClearance': 'optional — include if Cloudflare challenged you',
+  'settings.hintUserAgent':
+    "paste your browser's UA when cf_clearance is set (Cloudflare binds them)",
+  'settings.uaPlaceholder': 'leave empty for the server default',
+  'settings.saveSession': 'Save session',
+  'settings.savedVerified': 'session saved and verified — logged in',
+  'settings.savedUnverified': 'session saved but the login probe failed — cookies may be stale',
+  'settings.alerts': 'Alerts',
+  'settings.hitSound': 'Hit sound',
+  'settings.hitSoundDesc': 'play a sound on every detected hit',
+  'settings.volume': 'Volume',
+  'settings.systemNotifications': 'System notifications',
+  'settings.systemNotificationsDesc': 'system notification on every hit',
+  'settings.audioUnlockNote':
+    'Browsers unlock audio after the first interaction — hit Test once after opening the app.',
+  'settings.budgets': 'Rate-limit budgets',
+  'settings.budgetsEmpty':
+    'No live data yet — budgets appear after the first GGG request (read from X-Rate-Limit headers, never hardcoded).',
+  'settings.budgetRule': '{used}/{max} per {period}s',
+
+  // System notifications
+  'notify.appName': 'PoE Trade Sniper',
+  'notify.enabled': 'System notifications enabled',
+  'notify.testBody': 'Test alert — this is how a hit looks',
+  'notify.hitTitle': 'Hit: {item}',
+} as const;
+
+export type MessageKey = keyof typeof EN;
+
+export const PL: Record<MessageKey, string> = {
+  // Common
+  'common.cancel': 'Anuluj',
+  'common.close': 'Zamknij',
+  'common.confirm': 'Potwierdź',
+  'common.refresh': 'Odśwież',
+  'common.test': 'Test',
+  'common.requestFailed': 'żądanie nie powiodło się',
+  'common.live': 'na żywo',
+  'common.offline': 'offline',
+  'common.connecting': 'łączenie',
+
+  // Navigation
+  'nav.searches': 'Wyszukiwania',
+  'nav.hits': 'Trafienia',
+  'nav.settings': 'Ustawienia',
+
+  // Status bar
+  'status.serverChecking': 'serwer …',
+  'status.server': 'serwer',
+  'status.serverDown': 'serwer nie działa',
+  'status.noSession': 'brak sesji',
+  'status.session': 'sesja',
+  'status.sessionInvalid': 'sesja nieważna',
+  'status.sessionUnprobed': 'sesja niezweryfikowana',
+  'status.rateLimitedUntil': 'limit zapytań do {time}',
+  'status.searchBudget': 'wyszukiwanie {budget}',
+  'status.travelQueue': 'kolejka podróży: {count}',
+
+  // Outbound safety guard
+  'guard.tripped': 'Bezpiecznik zadziałał — cały ruch do PoE wstrzymany.',
+  'guard.unknownReason': 'nieznany powód',
+  'guard.reset': 'Zresetuj bezpiecznik',
+
+  // Expired-session banner
+  'sessionBanner.expired':
+    'Sesja PoE wygląda na wygasłą — wykrywanie nie może połączyć się z API trade.',
+  'sessionBanner.fix': 'Napraw w Ustawieniach',
+
+  // Login overlay / capture
+  'login.titleExpired': 'Twoja sesja PoE wygasła',
+  'login.titleMissing': 'Nie zalogowano do Path of Exile',
+  'login.bodyExpired':
+    'Zapisane cookies już nie działają — wykrywanie i podróże są wstrzymane do ponownego zalogowania.',
+  'login.bodyMissing':
+    'Sniper potrzebuje sesji PoE, aby obserwować wyszukiwania i podróżować. Zaloguj się raz i gotowe.',
+  'login.again': 'Zaloguj się ponownie',
+  'login.withPoe': 'Zaloguj przez Path of Exile',
+  'login.waiting': 'oczekiwanie na logowanie…',
+  'login.preferNot': 'Wolisz nie logować się tutaj?',
+  'login.pasteInSettings': 'Wklej cookies w Ustawieniach',
+  'login.failedToStart': 'nie udało się uruchomić',
+
+  // Engine status badges
+  'engineStatus.pending': 'oczekuje',
+  'engineStatus.connecting': 'łączenie',
+  'engineStatus.active': 'aktywny',
+  'engineStatus.degraded': 'niestabilny',
+  'engineStatus.stopped': 'zatrzymany',
+
+  // Live hits panel
+  'hitsPanel.title': 'Trafienia na żywo',
+  'hitsPanel.empty': 'Nowe oferty pojawią się tutaj, gdy tylko silnik je wykryje.',
+
+  // Hit card / travel
+  'hitCard.queued': 'w kolejce…',
+  'hitCard.traveling': 'podróż…',
+  'hitCard.traveled': 'przeniesiono ✓',
+  'hitCard.failed': 'niepowodzenie',
+  'hitCard.travel': 'Podróżuj',
+  'hitCard.travelTitle': 'Podróżuj do kryjówki sprzedawcy',
+  'hitCard.expired': 'wygasł',
+  'hitCard.tokenExpired': 'token wygasł',
+
+  // Searches page
+  'searches.title': 'Wyszukiwania',
+  'searches.fieldInput': 'Id lub URL wyszukiwania',
+  'searches.fieldInputHint': 'wklej ze strony trade — definiuje zapytanie, ligę i tryb zakupu',
+  'searches.fieldInputPlaceholder': 'AbCdEf123 lub https://…/trade2/search/…',
+  'searches.fieldLabel': 'Etykieta',
+  'searches.fieldLabelPlaceholder': 'Buty ES T1',
+  'searches.fieldLeague': 'Liga',
+  'searches.fieldLeagueHint': 'samo id wymaga ligi',
+  'searches.autoTravel': 'Automatyczna podróż',
+  'searches.autoTravelInline': 'auto-podróż',
+  'searches.autoTravelWarning': 'teleportuje twoją postać — tylko Instant Buyout',
+  'searches.watch': 'Obserwuj wyszukiwanie',
+  'searches.empty': 'Brak obserwowanych wyszukiwań — wklej powyżej id lub URL wyszukiwania.',
+  'searches.travelToggle': 'PODRÓŻ',
+  'searches.autoFor': 'Automatyczna podróż dla {label}',
+  'searches.remove': 'Usuń {label}',
+  'searches.last': 'ostatnie {time}',
+
+  // Hits page
+  'hits.title': 'Trafienia',
+  'hits.allSearches': 'Wszystkie wyszukiwania',
+  'hits.filterBySearch': 'Filtruj po wyszukiwaniu',
+  'hits.empty':
+    'Brak zapisanych wykryć. Trafienia pojawią się tutaj (i w panelu na żywo), gdy obserwowane wyszukiwanie zadziała.',
+  'hits.noItemPayload': 'brak zapisanych danych przedmiotu',
+
+  // Item detail
+  'item.properties': 'Właściwości',
+  'item.requirements': 'Wymagania',
+  'item.ilvl': 'ilvl {level}',
+  'item.corrupted': 'skażony',
+  'item.noPrice': 'brak ceny',
+
+  // Settings
+  'settings.title': 'Ustawienia',
+  'settings.language': 'Język',
+  'settings.languageHint': 'Język interfejsu — działa od razu.',
+  'settings.session': 'Sesja PoE',
+  'settings.noSession': 'Brak zapisanej sesji.',
+  'settings.loggedIn': 'zalogowano',
+  'settings.invalid': 'nieważna',
+  'settings.notVerified': 'niezweryfikowana',
+  'settings.captured': 'zapisana {date}',
+  'settings.verify': 'Zweryfikuj sesję',
+  'settings.probeFailed': 'weryfikacja nie powiodła się — sesja wygląda na nieaktualną',
+  'settings.clear': 'Wyczyść sesję',
+  'settings.confirmClear': 'Potwierdź czyszczenie',
+  'settings.cleared': 'sesja wyczyszczona',
+  'settings.loginCard': 'Logowanie przez Path of Exile',
+  'settings.loginCardBody':
+    'Otwiera prawdziwą stronę pathofexile.com w twoim Chrome — dane logowania trafiają wyłącznie do GGG; po zalogowaniu sesja zostaje przechwycona, a okno samo się zamyka.',
+  'settings.pasteCard': 'Albo wklej cookies',
+  'settings.pasteCardBody':
+    'Wolisz nie logować się w aplikacji? Skopiuj cookies z własnej przeglądarki (devtools → Application → Cookies → pathofexile.com). Wartości są przechowywane lokalnie, nigdy nie są wyświetlane ani logowane.',
+  'settings.hintRequired': 'wymagane',
+  'settings.hintCfClearance': 'opcjonalne — dodaj, jeśli Cloudflare cię weryfikował',
+  'settings.hintUserAgent':
+    'wklej User-Agent swojej przeglądarki, gdy ustawiasz cf_clearance (Cloudflare je wiąże)',
+  'settings.uaPlaceholder': 'puste = wartość domyślna serwera',
+  'settings.saveSession': 'Zapisz sesję',
+  'settings.savedVerified': 'sesja zapisana i zweryfikowana — zalogowano',
+  'settings.savedUnverified':
+    'sesja zapisana, ale weryfikacja logowania nie powiodła się — cookies mogą być nieaktualne',
+  'settings.alerts': 'Alerty',
+  'settings.hitSound': 'Dźwięk trafienia',
+  'settings.hitSoundDesc': 'odtwarzaj dźwięk przy każdym wykrytym trafieniu',
+  'settings.volume': 'Głośność',
+  'settings.systemNotifications': 'Powiadomienia systemowe',
+  'settings.systemNotificationsDesc': 'powiadomienie systemowe przy każdym trafieniu',
+  'settings.audioUnlockNote':
+    'Przeglądarka odblokowuje dźwięk po pierwszej interakcji — kliknij Test raz po otwarciu aplikacji.',
+  'settings.budgets': 'Limity zapytań',
+  'settings.budgetsEmpty':
+    'Brak danych — limity pojawią się po pierwszym zapytaniu do GGG (odczytywane z nagłówków X-Rate-Limit, nigdy nie zaszyte na stałe).',
+  'settings.budgetRule': '{used}/{max} na {period}s',
+
+  // System notifications
+  'notify.appName': 'PoE Trade Sniper',
+  'notify.enabled': 'Powiadomienia systemowe włączone',
+  'notify.testBody': 'Alert testowy — tak wygląda trafienie',
+  'notify.hitTitle': 'Trafienie: {item}',
+};
+
+// --- Pluralised phrases (Intl.PluralRules categories) ---
+
+export type PluralForms = {
+  zero?: string;
+  one?: string;
+  two?: string;
+  few?: string;
+  many?: string;
+  other: string;
+};
+
+export const EN_PLURALS = {
+  'searches.hitCount': { one: '{count} hit', other: '{count} hits' },
+} as const satisfies Record<string, PluralForms>;
+
+export type PluralKey = keyof typeof EN_PLURALS;
+
+export const PL_PLURALS: Record<PluralKey, PluralForms> = {
+  'searches.hitCount': {
+    one: '{count} trafienie',
+    few: '{count} trafienia',
+    many: '{count} trafień',
+    other: '{count} trafienia',
+  },
+};

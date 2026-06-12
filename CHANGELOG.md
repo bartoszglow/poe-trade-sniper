@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Full i18n (English + Polish) mirroring the card-bridge pattern: typed
+  message catalog (`EN` as const drives the key set, `PL` compiler-checked),
+  `I18nProvider` with localStorage persistence and `Intl.PluralRules`
+  (Polish one/few/many), language select in Settings, `translateStatic` for
+  out-of-tree code (system notifications). Every user-facing string swept
+  into the catalog.
+- Alert volume control in Settings: gain-scaled WebAudio synth (0–100 %,
+  persisted), themed `Slider` atom, preview on release. System notifications
+  are sent `silent` so the slider governs all alert audio.
 - Phase 5 desktop: frameless window (traffic lights over the app bar,
   data-shell switch via preload), server bundled to one CJS file (esbuild —
   enabled by the explicit-@Inject rule), electron-builder .dmg (arm64,
@@ -55,3 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/api/session/*`, `/api/events`).
 - Phase 0 foundation: pnpm monorepo, strict TypeScript, ESLint/Prettier, Husky
   hooks (lint-staged, audit, gitleaks), CI.
+
+### Changed
+
+- Per-search auto-travel toggle is now labeled "TRAVEL" (was "AUTO").

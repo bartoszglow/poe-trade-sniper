@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { Crosshair, History, Settings } from 'lucide-react';
+import type { MessageKey } from '../i18n/messages';
 import { SearchesPage } from '../pages/SearchesPage';
 import { HitsPage } from '../pages/HitsPage';
 import { SettingsPage } from '../pages/SettingsPage';
@@ -7,7 +8,8 @@ import { SettingsPage } from '../pages/SettingsPage';
 export interface NavEntry {
   id: string;
   path: string;
-  label: string;
+  /** Catalog key — hooks can't run at module scope, so labels resolve in the rail. */
+  labelKey: MessageKey;
   icon: ComponentType<{ className?: string }>;
   page: ComponentType;
 }
@@ -18,7 +20,13 @@ export interface NavEntry {
  * components never change.
  */
 export const NAV_ENTRIES: NavEntry[] = [
-  { id: 'searches', path: '/', label: 'Searches', icon: Crosshair, page: SearchesPage },
-  { id: 'hits', path: '/hits', label: 'Hits', icon: History, page: HitsPage },
-  { id: 'settings', path: '/settings', label: 'Settings', icon: Settings, page: SettingsPage },
+  { id: 'searches', path: '/', labelKey: 'nav.searches', icon: Crosshair, page: SearchesPage },
+  { id: 'hits', path: '/hits', labelKey: 'nav.hits', icon: History, page: HitsPage },
+  {
+    id: 'settings',
+    path: '/settings',
+    labelKey: 'nav.settings',
+    icon: Settings,
+    page: SettingsPage,
+  },
 ];

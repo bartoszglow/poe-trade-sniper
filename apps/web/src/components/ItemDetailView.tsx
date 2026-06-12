@@ -1,4 +1,5 @@
 import type { ItemDetail, ItemProperty } from '@poe-sniper/shared';
+import { useT } from '../i18n/i18n';
 
 function PropertyList({ title, properties }: { title: string; properties: ItemProperty[] }) {
   if (properties.length === 0) return null;
@@ -32,15 +33,16 @@ function ModList({ mods, className }: { mods: string[]; className: string }) {
 
 /** Renders the normalized item payload — trade-site-ish mod coloring. */
 export function ItemDetailView({ item }: { item: ItemDetail }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-2 border-t border-edge pt-2">
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-ink-faint">
         {item.baseType && <span>{item.baseType}</span>}
-        {item.itemLevel !== null && <span>ilvl {item.itemLevel}</span>}
-        {item.corrupted && <span className="text-danger">corrupted</span>}
+        {item.itemLevel !== null && <span>{t('item.ilvl', { level: item.itemLevel })}</span>}
+        {item.corrupted && <span className="text-danger">{t('item.corrupted')}</span>}
       </div>
-      <PropertyList title="Properties" properties={item.properties} />
-      <PropertyList title="Requirements" properties={item.requirements} />
+      <PropertyList title={t('item.properties')} properties={item.properties} />
+      <PropertyList title={t('item.requirements')} properties={item.requirements} />
       <ModList mods={item.implicitMods} className="text-ink-muted italic" />
       <ModList mods={item.explicitMods} className="text-rarity-magic" />
       <ModList mods={item.runeMods} className="text-gold" />

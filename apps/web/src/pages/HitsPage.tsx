@@ -8,11 +8,13 @@ import { RarityName } from '../components/RarityName';
 import { Select } from '../components/Select';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useSearches } from '../hooks/useSearches';
+import { useT } from '../i18n/i18n';
 import { apiGet } from '../lib/api';
 
 const HISTORY_LIMIT = 50;
 
 export function HitsPage() {
+  const t = useT();
   const { liveHits } = useEventStream();
   const { searches } = useSearches();
   const [hits, setHits] = useState<Hit[]>([]);
@@ -32,32 +34,29 @@ export function HitsPage() {
   }, [refresh, liveHits.length]);
 
   const filterOptions = [
-    { value: '', label: 'All searches' },
+    { value: '', label: t('hits.allSearches') },
     ...searches.map((search) => ({ value: search.id, label: search.label })),
   ];
 
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-ink">Hits</h1>
+        <h1 className="text-lg font-semibold text-ink">{t('hits.title')}</h1>
         <div className="flex-1" />
         <Select
-          aria-label="Filter by search"
+          aria-label={t('hits.filterBySearch')}
           value={searchFilter}
           onChange={(changeEvent) => setSearchFilter(changeEvent.target.value)}
           options={filterOptions}
         />
         <Button variant="ghost" onClick={refresh}>
           <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
+          {t('common.refresh')}
         </Button>
       </div>
 
       {hits.length === 0 ? (
-        <p className="text-sm text-ink-faint">
-          No persisted detections yet. Hits land here (and in the live panel) once a watched search
-          fires.
-        </p>
+        <p className="text-sm text-ink-faint">{t('hits.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {hits.map((hit) => {
@@ -93,7 +92,7 @@ export function HitsPage() {
                       <ItemDetailView item={hit.item} />
                     </div>
                   ) : (
-                    <p className="mt-2 pl-5 text-xs text-ink-faint">no item payload recorded</p>
+                    <p className="mt-2 pl-5 text-xs text-ink-faint">{t('hits.noItemPayload')}</p>
                   ))}
               </li>
             );

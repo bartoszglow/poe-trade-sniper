@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { EventStreamProvider } from './hooks/EventStreamProvider';
+import { I18nProvider } from './i18n/I18nProvider';
 import { AppShell } from './shell/AppShell';
 import './index.css';
 
@@ -13,9 +14,11 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
-      <EventStreamProvider>
-        <AppShell />
-      </EventStreamProvider>
+      <I18nProvider>
+        <EventStreamProvider>
+          <AppShell />
+        </EventStreamProvider>
+      </I18nProvider>
     </BrowserRouter>
   </StrictMode>,
 );

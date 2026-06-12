@@ -4,12 +4,21 @@ import type { SessionPublicStatus } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
+import { Select } from '../components/Select';
+import { Slider } from '../components/Slider';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useLoginCapture } from '../hooks/useLoginCapture';
+import { LANGUAGES, useLanguage, useT, type Language } from '../i18n/i18n';
 import { ApiError, apiSend } from '../lib/api';
-import { isHitSoundEnabled, playHitSound, setHitSoundEnabled } from '../lib/hit-sound';
+import {
+  getHitSoundVolume,
+  isHitSoundEnabled,
+  playHitSound,
+  setHitSoundEnabled,
+  setHitSoundVolume,
+} from '../lib/hit-sound';
 import { isNotifyEnabled, setNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
 function SettingsCard({ title, children }: { title: string; children: ReactNode }) {
@@ -22,8 +31,9 @@ function SettingsCard({ title, children }: { title: string; children: ReactNode 
 }
 
 function SessionStatusLine({ session }: { session: SessionPublicStatus | undefined }) {
+  const t = useT();
   if (!session?.hasSession) {
-    return <p className="text-sm text-ink-faint">No session stored.</p>;
+    return <p className="text-sm text-ink-faint">{t('settings.noSession')}</p>;
   }
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
@@ -33,13 +43,15 @@ function SessionStatusLine({ session }: { session: SessionPublicStatus | undefin
         }
       >
         {session.probedValid === true
-          ? 'logged in'
+          ? t('settings.loggedIn')
           : session.probedValid === false
-            ? 'invalid'
-            : 'not verified'}
+            ? t('settings.invalid')
+            : t('settings.notVerified')}
       </Badge>
       {session.capturedAt && (
-        <span className="text-xs">captured {new Date(session.capturedAt).toLocaleString()}</span>
+        <span className="text-xs">
+          {t('settings.captured', { date: new Date(session.capturedAt).toLocaleString() })}
+        </span>
       )}
       {session.cookieNames.map((cookieName) => (
         <Badge key={cookieName} tone="neutral">
@@ -51,6 +63,8 @@ function SessionStatusLine({ session }: { session: SessionPublicStatus | undefin
 }
 
 export function SettingsPage() {
+  const t = useT();
+  const [language, setLanguage] = useLanguage();
   const { status, refresh } = useServerStatus();
   const [poesessid, setPoesessid] = useState('');
   const [cfClearance, setCfClearance] = useState('');
@@ -59,6 +73,7 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => isHitSoundEnabled());
+  const [volume, setVolume] = useState(() => getHitSoundVolume());
   const [notifyEnabled, setNotifyEnabledState] = useState(() => isNotifyEnabled());
   const {
     loginState,
@@ -73,10 +88,15 @@ export function SettingsPage() {
     if (enabled) playHitSound();
   }
 
+  function changeVolume(nextVolume: number): void {
+    setHitSoundVolume(nextVolume);
+    setVolume(nextVolume);
+  }
+
   function toggleNotify(enabled: boolean): void {
     setNotifyEnabled(enabled);
     setNotifyEnabledState(enabled);
-    if (enabled) showSystemNotification('PoE Trade Sniper', 'System notifications enabled');
+    if (enabled) showSystemNotification(t('notify.appName'), t('notify.enabled'));
   }
 
   async function run(action: () => Promise<string>): Promise<void> {
@@ -88,7 +108,7 @@ export function SettingsPage() {
     } catch (error) {
       setMessage({
         tone: 'danger',
-        text: error instanceof ApiError ? error.message : 'request failed',
+        text: error instanceof ApiError ? error.message : t('common.requestFailed'),
       });
     } finally {
       setBusy(false);
@@ -108,17 +128,27 @@ export function SettingsPage() {
       setPoesessid('');
       setCfClearance('');
       const probed = await apiSend<SessionPublicStatus>('POST', '/api/session/probe');
-      return probed.probedValid
-        ? 'session saved and verified — logged in'
-        : 'session saved but the login probe failed — cookies may be stale';
+      return probed.probedValid ? t('settings.savedVerified') : t('settings.savedUnverified');
     });
   }
 
   return (
     <section className="flex max-w-3xl flex-col gap-4">
-      <h1 className="text-lg font-semibold text-ink">Settings</h1>
+      <h1 className="text-lg font-semibold text-ink">{t('settings.title')}</h1>
 
-      <SettingsCard title="PoE session">
+      <SettingsCard title={t('settings.language')}>
+        <div className="flex items-center gap-3">
+          <Select
+            aria-label={t('settings.language')}
+            value={language}
+            onChange={(changeEvent) => setLanguage(changeEvent.target.value as Language)}
+            options={LANGUAGES.map((entry) => ({ value: entry.code, label: entry.label }))}
+          />
+          <span className="text-xs text-ink-faint">{t('settings.languageHint')}</span>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title={t('settings.session')}>
         <SessionStatusLine session={status?.session} />
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
@@ -127,12 +157,12 @@ export function SettingsPage() {
             onClick={() => {
               void run(async () => {
                 const probed = await apiSend<SessionPublicStatus>('POST', '/api/session/probe');
-                return probed.probedValid ? 'logged in' : 'probe failed — session looks stale';
+                return probed.probedValid ? t('settings.loggedIn') : t('settings.probeFailed');
               });
             }}
           >
             <ShieldCheck className="h-4 w-4" />
-            Verify session
+            {t('settings.verify')}
           </Button>
           {confirmingClear ? (
             <Button
@@ -142,11 +172,11 @@ export function SettingsPage() {
                 setConfirmingClear(false);
                 void run(async () => {
                   await apiSend('DELETE', '/api/session');
-                  return 'session cleared';
+                  return t('settings.cleared');
                 });
               }}
             >
-              Confirm clear
+              {t('settings.confirmClear')}
             </Button>
           ) : (
             <Button
@@ -157,17 +187,14 @@ export function SettingsPage() {
                 setTimeout(() => setConfirmingClear(false), 3000);
               }}
             >
-              Clear session
+              {t('settings.clear')}
             </Button>
           )}
         </div>
       </SettingsCard>
 
-      <SettingsCard title="Log in with Path of Exile">
-        <p className="text-sm text-ink-faint">
-          Opens the real pathofexile.com page in your Chrome — credentials go only to GGG; once you
-          finish logging in there, the session is captured and the window closes itself.
-        </p>
+      <SettingsCard title={t('settings.loginCard')}>
+        <p className="text-sm text-ink-faint">{t('settings.loginCardBody')}</p>
         <div className="mt-3 flex items-center gap-3">
           <Button
             variant="primary"
@@ -175,13 +202,13 @@ export function SettingsPage() {
             onClick={startLoginCapture}
           >
             <LogIn className="h-4 w-4" />
-            Log in with Path of Exile
+            {t('login.withPoe')}
           </Button>
           {loginState === 'waiting-login' && (
             <>
-              <Badge tone="gold">waiting for login…</Badge>
+              <Badge tone="gold">{t('login.waiting')}</Badge>
               <Button variant="ghost" onClick={cancelLoginCapture}>
-                Cancel
+                {t('common.cancel')}
               </Button>
             </>
           )}
@@ -189,14 +216,10 @@ export function SettingsPage() {
         </div>
       </SettingsCard>
 
-      <SettingsCard title="Paste cookies instead">
-        <p className="text-sm text-ink-faint">
-          Prefer not to log in inside the app? Copy the cookies from your own browser (devtools →
-          Application → Cookies → pathofexile.com). Values are stored locally, never displayed and
-          never logged.
-        </p>
+      <SettingsCard title={t('settings.pasteCard')}>
+        <p className="text-sm text-ink-faint">{t('settings.pasteCardBody')}</p>
         <form onSubmit={pasteCookies} className="mt-3 flex flex-col gap-3">
-          <Field label="POESESSID" hint="required">
+          <Field label="POESESSID" hint={t('settings.hintRequired')}>
             <TextInput
               type="password"
               value={poesessid}
@@ -205,7 +228,7 @@ export function SettingsPage() {
               required
             />
           </Field>
-          <Field label="cf_clearance" hint="optional — include if Cloudflare challenged you">
+          <Field label="cf_clearance" hint={t('settings.hintCfClearance')}>
             <TextInput
               type="password"
               value={cfClearance}
@@ -213,20 +236,17 @@ export function SettingsPage() {
               autoComplete="off"
             />
           </Field>
-          <Field
-            label="User-Agent"
-            hint="paste your browser's UA when cf_clearance is set (Cloudflare binds them)"
-          >
+          <Field label="User-Agent" hint={t('settings.hintUserAgent')}>
             <TextInput
               value={userAgent}
               onChange={(changeEvent) => setUserAgent(changeEvent.target.value)}
-              placeholder="leave empty for the server default"
+              placeholder={t('settings.uaPlaceholder')}
             />
           </Field>
           <div className="flex items-center gap-3">
             <Button variant="primary" type="submit" disabled={busy || poesessid.trim() === ''}>
               <KeyRound className="h-4 w-4" />
-              Save session
+              {t('settings.saveSession')}
             </Button>
             {message && (
               <span className={`text-sm ${message.tone === 'ok' ? 'text-ok' : 'text-danger'}`}>
@@ -237,32 +257,48 @@ export function SettingsPage() {
         </form>
       </SettingsCard>
 
-      <SettingsCard title="Alerts">
+      <SettingsCard title={t('settings.alerts')}>
         <div className="flex items-center gap-3">
-          <Switch checked={soundEnabled} onChange={toggleSound} label="Hit sound" />
-          <span className="text-sm text-ink-muted">play a sound on every detected hit</span>
+          <Switch checked={soundEnabled} onChange={toggleSound} label={t('settings.hitSound')} />
+          <span className="text-sm text-ink-muted">{t('settings.hitSoundDesc')}</span>
           <div className="flex-1" />
           <Button
             variant="ghost"
             onClick={() => {
               playHitSound();
-              showSystemNotification('PoE Trade Sniper', 'Test alert — this is how a hit looks');
+              showSystemNotification(t('notify.appName'), t('notify.testBody'));
             }}
           >
             <Volume2 className="h-4 w-4" />
-            Test
+            {t('common.test')}
           </Button>
         </div>
         <div className="mt-3 flex items-center gap-3">
-          <Switch checked={notifyEnabled} onChange={toggleNotify} label="System notifications" />
-          <span className="text-sm text-ink-muted">system notification on every hit</span>
+          <span className="text-sm text-ink-muted">{t('settings.volume')}</span>
+          <Slider
+            value={volume}
+            onChange={changeVolume}
+            onCommit={() => {
+              if (soundEnabled) playHitSound();
+            }}
+            label={t('settings.volume')}
+            disabled={!soundEnabled}
+            className="w-48"
+          />
+          <span className="w-10 font-mono text-xs text-ink-faint">{volume}%</span>
         </div>
-        <p className="mt-2 text-xs text-ink-faint">
-          Browsers unlock audio after the first interaction — hit Test once after opening the app.
-        </p>
+        <div className="mt-3 flex items-center gap-3">
+          <Switch
+            checked={notifyEnabled}
+            onChange={toggleNotify}
+            label={t('settings.systemNotifications')}
+          />
+          <span className="text-sm text-ink-muted">{t('settings.systemNotificationsDesc')}</span>
+        </div>
+        <p className="mt-2 text-xs text-ink-faint">{t('settings.audioUnlockNote')}</p>
       </SettingsCard>
 
-      <SettingsCard title="Rate-limit budgets">
+      <SettingsCard title={t('settings.budgets')}>
         {status && Object.keys(status.rateLimit.policies).length > 0 ? (
           <ul className="flex flex-col gap-1 font-mono text-xs text-ink-muted">
             {Object.entries(status.rateLimit.policies).map(([policyKey, snapshot]) => (
@@ -270,19 +306,19 @@ export function SettingsPage() {
                 {policyKey}
                 {snapshot.policyName && ` (${snapshot.policyName})`}:{' '}
                 {snapshot.rules
-                  .map(
-                    (rule, index) =>
-                      `${snapshot.states[index]?.maxHits ?? 0}/${rule.maxHits} per ${rule.periodSeconds}s`,
+                  .map((rule, index) =>
+                    t('settings.budgetRule', {
+                      used: snapshot.states[index]?.maxHits ?? 0,
+                      max: rule.maxHits,
+                      period: rule.periodSeconds,
+                    }),
                   )
                   .join(' · ')}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-faint">
-            No live data yet — budgets appear after the first GGG request (read from X-Rate-Limit
-            headers, never hardcoded).
-          </p>
+          <p className="text-sm text-ink-faint">{t('settings.budgetsEmpty')}</p>
         )}
       </SettingsCard>
     </section>

@@ -1,3 +1,5 @@
+import { useT } from '../i18n/i18n';
+
 interface AppBarProps {
   serverHealthy: boolean | null;
   streamConnected: boolean;
@@ -9,6 +11,7 @@ interface AppBarProps {
  * reserves the corner for window buttons — both inert in the browser.
  */
 export function AppBar({ serverHealthy, streamConnected }: AppBarProps) {
+  const t = useT();
   const live = streamConnected && serverHealthy !== false;
   return (
     <div className="app-drag-region flex h-full items-center gap-3 border-b border-edge bg-surface-1 px-4">
@@ -26,7 +29,11 @@ export function AppBar({ serverHealthy, streamConnected }: AppBarProps) {
                 : 'bg-danger'
           }`}
         />
-        {serverHealthy === null && !streamConnected ? 'connecting' : live ? 'live' : 'offline'}
+        {serverHealthy === null && !streamConnected
+          ? t('common.connecting')
+          : live
+            ? t('common.live')
+            : t('common.offline')}
       </span>
       <div className="app-window-controls" />
     </div>
