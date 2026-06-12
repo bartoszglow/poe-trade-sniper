@@ -266,7 +266,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const candidate = [...this.watchers.values()].find(
       (watcher) =>
         watcher.engine instanceof PollEngine &&
-        now - watcher.lastWsUpgradeProbeAtMs > this.config.WS_RECONNECT_MAX_MS,
+        now - watcher.lastWsUpgradeProbeAtMs > this.config.WS_UPGRADE_PROBE_INTERVAL_MS,
     );
     if (!candidate) return;
     candidate.lastWsUpgradeProbeAtMs = now;

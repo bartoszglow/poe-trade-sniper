@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Listing } from '@poe-sniper/shared';
 import type { EngineCallbacks, EngineContext } from './detection-engine.js';
-import { nextReconnectDelayMs, parseLiveMessage } from './live-message.js';
+import { parseLiveMessage, reconnectDelayFromLadder } from './live-message.js';
 import { PollEngine, type PollTradeApi } from './poll-engine.js';
 
 const CONTEXT: EngineContext = {
@@ -109,9 +109,16 @@ describe('parseLiveMessage', () => {
   });
 });
 
-describe('nextReconnectDelayMs', () => {
-  it('doubles up to the ceiling', () => {
-    expect(nextReconnectDelayMs(5_000, 120_000)).toBe(10_000);
-    expect(nextReconnectDelayMs(100_000, 120_000)).toBe(120_000);
+describe('reconnectDelayFromLadder', () => {
+  const ladder = [1_000, 5_000, 20_000, 60_000];
+
+  it('climbs the ladder per consecutive failure', () => {
+    expect(reconnectDelayFromLadder(ladder, 0)).toBe(1_000);
+    expect(reconnectDelayFromLadder(ladder, 1)).toBe(5_000);
+    expect(reconnectDelayFromLadder(ladder, 3)).toBe(60_000);
+  });
+
+  it('stays on the last rung past the ladder end', () => {
+    expect(reconnectDelayFromLadder(ladder, 99)).toBe(60_000);
   });
 });

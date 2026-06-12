@@ -58,8 +58,19 @@ export const envSchema = z.object({
   // --- live WebSocket ---
   /** Tarpit guard: unauthenticated handshakes hang forever — always time out. */
   WS_HANDSHAKE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(10_000),
-  WS_RECONNECT_BASE_MS: z.coerce.number().int().min(1000).default(5_000),
-  WS_RECONNECT_MAX_MS: z.coerce.number().int().min(5_000).default(120_000),
+  /**
+   * Reconnect ladder (comma-separated ms), advanced per consecutive failure,
+   * reset on a successful connect. Fast first retry: GGG drops live sockets
+   * periodically and every reconnect gap is missed listings; repeated
+   * failures back off — aggressive retry loops burn the per-IP budget.
+   */
+  WS_RECONNECT_LADDER_MS: z
+    .string()
+    .regex(/^\d+(,\d+)*$/, 'comma-separated milliseconds, e.g. 1000,5000,20000,60000')
+    .default('1000,5000,20000,60000')
+    .transform((csv) => csv.split(',').map(Number)),
+  /** How often a poll-mode search re-probes ws for an upgrade. */
+  WS_UPGRADE_PROBE_INTERVAL_MS: z.coerce.number().int().min(10_000).default(120_000),
   WS_KEEPALIVE_PING_MS: z.coerce.number().int().min(5_000).default(30_000),
 });
 

@@ -13,7 +13,11 @@ export function parseLiveMessage(text: string): string[] | null {
   return payload.new.filter((value): value is string => typeof value === 'string');
 }
 
-/** Exponential backoff with a ceiling — aggressive reconnects burn the IP budget. */
-export function nextReconnectDelayMs(currentMs: number, maxMs: number): number {
-  return Math.min(currentMs * 2, maxMs);
+/**
+ * Reconnect ladder lookup: fast first retry (a gap = missed listings),
+ * backing off on consecutive failures (aggressive loops burn the IP budget).
+ * Past the last rung the delay stays at the ladder's end.
+ */
+export function reconnectDelayFromLadder(ladderMs: number[], attemptIndex: number): number {
+  return ladderMs[Math.min(attemptIndex, ladderMs.length - 1)] ?? 5_000;
 }

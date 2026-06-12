@@ -4,14 +4,13 @@ import type { SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import type { DetectionEngine, EngineCallbacks, EngineContext } from './detection-engine.js';
-import { nextReconnectDelayMs, parseLiveMessage } from './live-message.js';
+import { parseLiveMessage, reconnectDelayFromLadder } from './live-message.js';
 
 type WsConfig = Pick<
   AppConfig,
   | 'POE_BASE_URL'
   | 'WS_HANDSHAKE_TIMEOUT_MS'
-  | 'WS_RECONNECT_BASE_MS'
-  | 'WS_RECONNECT_MAX_MS'
+  | 'WS_RECONNECT_LADDER_MS'
   | 'WS_KEEPALIVE_PING_MS'
   | 'MAX_FRESH_IDS_PER_TICK'
 >;
@@ -70,7 +69,8 @@ export class WsEngine implements DetectionEngine {
   private socket: WebSocket | null = null;
   private keepaliveTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private reconnectDelayMs: number;
+  /** Consecutive failures since the last successful connect (ladder index). */
+  private reconnectAttempt = 0;
   private stopped = false;
   private context: EngineContext | null = null;
   private callbacks: EngineCallbacks | null = null;
@@ -79,9 +79,7 @@ export class WsEngine implements DetectionEngine {
     private readonly config: WsConfig,
     private readonly tradeApi: Pick<TradeApiClient, 'fetchListings'>,
     private readonly sessionProvider: () => SessionState | null,
-  ) {
-    this.reconnectDelayMs = config.WS_RECONNECT_BASE_MS;
-  }
+  ) {}
 
   start(context: EngineContext, callbacks: EngineCallbacks): void {
     this.context = context;
@@ -117,7 +115,7 @@ export class WsEngine implements DetectionEngine {
     this.socket = socket;
 
     socket.on('open', () => {
-      this.reconnectDelayMs = this.config.WS_RECONNECT_BASE_MS;
+      this.reconnectAttempt = 0;
       this.callbacks?.onStatus('active', 'live websocket connected');
       this.keepaliveTimer = setInterval(() => socket.ping(), this.config.WS_KEEPALIVE_PING_MS);
     });
@@ -130,19 +128,22 @@ export class WsEngine implements DetectionEngine {
       this.logger.warn(`[${this.context?.correlationId}] socket error: ${error.message}`);
     });
 
-    socket.on('close', () => {
+    socket.on('close', (code: number) => {
       if (this.keepaliveTimer) clearInterval(this.keepaliveTimer);
       this.keepaliveTimer = null;
       if (this.stopped) return;
+      const delayMs = reconnectDelayFromLadder(
+        this.config.WS_RECONNECT_LADDER_MS,
+        this.reconnectAttempt,
+      );
+      this.reconnectAttempt += 1;
+      // The close code is the diagnostic: 1006 = dropped without handshake
+      // (typical GGG periodic drop), 1000 = clean close, 4xx = policy/auth.
       this.callbacks?.onStatus(
         'degraded',
-        `live connection lost — reconnecting in ${this.reconnectDelayMs / 1000}s`,
+        `live connection lost (code ${code}) — reconnecting in ${delayMs / 1000}s`,
       );
-      this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelayMs);
-      this.reconnectDelayMs = nextReconnectDelayMs(
-        this.reconnectDelayMs,
-        this.config.WS_RECONNECT_MAX_MS,
-      );
+      this.reconnectTimer = setTimeout(() => this.connect(), delayMs);
     });
   }
 
