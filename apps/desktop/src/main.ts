@@ -24,6 +24,8 @@ function configureEnvironment(): void {
   // Each desktop install owns its data; the dev stack on :3500 stays untouched.
   process.env['PORT'] ??= DEFAULT_DESKTOP_PORT;
   process.env['DB_PATH'] ??= join(app.getPath('userData'), 'sniper.db');
+  // Redacted GGG network log — a user can share this file for debugging.
+  process.env['LOG_DIR'] ??= join(app.getPath('logs'), 'network');
   if (app.isPackaged) {
     process.env['STATIC_DIR'] ??= join(process.resourcesPath, 'web');
     process.env['MIGRATIONS_DIR'] ??= join(process.resourcesPath, 'migrations');

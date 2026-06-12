@@ -25,7 +25,34 @@ export const EN = {
   // Navigation
   'nav.searches': 'Searches',
   'nav.hits': 'Hits',
+  'nav.network': 'Network',
   'nav.settings': 'Settings',
+
+  // Network (developer) view
+  'network.title': 'Network',
+  'network.subtitle': 'Every request to and from GGG trade (redacted — no cookies or tokens).',
+  'network.logFile': 'Log file',
+  'network.copyPath': 'Copy path',
+  'network.copied': 'Copied',
+  'network.search': 'Search url / id / detail…',
+  'network.allChannels': 'All channels',
+  'network.errorsOnly': 'Errors only',
+  'network.pause': 'Pause',
+  'network.clear': 'Clear',
+  'network.empty': 'No traffic yet — activity appears the moment the app calls GGG.',
+  'network.colTime': 'Time',
+  'network.colChannel': 'Ch',
+  'network.colMethod': 'Method',
+  'network.colEndpoint': 'Endpoint',
+  'network.colPolicy': 'Policy',
+  'network.colStatus': 'Status',
+  'network.colDuration': 'Duration',
+  'network.colOutcome': 'Outcome',
+  'network.correlationId': 'Correlation ID',
+  'network.rateLimit': 'Rate-limit headers',
+  'network.detail': 'Detail',
+  'network.ago': '{value} ago',
+  'network.entriesShown': '{count} shown',
 
   // Detection mode (app bar pills)
   'detection.wsTitle': 'Live push (WebSocket) — instant detection',
@@ -178,6 +205,10 @@ export const EN = {
   'settings.systemNotificationsDesc': 'system notification on every hit',
   'settings.audioUnlockNote':
     'Browsers unlock audio after the first interaction — hit Test once after opening the app.',
+  'settings.developer': 'Developer',
+  'settings.networkView': 'Network view',
+  'settings.networkViewDesc':
+    'show the GGG request log in the sidebar (the log file is always written)',
   'settings.budgets': 'Rate-limit budgets',
   'settings.budgetsEmpty':
     'No live data yet — budgets appear after the first GGG request (read from X-Rate-Limit headers, never hardcoded).',
@@ -207,7 +238,34 @@ export const PL: Record<MessageKey, string> = {
   // Navigation
   'nav.searches': 'Wyszukiwania',
   'nav.hits': 'Trafienia',
+  'nav.network': 'Sieć',
   'nav.settings': 'Ustawienia',
+
+  // Network (developer) view
+  'network.title': 'Sieć',
+  'network.subtitle': 'Każdy request do i z GGG trade (zredagowane — bez cookies i tokenów).',
+  'network.logFile': 'Plik logu',
+  'network.copyPath': 'Kopiuj ścieżkę',
+  'network.copied': 'Skopiowano',
+  'network.search': 'Szukaj url / id / detal…',
+  'network.allChannels': 'Wszystkie kanały',
+  'network.errorsOnly': 'Tylko błędy',
+  'network.pause': 'Pauza',
+  'network.clear': 'Wyczyść',
+  'network.empty': 'Brak ruchu — aktywność pojawi się gdy aplikacja odpyta GGG.',
+  'network.colTime': 'Czas',
+  'network.colChannel': 'Kan',
+  'network.colMethod': 'Metoda',
+  'network.colEndpoint': 'Endpoint',
+  'network.colPolicy': 'Polityka',
+  'network.colStatus': 'Status',
+  'network.colDuration': 'Czas trw.',
+  'network.colOutcome': 'Wynik',
+  'network.correlationId': 'Correlation ID',
+  'network.rateLimit': 'Nagłówki rate-limit',
+  'network.detail': 'Szczegóły',
+  'network.ago': '{value} temu',
+  'network.entriesShown': 'pokazano: {count}',
 
   // Detection mode (app bar pills)
   'detection.wsTitle': 'Push na żywo (WebSocket) — natychmiastowe wykrywanie',
@@ -361,6 +419,10 @@ export const PL: Record<MessageKey, string> = {
   'settings.systemNotificationsDesc': 'powiadomienie systemowe przy każdym trafieniu',
   'settings.audioUnlockNote':
     'Przeglądarka odblokowuje dźwięk po pierwszej interakcji — kliknij Test raz po otwarciu aplikacji.',
+  'settings.developer': 'Deweloper',
+  'settings.networkView': 'Widok sieci',
+  'settings.networkViewDesc':
+    'pokaż log requestów GGG w panelu bocznym (plik logu pisze się zawsze)',
   'settings.budgets': 'Limity zapytań',
   'settings.budgetsEmpty':
     'Brak danych — limity pojawią się po pierwszym zapytaniu do GGG (odczytywane z nagłówków X-Rate-Limit, nigdy nie zaszyte na stałe).',

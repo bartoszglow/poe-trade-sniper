@@ -4,6 +4,7 @@ import type { DetectionEngine } from '../engines/detection-engine.js';
 import { PollEngine } from '../engines/poll-engine.js';
 import { WsEngine } from '../engines/ws-engine.js';
 import type { OutboundGuard } from '../guard/outbound-guard.js';
+import type { NetworkLog } from '../network/network-log.service.js';
 import type { SessionService } from '../session/session.service.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 
@@ -24,11 +25,13 @@ export function buildEngineRegistry(
   tradeApi: TradeApiClient,
   sessionService: SessionService,
   guard: OutboundGuard,
+  networkLog: NetworkLog,
 ): EngineFactory[] {
   return [
     {
       kind: 'ws',
-      create: () => new WsEngine(config, tradeApi, () => sessionService.getSession(), guard),
+      create: () =>
+        new WsEngine(config, tradeApi, () => sessionService.getSession(), guard, networkLog),
     },
     {
       kind: 'poll',

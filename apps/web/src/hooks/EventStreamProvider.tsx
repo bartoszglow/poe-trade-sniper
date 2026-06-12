@@ -4,6 +4,7 @@ import type {
   EngineKind,
   EngineStatus,
   Listing,
+  NetworkLogEntry,
   TravelEvent,
 } from '@poe-sniper/shared';
 import { translateStatic } from '../i18n/i18n';
@@ -12,6 +13,8 @@ import { isNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
 /** Bounded-growth cap for the live feed kept in memory. */
 const LIVE_HITS_CAP = 100;
+/** Dev network view keeps a deeper buffer than the hits feed. */
+const NETWORK_CAP = 1000;
 
 export interface EngineState {
   engine: EngineKind;
@@ -39,6 +42,8 @@ export interface EventStreamState {
   searchesVersion: number;
   /** Live guard state; null until the first guard event (poll fills the gap). */
   guard: GuardState | null;
+  /** Newest-first GGG network entries since page load (dev view). */
+  networkEvents: NetworkLogEntry[];
 }
 
 const INITIAL_STATE: EventStreamState = {
@@ -48,6 +53,7 @@ const INITIAL_STATE: EventStreamState = {
   travelStateByListingId: {},
   searchesVersion: 0,
   guard: null,
+  networkEvents: [],
 };
 
 const EventStreamContext = createContext<EventStreamState>(INITIAL_STATE);
@@ -84,6 +90,11 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
         ...state,
         guard: { tripped: event.state === 'tripped', reason: event.reason },
         searchesVersion: state.searchesVersion + 1,
+      };
+    case 'network':
+      return {
+        ...state,
+        networkEvents: [event.entry, ...state.networkEvents].slice(0, NETWORK_CAP),
       };
     case 'log':
       return state;

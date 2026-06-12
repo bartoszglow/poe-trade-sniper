@@ -1,7 +1,14 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import type { LeagueInfo, Listing, SessionState, StatDictionaryEntry } from '@poe-sniper/shared';
+import type {
+  LeagueInfo,
+  Listing,
+  NetworkOutcome,
+  SessionState,
+  StatDictionaryEntry,
+} from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
+import { NetworkLog } from '../network/network-log.service.js';
 import { normalizeListing } from '../items/item-normalizer.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { SessionService } from '../session/session.service.js';
@@ -75,6 +82,7 @@ export class TradeApiClient {
     @Inject(SessionService) private readonly sessionService: SessionService,
     @Inject(RateLimitGovernor) private readonly governor: RateLimitGovernor,
     @Inject(OutboundGuard) private readonly guard: OutboundGuard,
+    @Inject(NetworkLog) private readonly networkLog: NetworkLog,
     @Optional() @Inject(HTTP_FETCH) fetchFn: FetchFunction | null,
   ) {
     this.fetchFn = fetchFn ?? fetch;
@@ -280,23 +288,126 @@ export class TradeApiClient {
     init: RequestInit,
     correlationId: string,
   ): Promise<Response> {
-    const sessionState = this.session();
-    if (!this.guard.allowHttp(`${init.method ?? 'GET'} ${url}`)) {
+    const method = init.method ?? 'GET';
+    const startMs = Date.now();
+
+    let sessionState: SessionState;
+    try {
+      sessionState = this.session();
+    } catch (error) {
+      this.recordHttp(
+        method,
+        url,
+        policyKey,
+        correlationId,
+        startMs,
+        null,
+        'no-session',
+        null,
+        null,
+      );
+      throw error;
+    }
+    if (!this.guard.allowHttp(`${method} ${url}`)) {
+      this.recordHttp(
+        method,
+        url,
+        policyKey,
+        correlationId,
+        startMs,
+        null,
+        'guard-blocked',
+        null,
+        null,
+      );
       throw new GuardTrippedError();
     }
+
     await this.governor.acquire(policyKey, spacingMs);
-    const response = await this.fetchFn(url, {
-      ...init,
-      headers: {
-        Cookie: this.sessionService.buildCookieHeader(sessionState),
-        'User-Agent': sessionState.userAgent,
-        Origin: this.config.POE_BASE_URL,
-        ...init.headers,
-      },
-      signal: AbortSignal.timeout(this.config.OUTBOUND_TIMEOUT_MS),
-    });
+    let response: Response;
+    try {
+      response = await this.fetchFn(url, {
+        ...init,
+        headers: {
+          Cookie: this.sessionService.buildCookieHeader(sessionState),
+          'User-Agent': sessionState.userAgent,
+          Origin: this.config.POE_BASE_URL,
+          ...init.headers,
+        },
+        signal: AbortSignal.timeout(this.config.OUTBOUND_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === 'TimeoutError';
+      this.recordHttp(
+        method,
+        url,
+        policyKey,
+        correlationId,
+        startMs,
+        null,
+        timedOut ? 'timeout' : 'network-error',
+        error instanceof Error ? error.message : String(error),
+        null,
+      );
+      throw error;
+    }
+
     this.governor.noteResponse(policyKey, response.status, response.headers);
-    this.logger.debug(`[${correlationId}] ${init.method ?? 'GET'} ${url} → ${response.status}`);
+    this.recordHttp(
+      method,
+      url,
+      policyKey,
+      correlationId,
+      startMs,
+      response.status,
+      httpOutcome(response.status),
+      null,
+      extractRateLimitHeaders(response.headers),
+    );
+    this.logger.debug(`[${correlationId}] ${method} ${url} → ${response.status}`);
     return response;
   }
+
+  /** Build a REDACTED network entry (no cookies/UA/token) and hand it to the log. */
+  private recordHttp(
+    method: string,
+    url: string,
+    policy: string,
+    correlationId: string,
+    startMs: number,
+    status: number | null,
+    outcome: NetworkOutcome,
+    detail: string | null,
+    rateLimit: Record<string, string> | null,
+  ): void {
+    this.networkLog.record({
+      at: new Date(startMs).toISOString(),
+      channel: 'http',
+      method,
+      url,
+      policy,
+      correlationId,
+      status,
+      durationMs: Date.now() - startMs,
+      outcome,
+      detail,
+      rateLimit,
+    });
+  }
+}
+
+function httpOutcome(status: number): NetworkOutcome {
+  if (status === 429) return 'rate-limited';
+  if (status < 300) return 'ok';
+  if (status < 500) return 'client-error';
+  return 'server-error';
+}
+
+/** Only the safe `x-rate-limit-*` headers — never auth/session headers. */
+function extractRateLimitHeaders(headers: Headers): Record<string, string> | null {
+  const collected: Record<string, string> = {};
+  headers.forEach((value, name) => {
+    if (name.toLowerCase().startsWith('x-rate-limit')) collected[name] = value;
+  });
+  return Object.keys(collected).length > 0 ? collected : null;
 }

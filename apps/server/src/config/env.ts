@@ -19,6 +19,12 @@ export const envSchema = z.object({
    * one origin — the desktop shell uses it). Unset in web dev: Vite serves.
    */
   STATIC_DIR: z.string().min(1).optional(),
+  /** Where the redacted GGG network log (JSONL) is written for sharing/debug. */
+  LOG_DIR: z.string().min(1).default('./data/logs'),
+  /** Rotate the network log file once it passes this size. */
+  LOG_MAX_BYTES: z.coerce.number().int().min(1_000).default(5_000_000),
+  /** Network entries kept in memory for the dev view's initial load. */
+  NETWORK_LOG_RING_SIZE: z.coerce.number().int().min(1).default(500),
 
   // --- GGG trade API ---
   POE_BASE_URL: z.string().url().default('https://www.pathofexile.com'),

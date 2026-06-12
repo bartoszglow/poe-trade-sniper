@@ -1,13 +1,16 @@
 import { NavLink } from 'react-router-dom';
 import { useT } from '../i18n/i18n';
+import { useNetworkViewEnabled } from '../hooks/useNetworkView';
 import { NAV_ENTRIES } from './nav';
 
 /** Left navigation rail — entries come exclusively from the nav registry. */
 export function IconRail() {
   const t = useT();
+  const networkVisible = useNetworkViewEnabled();
+  const entries = NAV_ENTRIES.filter((entry) => !entry.devOnly || networkVisible);
   return (
     <nav className="flex flex-col items-center gap-1 border-r border-edge bg-surface-1 py-2">
-      {NAV_ENTRIES.map((entry) => (
+      {entries.map((entry) => (
         <NavLink
           key={entry.id}
           to={entry.path}

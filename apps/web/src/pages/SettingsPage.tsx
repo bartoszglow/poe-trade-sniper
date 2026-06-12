@@ -10,6 +10,7 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useLoginCapture } from '../hooks/useLoginCapture';
+import { setNetworkViewEnabled, useNetworkViewEnabled } from '../hooks/useNetworkView';
 import { LANGUAGES, useLanguage, useT, type Language } from '../i18n/i18n';
 import { ApiError, apiSend } from '../lib/api';
 import {
@@ -72,6 +73,7 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const networkViewEnabled = useNetworkViewEnabled();
   const [soundEnabled, setSoundEnabled] = useState(() => isHitSoundEnabled());
   const [volume, setVolume] = useState(() => getHitSoundVolume());
   const [notifyEnabled, setNotifyEnabledState] = useState(() => isNotifyEnabled());
@@ -297,6 +299,17 @@ export function SettingsPage() {
           <span className="text-sm text-ink-muted">{t('settings.systemNotificationsDesc')}</span>
         </div>
         <p className="mt-2 text-xs text-ink-faint">{t('settings.audioUnlockNote')}</p>
+      </SettingsCard>
+
+      <SettingsCard title={t('settings.developer')}>
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={networkViewEnabled}
+            onChange={setNetworkViewEnabled}
+            label={t('settings.networkView')}
+          />
+          <span className="text-sm text-ink-muted">{t('settings.networkViewDesc')}</span>
+        </div>
       </SettingsCard>
 
       <SettingsCard title={t('settings.budgets')}>

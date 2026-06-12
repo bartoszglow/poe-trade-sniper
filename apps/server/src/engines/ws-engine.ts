@@ -1,7 +1,8 @@
 import { Logger } from '@nestjs/common';
 import WebSocket from 'ws';
-import type { SessionState } from '@poe-sniper/shared';
+import type { NetworkOutcome, SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
+import type { NetworkLog } from '../network/network-log.service.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import type { DetectionEngine, EngineCallbacks, EngineContext } from './detection-engine.js';
 import { parseLiveMessage, reconnectDelayForClose } from './live-message.js';
@@ -64,6 +65,7 @@ export class WsEngine implements DetectionEngine {
     private readonly tradeApi: Pick<TradeApiClient, 'fetchListings'>,
     private readonly sessionProvider: () => SessionState | null,
     private readonly connectGate: WsConnectGate,
+    private readonly networkLog: Pick<NetworkLog, 'record'>,
   ) {}
 
   start(context: EngineContext, callbacks: EngineCallbacks): void {
@@ -91,6 +93,7 @@ export class WsEngine implements DetectionEngine {
       // Keep retrying — the session may load shortly after boot (boot probe).
       // Poll coverage in the SearchManager handles detection meanwhile.
       this.callbacks.onStatus('degraded', 'no session for live websocket');
+      this.recordWs('ws-closed', null, 'no session — retrying');
       this.scheduleReconnect(this.config.WS_RECONNECT_LADDER_MS[0] ?? 1_000);
       return;
     }
@@ -98,10 +101,12 @@ export class WsEngine implements DetectionEngine {
       // No retry timer on purpose: the guard stays tripped until the operator
       // resets it; the SearchManager restarts engines afterwards.
       this.callbacks.onStatus('degraded', 'safety guard tripped — ws connections halted');
+      this.recordWs('ws-closed', null, 'safety guard tripped');
       return;
     }
 
     this.callbacks.onStatus('connecting', null);
+    this.recordWs('ws-connecting', null, null);
     const socket = new WebSocket(liveWebSocketUrl(this.config.POE_BASE_URL, this.context.search), {
       headers: socketHeaders(session),
       handshakeTimeout: this.config.WS_HANDSHAKE_TIMEOUT_MS,
@@ -113,6 +118,7 @@ export class WsEngine implements DetectionEngine {
       // hammer the fastest rung. The reset happens on close, only if stable.
       this.connectedAtMs = Date.now();
       this.callbacks?.onStatus('active', 'live websocket connected');
+      this.recordWs('ws-open', null, null);
       this.keepaliveTimer = setInterval(() => socket.ping(), this.config.WS_KEEPALIVE_PING_MS);
     });
 
@@ -147,7 +153,25 @@ export class WsEngine implements DetectionEngine {
         'degraded',
         `live connection lost (code ${code}) — reconnecting in ${delayMs / 1000}s`,
       );
+      this.recordWs('ws-closed', code, `reconnecting in ${delayMs / 1000}s`);
       this.scheduleReconnect(delayMs);
+    });
+  }
+
+  private recordWs(outcome: NetworkOutcome, status: number | null, detail: string | null): void {
+    if (!this.context) return;
+    this.networkLog.record({
+      at: new Date().toISOString(),
+      channel: 'ws',
+      method: 'WS',
+      url: liveWebSocketUrl(this.config.POE_BASE_URL, this.context.search),
+      policy: 'live',
+      correlationId: this.context.correlationId,
+      status,
+      durationMs: null,
+      outcome,
+      detail,
+      rateLimit: null,
     });
   }
 
@@ -160,6 +184,12 @@ export class WsEngine implements DetectionEngine {
     if (!this.context || !this.callbacks) return;
     const newIds = parseLiveMessage(text);
     if (!newIds) return;
+    const preview = newIds.slice(0, 5).join(', ');
+    this.recordWs(
+      'ws-frame',
+      null,
+      `${newIds.length} new: ${preview}${newIds.length > 5 ? '…' : ''}`,
+    );
     const idsToFetch = newIds.slice(0, this.config.MAX_FRESH_IDS_PER_TICK);
     const listings = await this.tradeApi.fetchListings(
       this.context.search,

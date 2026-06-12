@@ -10,6 +10,7 @@ Grouped by purpose — open the folder that matches what you need.
 - [`desktop.md`](architecture/desktop.md) — Electron shell, dev vs preview modes, the sqlite ABI swap.
 - [`auth.md`](architecture/auth.md) — why no OAuth, the supported session sources, secret rules.
 - [`frontend.md`](architecture/frontend.md) — shell layout, nav registry, atomic-component rule, theme tokens, Electron readiness.
+- [`network-log.md`](architecture/network-log.md) — the redacted GGG request log: dev view, shareable file, redaction guarantees.
 
 ## `integration/` — the undocumented GGG API
 

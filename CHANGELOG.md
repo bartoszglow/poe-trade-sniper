@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Developer "Network" view + shareable log file: every GGG request/response and
+  live-socket event is captured (redacted — never a cookie, User-Agent or
+  hideout token) at the two existing choke points (`TradeApiClient.request`,
+  `WsEngine`). One `NetworkLog` sink fans out to an in-memory ring
+  (`GET /api/network`), a live `network` SSE event, and a rotating JSONL file at
+  `LOG_DIR` (always written, so an end user can share it). New `/network` page
+  (live table, filters, detail expand, log-path copy) gated by a Settings
+  toggle — hidden for an operator build, file logging stays on.
 - App-bar detection pills (WS / POLL) showing the global push-vs-poll posture,
   lit from the live searches list — they follow ws→poll demotions and
   re-promotions in real time.
