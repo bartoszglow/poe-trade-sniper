@@ -41,6 +41,14 @@ export interface TravelStatus {
 export class TravelService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(TravelService.name);
   private readonly queue: QueuedTravel[] = [];
+  /**
+   * Listing ids already traveled to (insertion-ordered, bounded). A listing
+   * re-enters the live stream as "new" when the buyer returns to hideout
+   * without purchasing — auto-travel must not teleport to it again. Manual
+   * travel is always allowed; a failed travel is not recorded, so the next
+   * re-detection may retry.
+   */
+  private readonly traveledListingIds = new Set<string>();
   private processing = false;
   private unsubscribe: (() => void) | null = null;
   private lastTravel: TravelStatus['lastTravel'] = null;
@@ -80,6 +88,10 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     const { listing } = event;
     if (!listing.hideoutToken) return;
     if (!this.searchManager.isAutoTravelEnabled(listing.searchId)) return;
+    if (this.traveledListingIds.has(listing.listingId)) {
+      this.logger.log(`auto travel skipped — already traveled to listing ${listing.listingId}`);
+      return;
+    }
     const search = this.searchManager.getSearchRef(listing.searchId);
     if (!search) return;
     this.enqueue({
@@ -107,6 +119,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
         this.publish('started', request, null);
         try {
           await this.tradeApi.travel(request.hideoutToken, request.search, randomUUID());
+          this.rememberTraveled(request.listingId);
           this.publish('success', request, null);
         } catch (error) {
           this.publish('failed', request, error instanceof Error ? error.message : String(error));
@@ -114,6 +127,17 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
       }
     } finally {
       this.processing = false;
+    }
+  }
+
+  private rememberTraveled(listingId: string | null): void {
+    if (listingId === null) return;
+    this.traveledListingIds.delete(listingId);
+    this.traveledListingIds.add(listingId);
+    while (this.traveledListingIds.size > this.config.TRAVEL_DEDUPE_MAX_ENTRIES) {
+      const oldest = this.traveledListingIds.values().next().value;
+      if (oldest === undefined) break;
+      this.traveledListingIds.delete(oldest);
     }
   }
 

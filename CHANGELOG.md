@@ -68,3 +68,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Per-search auto-travel toggle is now labeled "TRAVEL" (was "AUTO").
+
+### Fixed
+
+- Auto-travel no longer re-fires for a listing that re-enters the live
+  stream after traveling to it and returning without purchasing —
+  successfully-traveled listing ids are remembered
+  (`TRAVEL_DEDUPE_MAX_ENTRIES`, default 500); manual travel and retries
+  after a failed travel are unaffected.

@@ -32,6 +32,17 @@ events on the RealtimeBus and enqueues only when **both** hold:
    at add/update time — D-5), and
 2. the listing carries a `hideout_token`.
 
+### One travel per listing
+
+A listing re-enters the live stream as a brand-new hit when the buyer
+travels, does not purchase, and returns to hideout (trade-site behavior).
+`TravelService` therefore remembers successfully-traveled listing ids
+(insertion-ordered set, bounded by `TRAVEL_DEDUPE_MAX_ENTRIES`, default 500)
+and skips **auto**-travel for them. Manual travel is always allowed, and a
+failed travel is not remembered — the next re-detection may retry. The memory
+is in-process only: after a server restart one extra auto-travel to a
+re-detected listing is possible (accepted — same lifetime as the queue).
+
 ## Manual travel
 
 `POST /api/travel {token, realm, league, searchId, listingId?, itemName?}` —

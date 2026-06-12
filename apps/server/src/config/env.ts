@@ -64,6 +64,12 @@ export const envSchema = z.object({
    * expire at ~300 s and a stale travel would just 4xx.
    */
   TRAVEL_TOKEN_MAX_AGE_MS: z.coerce.number().int().min(10_000).default(240_000),
+  /**
+   * Listings re-enter the live stream as "new" when the buyer returns to
+   * hideout without purchasing (trade-site behavior) — remember this many
+   * successfully-traveled listing ids so auto-travel never re-fires for them.
+   */
+  TRAVEL_DEDUPE_MAX_ENTRIES: z.coerce.number().int().min(10).default(500),
 
   // --- live WebSocket ---
   /** Tarpit guard: unauthenticated handshakes hang forever — always time out. */

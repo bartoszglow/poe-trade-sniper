@@ -121,6 +121,75 @@ describe('TravelService', () => {
     tokenless.service.onApplicationShutdown();
   });
 
+  it('never auto-travels twice to the same listing (re-detection after returning)', async () => {
+    const { service, tradeApi, realtimeBus } = createService({ autoTravel: true });
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-first') });
+    await flushQueue();
+    // The buyer returned to hideout without purchasing — the trade site
+    // re-emits the same listing as a brand-new hit (fresh token).
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-second') });
+    await flushQueue();
+
+    expect(tradeApi.travel).toHaveBeenCalledTimes(1);
+    service.onApplicationShutdown();
+  });
+
+  it('still auto-travels on re-detection when the first attempt failed', async () => {
+    const { service, tradeApi, realtimeBus } = createService({ autoTravel: true });
+    (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('travel: HTTP 403'),
+    );
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-first') });
+    await flushQueue();
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-second') });
+    await flushQueue();
+
+    expect(tradeApi.travel).toHaveBeenCalledTimes(2);
+    service.onApplicationShutdown();
+  });
+
+  it('manual travel is allowed to a listing already auto-traveled', async () => {
+    const { service, tradeApi, realtimeBus } = createService({ autoTravel: true });
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+    await flushQueue();
+    service.enqueue(manualRequest({ hideoutToken: 'jwt-manual' }));
+    await flushQueue();
+
+    expect(tradeApi.travel).toHaveBeenCalledTimes(2);
+    service.onApplicationShutdown();
+  });
+
+  it('evicts the oldest remembered listings beyond TRAVEL_DEDUPE_MAX_ENTRIES', async () => {
+    const config = loadConfig({ TRAVEL_DEDUPE_MAX_ENTRIES: '10' });
+    const realtimeBus = new RealtimeBus();
+    const travel = vi.fn().mockResolvedValue(undefined);
+    const tradeApi = { travel } as unknown as TradeApiClient;
+    const service = new TravelService(
+      config,
+      tradeApi,
+      { isAutoTravelEnabled: () => true, getSearchRef: () => SEARCH } as unknown as SearchManager,
+      realtimeBus,
+    );
+    service.onApplicationBootstrap();
+
+    // listing1 travels, then 10 other listings push it out of the window.
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-1') });
+    await flushQueue();
+    for (let index = 0; index < 10; index += 1) {
+      realtimeBus.publish({
+        type: 'hit',
+        listing: { ...listingWithToken('jwt-n'), listingId: `other${index}` },
+      });
+    }
+    await flushQueue();
+    realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-again') });
+    await flushQueue();
+
+    // 1 (listing1) + 10 (others) + 1 (listing1 evicted, travels again)
+    expect(travel).toHaveBeenCalledTimes(12);
+    service.onApplicationShutdown();
+  });
+
   it('drops stale queue entries instead of firing expired tokens', async () => {
     const config = loadConfig({ TRAVEL_TOKEN_MAX_AGE_MS: '10000' });
     const realtimeBus = new RealtimeBus();
