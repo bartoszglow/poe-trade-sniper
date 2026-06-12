@@ -47,7 +47,7 @@ export function AppShell() {
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
   return (
-    <div className="grid h-screen grid-rows-[2.5rem_auto_1fr_2rem] grid-cols-[3rem_1fr] lg:grid-cols-[3rem_1fr_22rem]">
+    <div className="grid h-screen grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden lg:grid-cols-[3rem_1fr_22rem]">
       <header className="col-span-full">
         <AppBar
           serverHealthy={health.healthy}
@@ -63,7 +63,7 @@ export function AppShell() {
 
       <IconRail />
 
-      <main className="overflow-y-auto bg-surface-0 px-5 py-4">
+      <main className="min-h-0 overflow-y-auto bg-surface-0 px-5 py-4">
         <Routes>
           {NAV_ENTRIES.map((entry) => (
             <Route key={entry.id} path={entry.path} element={<entry.page />} />
@@ -71,7 +71,7 @@ export function AppShell() {
         </Routes>
       </main>
 
-      <aside className="hidden border-l border-edge bg-surface-1 lg:block">
+      <aside className="hidden min-h-0 overflow-hidden border-l border-edge bg-surface-1 lg:block">
         <HitsPanel />
       </aside>
 

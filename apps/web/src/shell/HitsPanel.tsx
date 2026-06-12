@@ -42,7 +42,7 @@ export function HitsPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-edge px-4 py-2.5">
+      <div className="flex shrink-0 items-center gap-2 border-b border-edge px-4 py-2.5">
         <Zap className="h-3.5 w-3.5 text-gold" />
         <span className="text-xs font-semibold tracking-widest text-ink-muted uppercase">
           {t('hitsPanel.title')}
@@ -57,7 +57,7 @@ export function HitsPanel() {
           <p className="text-sm text-ink-faint">{t('hitsPanel.empty')}</p>
         </div>
       ) : (
-        <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto p-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
           {liveHits.map((listing) => (
             <HitCard
               key={listing.listingId}
