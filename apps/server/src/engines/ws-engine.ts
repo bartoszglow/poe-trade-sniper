@@ -4,7 +4,7 @@ import type { SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import type { DetectionEngine, EngineCallbacks, EngineContext } from './detection-engine.js';
-import { parseLiveMessage } from './live-message.js';
+import { parseLiveMessage, reconnectDelayForClose } from './live-message.js';
 
 type WsConfig = Pick<
   AppConfig,
@@ -37,36 +37,12 @@ function socketHeaders(session: SessionState): Record<string, string> {
 }
 
 /**
- * Handshake probe used to pick ws over poll. MUST carry session cookies and a
- * timeout: GGG tarpits unauthenticated handshakes (they hang forever), and the
- * live backend has been 504-ing since ~patch 0.5.0 (api-notes).
- */
-export function probeLiveWebSocket(
-  config: WsConfig,
-  search: TradeSearchRef,
-  session: SessionState,
-): Promise<boolean> {
-  return new Promise((resolveProbe) => {
-    const socket = new WebSocket(liveWebSocketUrl(config.POE_BASE_URL, search), {
-      headers: socketHeaders(session),
-      handshakeTimeout: config.WS_HANDSHAKE_TIMEOUT_MS,
-    });
-    socket.on('open', () => {
-      socket.close();
-      resolveProbe(true);
-    });
-    socket.on('error', () => resolveProbe(false));
-    socket.on('unexpected-response', () => {
-      socket.terminate();
-      resolveProbe(false);
-    });
-  });
-}
-
-/**
- * Push detection over the trade2 live websocket — near-zero latency when
- * GGG's backend is up. Reconnects with exponential backoff (aggressive
- * reconnects burn the shared IP budget).
+ * Push detection over the trade2 live websocket — one persistent connection
+ * per search, mimicking a single browser trade tab. It NEVER gives up: every
+ * close (including 1013 "Try Again Later") just schedules a reconnect on the
+ * backoff ladder, resetting only after a stable connection. The SearchManager
+ * runs a poll engine alongside it to cover the reconnect gaps, so there is no
+ * detection hole and no connection churn that would trip GGG's 1013 backoff.
  */
 export class WsEngine implements DetectionEngine {
   readonly kind = 'ws';
@@ -75,7 +51,9 @@ export class WsEngine implements DetectionEngine {
   private socket: WebSocket | null = null;
   private keepaliveTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  /** When the current connection opened — distinguishes routine vs unstable drops. */
+  /** Backoff ladder index — reset after a connection proves stable. */
+  private reconnectAttempt = 0;
+  /** When the current connection opened — gates the ladder reset. */
   private connectedAtMs = 0;
   private stopped = false;
   private context: EngineContext | null = null;
@@ -110,7 +88,10 @@ export class WsEngine implements DetectionEngine {
     if (this.stopped || !this.context || !this.callbacks) return;
     const session = this.sessionProvider();
     if (!session) {
+      // Keep retrying — the session may load shortly after boot (boot probe).
+      // Poll coverage in the SearchManager handles detection meanwhile.
       this.callbacks.onStatus('degraded', 'no session for live websocket');
+      this.scheduleReconnect(this.config.WS_RECONNECT_LADDER_MS[0] ?? 1_000);
       return;
     }
     if (!this.connectGate.allowWsConnect(this.context.search.searchId)) {
@@ -128,6 +109,8 @@ export class WsEngine implements DetectionEngine {
     this.socket = socket;
 
     socket.on('open', () => {
+      // Don't reset the ladder yet: a connect→instant-drop loop would otherwise
+      // hammer the fastest rung. The reset happens on close, only if stable.
       this.connectedAtMs = Date.now();
       this.callbacks?.onStatus('active', 'live websocket connected');
       this.keepaliveTimer = setInterval(() => socket.ping(), this.config.WS_KEEPALIVE_PING_MS);
@@ -149,28 +132,28 @@ export class WsEngine implements DetectionEngine {
         this.connectedAtMs > 0 &&
         Date.now() - this.connectedAtMs >= this.config.WS_STABLE_CONNECTION_MS;
       this.connectedAtMs = 0;
+      if (wasStable) this.reconnectAttempt = 0;
 
-      // 1013 = "Try Again Later" (server says back off), or a drop before the
-      // connection proved stable = GGG's live backend cooling off. Either way
-      // DON'T sit dark on a reconnect ladder — hand the search straight back to
-      // poll so detection keeps running at a safe cadence. The SearchManager's
-      // shared, background live-backend monitor re-promotes every search at
-      // once when a single probe confirms ws is up again.
-      if (code === 1013 || !wasStable) {
-        this.callbacks?.onDemote(`unstable ws (close code ${code})`);
-        return;
-      }
-
-      // A connection that ran stable then dropped is a routine periodic GGG
-      // drop — exactly what the real client silently reconnects from. One
-      // quick reconnect; if THAT proves unstable the branch above demotes us.
-      const delayMs = this.config.WS_RECONNECT_LADDER_MS[0] ?? 1_000;
+      // Persistent reconnect — never give up (1013 just goes to the top rung).
+      // The close code is the diagnostic: 1006 = dropped without handshake
+      // (typical GGG periodic drop), 1013 = server says back off, 1000 = clean.
+      const delayMs = reconnectDelayForClose(
+        code,
+        this.config.WS_RECONNECT_LADDER_MS,
+        this.reconnectAttempt,
+      );
+      this.reconnectAttempt += 1;
       this.callbacks?.onStatus(
         'degraded',
         `live connection lost (code ${code}) — reconnecting in ${delayMs / 1000}s`,
       );
-      this.reconnectTimer = setTimeout(() => this.connect(), delayMs);
+      this.scheduleReconnect(delayMs);
     });
+  }
+
+  private scheduleReconnect(delayMs: number): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => this.connect(), delayMs);
   }
 
   private async handleMessage(text: string): Promise<void> {

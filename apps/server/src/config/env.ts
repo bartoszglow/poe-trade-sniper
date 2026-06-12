@@ -87,16 +87,11 @@ export const envSchema = z.object({
     .regex(/^\d+(,\d+)*$/, 'comma-separated milliseconds, e.g. 1000,5000,20000,60000')
     .default('1000,5000,20000,60000')
     .transform((csv) => csv.split(',').map(Number)),
-  /**
-   * Cadence of the SINGLE shared background probe that checks whether GGG's
-   * live ws backend is up — one probe answers for every poll-mode search.
-   */
-  WS_UPGRADE_PROBE_INTERVAL_MS: z.coerce.number().int().min(10_000).default(120_000),
   WS_KEEPALIVE_PING_MS: z.coerce.number().int().min(5_000).default(30_000),
   /**
-   * A connection must survive this long to count as "stable". A drop after
-   * that is a routine periodic GGG drop (one quick reconnect); a drop before
-   * it means the backend is cooling off (demote straight to poll, no dark wait).
+   * A connection must survive this long to count as "stable" — the backoff
+   * ladder resets only after a stable connection, so a connect→instant-drop
+   * loop can't keep retrying at the fastest rung.
    */
   WS_STABLE_CONNECTION_MS: z.coerce.number().int().min(5_000).default(60_000),
 

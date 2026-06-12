@@ -15,15 +15,12 @@ import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 import type { EngineFactory } from './engine-registry.js';
 import { SearchManager } from './search-manager.js';
 
-const ARMED_GUARD = {
-  tripped: false,
-  wsConnectBudgetRemaining: () => 100,
-} as unknown as OutboundGuard;
+const ARMED_GUARD = { tripped: false } as unknown as OutboundGuard;
 
 const SECURABLE_QUERY = { status: { option: 'securable' }, stats: [] };
 const ANY_QUERY = { status: { option: 'any' }, stats: [] };
 
-/** No-op ws engine that captures its callbacks so tests can trigger onDemote. */
+/** No-op ws engine that captures its callbacks so tests can drive ws status. */
 class FakeWsEngine implements DetectionEngine {
   readonly kind = 'ws';
   callbacks: EngineCallbacks | null = null;
@@ -50,13 +47,11 @@ function createManager(options: { resolvedQuery?: unknown; guard?: OutboundGuard
     fetchListings: vi.fn(() => Promise.resolve([] as Listing[])),
   } as unknown as TradeApiClient;
 
-  // Controllable ws probe (GGG live backend up/down) + observable ws engines.
-  const wsProbe = vi.fn(() => Promise.resolve(false));
+  // Observable persistent ws engines (one per search); poll covers the gaps.
   const wsEngines: FakeWsEngine[] = [];
   const registry: EngineFactory[] = [
     {
       kind: 'ws',
-      probe: wsProbe,
       create: () => {
         const engine = new FakeWsEngine();
         wsEngines.push(engine);
@@ -65,7 +60,6 @@ function createManager(options: { resolvedQuery?: unknown; guard?: OutboundGuard
     },
     {
       kind: 'poll',
-      probe: () => Promise.resolve(true),
       create: () => new PollEngine(config, tradeApi),
     },
   ];
@@ -78,7 +72,7 @@ function createManager(options: { resolvedQuery?: unknown; guard?: OutboundGuard
     realtimeBus,
     options.guard ?? ARMED_GUARD,
   );
-  return { manager, database, tradeApi, events, executeSearch, wsProbe, wsEngines };
+  return { manager, database, tradeApi, events, executeSearch, wsEngines };
 }
 
 describe('SearchManager', () => {
@@ -262,40 +256,18 @@ describe('SearchManager', () => {
     }
   });
 
-  it('ws-availability probe is decoupled from the poll tick (one shared probe)', async () => {
-    const { manager, database, wsProbe } = createManager();
+  it('poll covers the gap until ws connects, then poll stops (no double traffic)', async () => {
+    const { manager, database, wsEngines, executeSearch } = createManager();
     try {
-      await manager.add('first11', {});
-      await manager.add('second22', {});
-      wsProbe.mockClear();
-
-      // Poll ticks must NOT probe ws — that is the whole decoupling.
+      await manager.add('AbCdEf123', {});
+      // ws not connected yet → poll covers; display kind is poll.
+      expect(manager.list()[0]?.engine).toBe('poll');
       await manager.runSchedulerTick();
-      await manager.runSchedulerTick();
-      expect(wsProbe).not.toHaveBeenCalled();
+      expect(executeSearch).toHaveBeenCalled();
 
-      // One shared probe answers for BOTH searches — not one probe per search.
-      await manager.probeLiveBackend();
-      expect(wsProbe).toHaveBeenCalledTimes(1);
-    } finally {
-      manager.onApplicationShutdown();
-      database.$client.close();
-    }
-  });
-
-  it('promotes every poll search to ws at once when the shared probe succeeds', async () => {
-    const { manager, database, wsProbe, executeSearch } = createManager();
-    try {
-      await manager.add('first11', {});
-      await manager.add('second22', {});
-      expect(manager.list().every((info) => info.engine === 'poll')).toBe(true);
-
-      wsProbe.mockResolvedValue(true);
-      await manager.probeLiveBackend();
-      await manager.runSchedulerTick(); // promotion happens inside the tick
-
-      expect(manager.list().every((info) => info.engine === 'ws')).toBe(true);
-      // No poll watchers remain → no more search POSTs.
+      // ws connects → poll coverage drops, push takes over.
+      wsEngines[0]?.callbacks?.onStatus('active', 'live websocket connected');
+      expect(manager.list()[0]?.engine).toBe('ws');
       executeSearch.mockClear();
       await manager.runSchedulerTick();
       expect(executeSearch).not.toHaveBeenCalled();
@@ -305,47 +277,35 @@ describe('SearchManager', () => {
     }
   });
 
-  it('promotion respects the guard ws-connect ceiling, deferring the rest', async () => {
-    const guard = {
-      tripped: false,
-      wsConnectBudgetRemaining: () => 1,
-    } as unknown as OutboundGuard;
-    const { manager, database, wsProbe } = createManager({ guard });
+  it('ws drop brings poll coverage back, ws reconnect drops it again', async () => {
+    const { manager, database, wsEngines, executeSearch } = createManager();
     try {
-      await manager.add('first11', {});
-      await manager.add('second22', {});
+      await manager.add('AbCdEf123', {});
+      wsEngines[0]?.callbacks?.onStatus('active', 'connected');
+      expect(manager.list()[0]?.engine).toBe('ws');
 
-      wsProbe.mockResolvedValue(true);
-      await manager.probeLiveBackend();
+      // ws drops (engine keeps reconnecting on its own) → poll covers the gap.
+      wsEngines[0]?.callbacks?.onStatus('degraded', 'live connection lost (code 1013)');
+      expect(manager.list()[0]?.engine).toBe('poll');
+      executeSearch.mockClear();
       await manager.runSchedulerTick();
+      expect(executeSearch).toHaveBeenCalled();
 
-      const engines = manager.list().map((info) => info.engine);
-      expect(engines.filter((engine) => engine === 'ws')).toHaveLength(1);
-      expect(engines.filter((engine) => engine === 'poll')).toHaveLength(1);
+      // ws comes back → poll stops again.
+      wsEngines[0]?.callbacks?.onStatus('active', 'reconnected');
+      expect(manager.list()[0]?.engine).toBe('ws');
     } finally {
       manager.onApplicationShutdown();
       database.$client.close();
     }
   });
 
-  it('a demoted ws search falls back to poll and is re-promoted by the shared probe', async () => {
-    const { manager, database, wsProbe, wsEngines, executeSearch } = createManager();
+  it('runs one persistent ws engine per search (a socket per browser-tab)', async () => {
+    const { manager, database, wsEngines } = createManager();
     try {
-      wsProbe.mockResolvedValue(true);
-      await manager.add('AbCdEf123', {}); // starts on ws (probe passes at add)
-      expect(manager.list()[0]?.engine).toBe('ws');
-
-      // Engine hands the search back (unstable ws / 1013).
-      wsEngines[0]?.callbacks?.onDemote('unstable ws (close code 1013)');
-      expect(manager.list()[0]?.engine).toBe('poll');
-      executeSearch.mockClear();
-      await manager.runSchedulerTick();
-      expect(executeSearch).toHaveBeenCalled(); // poll keeps detection alive
-
-      // Backend recovers → shared probe re-promotes it.
-      await manager.probeLiveBackend();
-      await manager.runSchedulerTick();
-      expect(manager.list()[0]?.engine).toBe('ws');
+      await manager.add('first11', {});
+      await manager.add('second22', {});
+      expect(wsEngines).toHaveLength(2);
     } finally {
       manager.onApplicationShutdown();
       database.$client.close();
@@ -453,7 +413,6 @@ describe('SearchManager', () => {
         [
           {
             kind: 'poll',
-            probe: () => Promise.resolve(true),
             create: () =>
               new PollEngine(loadConfig({}), {
                 executeSearch: () => Promise.resolve({ ids: [], total: 0, rateLimited: false }),

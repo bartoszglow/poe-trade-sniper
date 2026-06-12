@@ -42,31 +42,31 @@ per tick, round-robin across all polled searches**, because the search budget
 is per-IP, not per-search. The tick also retries pending watchers (e.g. after
 a session import).
 
-## One ws connection per search, one shared availability probe
+## Persistent ws per search + poll gap coverage
 
 GGG's live endpoint is keyed by search id in the URL
-(`/api/trade2/live/<realm>/<league>/<id>`) — there is no multiplexing
-protocol, so **each search has its own ws connection** when push is up. This
-matches the real trade site (one socket per open live search). N searches = N
-sockets, exactly like the site; our guard ceilings cap reconnect storms, not
-steady state.
+(`/api/trade2/live/<realm>/<league>/<id>`) — there is no multiplexing protocol,
+so **each search owns one persistent ws connection**, exactly like a single
+browser trade tab. N searches = N sockets, just like opening N tabs.
 
-But the live backend is up or down **globally**, so checking whether it
-recovered is a single shared concern, not per-search:
+Each enabled search runs **both** engines, composed by the SearchManager:
 
-- A **single background probe** (`WS_UPGRADE_PROBE_INTERVAL_MS`) runs on its
-  **own timer, off the poll tick** — a slow handshake never delays detection.
-  One probe answers for every poll-mode search.
-- On success it flips a flag; the next poll tick promotes poll searches to ws
-  **synchronously** (so it never races the poll loop), throttled by the guard's
-  ws-connect ceiling (the rest defer to the next window).
-- **No dark reconnect ladder.** When a ws connection drops: a drop after a
-  stable run is a routine GGG drop → one quick reconnect (like the real
-  client); a drop before stable, or close code **1013** ("Try Again Later"), →
-  the search demotes **straight to poll** so detection keeps running at a safe
-  cadence. The shared probe re-promotes it once the backend is confirmed up.
-  The old per-search upgrade probe and the long reconnect-ladder dark wait are
-  gone.
+- **`WsEngine` (primary, persistent).** One socket, kept alive, that **never
+  gives up**: every close — including close code **1013 "Try Again Later"** —
+  just schedules a reconnect on the backoff ladder (`WS_RECONNECT_LADDER_MS`,
+  1013 jumps to the top rung), resetting only after a connection stays up
+  `WS_STABLE_CONNECTION_MS`. It does not churn (no throwaway probe, no
+  open/close cycling), which is what kept triggering GGG's 1013 backoff before.
+- **`PollEngine` (gap coverage).** Runs **only while the ws socket is not
+  connected**. The round-robin scheduler ticks the poll engines of watchers
+  whose `wsConnected === false`; the moment ws reports `active`, that watcher's
+  poll engine is torn down. A fresh poll engine is created per gap, so it
+  re-baselines and never re-reports listings ws already pushed.
+
+Result: no detection hole (poll covers reconnects), no double traffic when ws
+is up (poll is off then), and no connection churn — the behaviour a browser
+tab has. The displayed engine (`GET /api/searches`, the app-bar pills) is `ws`
+while connected and `poll` while it covers a gap.
 
 ## Status model
 

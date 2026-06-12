@@ -46,7 +46,7 @@ function createEngine(idsPerTick: string[][]) {
   };
   const onListings = vi.fn();
   const onStatus = vi.fn();
-  const callbacks: EngineCallbacks = { onListings, onStatus, onDemote: vi.fn() };
+  const callbacks: EngineCallbacks = { onListings, onStatus };
   const engine = new PollEngine(CONFIG, tradeApi);
   engine.start(CONTEXT, callbacks);
   return { engine, tradeApi, onListings, onStatus };
@@ -87,7 +87,7 @@ describe('PollEngine', () => {
     };
     const onStatus = vi.fn();
     const engine = new PollEngine(CONFIG, tradeApi);
-    engine.start(CONTEXT, { onListings: vi.fn(), onStatus, onDemote: vi.fn() });
+    engine.start(CONTEXT, { onListings: vi.fn(), onStatus });
     await engine.tick();
     expect(onStatus).toHaveBeenCalledWith('degraded', expect.stringContaining('rate-limited'));
     expect(tradeApi.fetchListings).not.toHaveBeenCalled();

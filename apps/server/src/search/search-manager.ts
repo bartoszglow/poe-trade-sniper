@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { desc, eq, sql } from 'drizzle-orm';
 import type {
+  EngineKind,
   EngineStatus,
   Hit,
   Listing,
@@ -25,7 +26,7 @@ import { OutboundGuard } from '../guard/outbound-guard.js';
 import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import { hits, searches } from '../db/schema.js';
-import type { DetectionEngine } from '../engines/detection-engine.js';
+import type { DetectionEngine, EngineContext } from '../engines/detection-engine.js';
 import { PollEngine } from '../engines/poll-engine.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { applyPurchaseMode } from '../trade-api/purchase-mode.js';
@@ -56,7 +57,21 @@ const PRUNE_EVERY_HITS = 100;
 
 interface Watcher {
   row: ManagedSearch;
-  engine: DetectionEngine | null;
+  /**
+   * Persistent live-ws engine — one socket per search, like a single browser
+   * trade tab. Reconnects forever on its own; null only when torn down
+   * (pause / guard / shutdown).
+   */
+  wsEngine: DetectionEngine | null;
+  /**
+   * Poll engine that COVERS THE GAP while ws is not connected (and the cold
+   * fallback when ws can't reach the backend). Freshly created each gap so it
+   * re-baselines and never re-reports listings ws already saw; torn down the
+   * moment ws connects.
+   */
+  pollEngine: DetectionEngine | null;
+  /** True while the ws socket is open — gates poll coverage and the display kind. */
+  wsConnected: boolean;
   status: EngineStatus;
   statusDetail: string | null;
   correlationId: string;
@@ -75,16 +90,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private readonly logger = new Logger(SearchManager.name);
   private readonly watchers = new Map<string, Watcher>();
   private schedulerTimer: NodeJS.Timeout | null = null;
-  private wsProbeTimer: NodeJS.Timeout | null = null;
   private roundRobinIndex = 0;
   private tickInFlight = false;
-  private wsProbeInFlight = false;
-  /**
-   * Set by the background live-backend probe, consumed by the next poll tick:
-   * promotion happens INSIDE the guarded tick (synchronous) so it never races
-   * the poll loop, while the slow probe itself stays off the tick.
-   */
-  private liveBackendConfirmedUp = false;
   private hitsSincePrune = 0;
 
   constructor(
@@ -105,15 +112,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       this.watchers.set(row.id, watcher);
     }
     this.pruneHits();
-    void this.startPendingWatchers();
+    this.startPendingWatchers();
     this.schedulerTimer = setInterval(() => {
       void this.runSchedulerTick();
     }, this.config.POLL_INTERVAL_MS);
-    // The ws-availability probe runs on its OWN timer, independent of the poll
-    // tick — a slow handshake must never delay detection.
-    this.wsProbeTimer = setInterval(() => {
-      void this.probeLiveBackend();
-    }, this.config.WS_UPGRADE_PROBE_INTERVAL_MS);
     this.logger.log(
       `watching ${this.watchers.size} search(es); scheduler tick ${this.config.POLL_INTERVAL_MS}ms`,
     );
@@ -121,11 +123,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   onApplicationShutdown(): void {
     if (this.schedulerTimer) clearInterval(this.schedulerTimer);
-    if (this.wsProbeTimer) clearInterval(this.wsProbeTimer);
     this.schedulerTimer = null;
-    this.wsProbeTimer = null;
     for (const watcher of this.watchers.values()) {
-      watcher.engine?.stop();
+      this.stopEngines(watcher);
     }
   }
 
@@ -186,7 +186,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const watcher = this.createWatcher(row);
     watcher.correlationId = correlationId;
     this.watchers.set(row.id, watcher);
-    await this.startWatcher(watcher);
+    this.startWatcher(watcher);
     this.publishSearchesChanged();
     return this.toRuntimeInfo(watcher);
   }
@@ -220,18 +220,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
     if (!enabled && wasEnabled) {
       // Paused: stop detection but keep the search and its config.
-      watcher.engine?.stop();
-      watcher.engine = null;
-      this.setStatus(watcher, 'stopped', 'paused');
+      this.stopEngines(watcher);
+      this.publishEngineStatus(watcher, 'stopped', 'paused');
     } else if (enabled && !wasEnabled) {
-      this.setStatus(watcher, 'pending', null);
-      void this.startWatcher(watcher);
+      this.startWatcher(watcher);
     } else if (options.purchaseMode !== undefined && enabled) {
       // A purchase-mode change alters the executed query — restart detection.
-      watcher.engine?.stop();
-      watcher.engine = null;
-      watcher.status = 'pending';
-      void this.startWatcher(watcher);
+      this.stopEngines(watcher);
+      this.startWatcher(watcher);
     }
     this.publishSearchesChanged();
     return this.toRuntimeInfo(watcher);
@@ -239,7 +235,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   remove(searchId: string): void {
     const watcher = this.requireWatcher(searchId);
-    watcher.engine?.stop();
+    this.stopEngines(watcher);
     this.watchers.delete(searchId);
     this.database.delete(searches).where(eq(searches.id, searchId)).run();
     this.publishSearchesChanged();
@@ -292,109 +288,69 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         this.windDownForGuard();
         return;
       }
-      await this.startPendingWatchers();
-      // Promote here (not in the probe) so it's synchronous and never races the
-      // poll loop below; the probe only flips the flag.
-      if (this.liveBackendConfirmedUp) {
-        this.liveBackendConfirmedUp = false;
-        this.promotePollWatchersToWs();
-      }
+      this.startPendingWatchers();
 
+      // Poll only the watchers whose ws is NOT currently connected — i.e. cover
+      // the reconnect gap. When ws is up, the search is served by push and is
+      // skipped here (no double traffic; matches a browser tab).
       const pollWatchers = [...this.watchers.values()].filter(
-        (watcher) => watcher.engine instanceof PollEngine,
+        (watcher) => watcher.row.enabled && watcher.pollEngine !== null && !watcher.wsConnected,
       );
       if (pollWatchers.length === 0) return;
       const watcher = pollWatchers[this.roundRobinIndex % pollWatchers.length]!;
       this.roundRobinIndex = (this.roundRobinIndex + 1) % Math.max(pollWatchers.length, 1);
       try {
-        await (watcher.engine as PollEngine).tick();
+        await (watcher.pollEngine as PollEngine).tick();
       } catch (error) {
-        this.setStatus(watcher, 'degraded', error instanceof Error ? error.message : String(error));
+        this.publishEngineStatus(
+          watcher,
+          'degraded',
+          error instanceof Error ? error.message : String(error),
+        );
       }
     } finally {
       this.tickInFlight = false;
     }
   }
 
-  /** Stops every engine; watchers return to pending and auto-restart post-reset. */
+  /** Stops every engine; watchers auto-restart on the next tick post-reset. */
   private windDownForGuard(): void {
     for (const watcher of this.watchers.values()) {
-      if (watcher.engine) {
-        watcher.engine.stop();
-        watcher.engine = null;
-        this.setStatus(watcher, 'degraded', 'safety guard tripped — detection halted');
+      if (watcher.wsEngine || watcher.pollEngine) {
+        this.stopEngines(watcher);
+        this.publishEngineStatus(watcher, 'degraded', 'safety guard tripped — detection halted');
       }
     }
   }
 
-  private async startPendingWatchers(): Promise<void> {
+  private startPendingWatchers(): void {
     for (const watcher of this.watchers.values()) {
       if (!watcher.row.enabled) continue;
-      if (watcher.engine === null && watcher.status !== 'stopped') {
-        await this.startWatcher(watcher);
+      if (
+        watcher.wsEngine === null &&
+        watcher.pollEngine === null &&
+        watcher.status !== 'stopped'
+      ) {
+        this.startWatcher(watcher);
       }
     }
   }
 
-  private pollWatchers(): Watcher[] {
-    return [...this.watchers.values()].filter(
-      (watcher) => watcher.row.enabled && watcher.engine instanceof PollEngine,
-    );
+  private wsFactory(): EngineFactory | undefined {
+    return this.engineRegistry.find((factory) => factory.kind === 'ws');
+  }
+
+  private pollFactory(): EngineFactory | undefined {
+    return this.engineRegistry.find((factory) => factory.kind === 'poll');
   }
 
   /**
-   * The single shared "is GGG's live ws backend up?" probe. The backend is up
-   * or down globally, so ONE probe answers for every poll-mode search — no
-   * per-search probing. Runs on its own timer, fully off the poll tick, and
-   * only flips a flag; the next tick does the (synchronous) promotion.
-   * Public for tests; production runs it on the ws-probe timer.
+   * Start a search: bring up the persistent ws engine (one socket, like a
+   * browser tab) AND poll coverage for the gap until ws connects. No engine
+   * selection / probe — the ws connection attempt is its own test, and poll
+   * always covers while ws isn't connected.
    */
-  async probeLiveBackend(): Promise<void> {
-    if (this.wsProbeInFlight || this.guard.tripped) return;
-    const candidates = this.pollWatchers();
-    if (candidates.length === 0) return;
-    const wsFactory = this.engineRegistry.find((factory) => factory.kind === 'ws');
-    if (!wsFactory) return;
-
-    this.wsProbeInFlight = true;
-    try {
-      if (await wsFactory.probe(this.toRef(candidates[0]!.row))) {
-        this.liveBackendConfirmedUp = true;
-      }
-    } finally {
-      this.wsProbeInFlight = false;
-    }
-  }
-
-  /**
-   * Move poll-mode searches onto ws after the shared probe confirmed the
-   * backend is up. Respects the guard's ws-connect ceiling: promote only as
-   * many as fit this minute, leaving the rest for the next probe window.
-   */
-  private promotePollWatchersToWs(): void {
-    const wsFactory = this.engineRegistry.find((factory) => factory.kind === 'ws');
-    if (!wsFactory) return;
-    const candidates = this.pollWatchers();
-    if (candidates.length === 0) return;
-
-    const budget = this.guard.wsConnectBudgetRemaining();
-    const toPromote = candidates.slice(0, budget);
-    const deferred = candidates.length - toPromote.length;
-    this.logger.log(
-      `live ws backend is back — promoting ${toPromote.length}/${candidates.length} search(es) from poll` +
-        (deferred > 0
-          ? ` (${deferred} deferred to the next probe window — ws-connect ceiling)`
-          : ''),
-    );
-    for (const watcher of toPromote) {
-      watcher.engine?.stop();
-      watcher.engine = null;
-      void this.startWatcher(watcher, wsFactory);
-    }
-  }
-
-  private async startWatcher(watcher: Watcher, forcedFactory?: EngineFactory): Promise<void> {
-    const ref = this.toRef(watcher.row);
+  private startWatcher(watcher: Watcher): void {
     const { query, applied } = applyPurchaseMode(watcher.row.filters, watcher.row.purchaseMode);
     if (!applied) {
       this.publishLog(
@@ -403,49 +359,80 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         watcher.correlationId,
       );
     }
+    const context = {
+      search: this.toRef(watcher.row),
+      query,
+      correlationId: watcher.correlationId,
+    };
 
-    let factory = forcedFactory ?? null;
-    if (!factory) {
-      for (const candidate of this.engineRegistry) {
-        if (await candidate.probe(ref)) {
-          factory = candidate;
-          break;
-        }
-      }
-    }
-    if (!factory) {
-      this.setStatus(watcher, 'degraded', 'no engine available');
-      return;
-    }
-
-    const engine = factory.create();
-    watcher.engine = engine;
-    engine.start(
-      { search: ref, query, correlationId: watcher.correlationId },
-      {
+    watcher.wsConnected = false;
+    const wsFactory = this.wsFactory();
+    if (wsFactory) {
+      const ws = wsFactory.create();
+      watcher.wsEngine = ws;
+      ws.start(context, {
         onListings: (listings) => this.recordHits(watcher, listings),
-        onStatus: (status, detail) => this.setStatus(watcher, status, detail),
-        onDemote: (reason) => this.demoteWatcher(watcher, reason),
-      },
-    );
+        onStatus: (status, detail) => this.onWsStatus(watcher, status, detail),
+      });
+    }
+    // Cover the gap until ws connects (and forever if there is no ws factory).
+    this.startPollCoverage(watcher, context);
   }
 
-  /**
-   * The engine handed the search back (ws unstable / 1013) — fall to the
-   * registry's last-resort strategy (poll) so detection keeps running. The
-   * shared background probe re-promotes it to ws when the backend recovers.
-   */
-  private demoteWatcher(watcher: Watcher, reason: string): void {
-    const fallbackFactory = this.engineRegistry[this.engineRegistry.length - 1];
-    if (!fallbackFactory) return;
-    this.publishLog(
-      'warn',
-      `${watcher.row.id}: demoting to ${fallbackFactory.kind} — ${reason}`,
-      watcher.correlationId,
-    );
-    watcher.engine?.stop();
-    watcher.engine = null;
-    void this.startWatcher(watcher, fallbackFactory);
+  /** ws connected → drop poll; ws lost/connecting → (re)start fresh poll coverage. */
+  private onWsStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
+    if (status === 'active') {
+      watcher.wsConnected = true;
+      this.stopPollCoverage(watcher);
+      this.publishEngineStatus(watcher, 'active', detail);
+      return;
+    }
+    // connecting / degraded — ws is not serving; poll must cover the gap.
+    watcher.wsConnected = false;
+    if (!watcher.pollEngine && watcher.row.enabled) {
+      const { query } = applyPurchaseMode(watcher.row.filters, watcher.row.purchaseMode);
+      this.startPollCoverage(watcher, {
+        search: this.toRef(watcher.row),
+        query,
+        correlationId: watcher.correlationId,
+      });
+    }
+    // While poll covers, the poll engine owns the displayed status; only surface
+    // the ws detail when there is no poll coverage at all.
+    if (!watcher.pollEngine) {
+      this.publishEngineStatus(watcher, status, detail);
+    }
+  }
+
+  private onPollStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
+    // ws push wins the display when connected; ignore poll chatter then.
+    if (watcher.wsConnected) return;
+    this.publishEngineStatus(watcher, status, detail);
+  }
+
+  private startPollCoverage(watcher: Watcher, context: EngineContext): void {
+    if (watcher.pollEngine || watcher.wsConnected) return;
+    const pollFactory = this.pollFactory();
+    if (!pollFactory) return;
+    const poll = pollFactory.create();
+    watcher.pollEngine = poll;
+    poll.start(context, {
+      onListings: (listings) => this.recordHits(watcher, listings),
+      onStatus: (status, detail) => this.onPollStatus(watcher, status, detail),
+    });
+  }
+
+  private stopPollCoverage(watcher: Watcher): void {
+    watcher.pollEngine?.stop();
+    watcher.pollEngine = null;
+  }
+
+  private stopEngines(watcher: Watcher): void {
+    watcher.wsEngine?.stop();
+    watcher.wsEngine = null;
+    watcher.pollEngine?.stop();
+    watcher.pollEngine = null;
+    watcher.wsConnected = false;
   }
 
   private recordHits(watcher: Watcher, listings: Listing[]): void {
@@ -484,13 +471,20 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     `);
   }
 
-  private setStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
+  /** Display engine kind: ws while connected, poll while it covers a gap. */
+  private currentEngineKind(watcher: Watcher): EngineKind | null {
+    if (watcher.wsConnected) return 'ws';
+    if (watcher.pollEngine) return 'poll';
+    return null;
+  }
+
+  private publishEngineStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
     watcher.status = status;
     watcher.statusDetail = detail;
     this.realtimeBus.publish({
       type: 'engine-status',
       searchId: watcher.row.id,
-      engine: watcher.engine?.kind ?? 'poll',
+      engine: this.currentEngineKind(watcher) ?? 'poll',
       status,
     });
   }
@@ -542,7 +536,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private createWatcher(row: ManagedSearch): Watcher {
     return {
       row,
-      engine: null,
+      wsEngine: null,
+      pollEngine: null,
+      wsConnected: false,
       status: row.enabled ? 'pending' : 'stopped',
       statusDetail: row.enabled ? null : 'paused',
       correlationId: randomUUID(),
@@ -572,7 +568,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private toRuntimeInfo(watcher: Watcher): SearchRuntimeInfo {
     return {
       ...watcher.row,
-      engine: watcher.engine?.kind ?? null,
+      engine: this.currentEngineKind(watcher),
       status: watcher.status,
       statusDetail: watcher.statusDetail,
       hitCount: watcher.hitCount,
