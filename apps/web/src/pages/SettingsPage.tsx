@@ -7,7 +7,7 @@ import { Field } from '../components/Field';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
-import { ApiError, apiSend } from '../lib/api';
+import { ApiError, apiGet, apiSend } from '../lib/api';
 import { isHitSoundEnabled, playHitSound, setHitSoundEnabled } from '../lib/hit-sound';
 
 function SettingsCard({ title, children }: { title: string; children: ReactNode }) {
@@ -57,11 +57,36 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => isHitSoundEnabled());
+  const [loginState, setLoginState] = useState<string>('idle');
+  const [loginDetail, setLoginDetail] = useState<string | null>(null);
 
   function toggleSound(enabled: boolean): void {
     setHitSoundEnabled(enabled);
     setSoundEnabled(enabled);
     if (enabled) playHitSound();
+  }
+
+  function startLoginCapture(): void {
+    void apiSend<{ state: string; detail: string | null }>('POST', '/api/session/login/start')
+      .then((started) => {
+        setLoginState(started.state);
+        setLoginDetail(started.detail);
+        const poll = setInterval(() => {
+          void apiGet<{ state: string; detail: string | null }>('/api/session/login')
+            .then((current) => {
+              setLoginState(current.state);
+              setLoginDetail(current.detail);
+              if (current.state !== 'waiting-login') {
+                clearInterval(poll);
+                refresh();
+              }
+            })
+            .catch(() => clearInterval(poll));
+        }, 3000);
+      })
+      .catch((error: unknown) => {
+        setLoginDetail(error instanceof ApiError ? error.message : 'failed to start');
+      });
   }
 
   async function run(action: () => Promise<string>): Promise<void> {
@@ -150,15 +175,34 @@ export function SettingsPage() {
 
       <SettingsCard title="Log in with Path of Exile">
         <p className="text-sm text-ink-faint">
-          One-click login on the real pathofexile.com page — credentials go only to GGG, the app
-          captures the resulting cookies. Lands with session capture (web) and the desktop app.
+          Opens the real pathofexile.com page in your Chrome — credentials go only to GGG; once you
+          finish logging in there, the session is captured and the window closes itself.
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <Button variant="primary" disabled title="Arrives in Phase 4 (web) / Phase 5 (desktop)">
+        <div className="mt-3 flex items-center gap-3">
+          <Button
+            variant="primary"
+            disabled={loginState === 'waiting-login'}
+            onClick={startLoginCapture}
+          >
             <LogIn className="h-4 w-4" />
             Log in with Path of Exile
           </Button>
-          <Badge tone="info">phase 4/5</Badge>
+          {loginState === 'waiting-login' && (
+            <>
+              <Badge tone="gold">waiting for login…</Badge>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void apiSend('POST', '/api/session/login/cancel').then(() =>
+                    setLoginState('idle'),
+                  );
+                }}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+          {loginDetail && <span className="text-xs text-ink-faint">{loginDetail}</span>}
         </div>
       </SettingsCard>
 

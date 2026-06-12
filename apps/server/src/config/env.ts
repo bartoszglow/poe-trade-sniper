@@ -8,6 +8,11 @@ import { z } from 'zod';
 export const envSchema = z.object({
   APP_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3500),
+  /**
+   * SECURITY: loopback only by default — the API can read the session status,
+   * add searches and fire travels; it must never be reachable from the LAN.
+   */
+  HOST: z.string().min(1).default('127.0.0.1'),
   DB_PATH: z.string().min(1).default('./data/dev.db'),
   /**
    * When set, the server serves this directory as the web UI (loopback,
@@ -84,6 +89,15 @@ export const envSchema = z.object({
   WS_STABLE_CONNECTION_MS: z.coerce.number().int().min(5_000).default(60_000),
   /** After this many consecutive unstable ws cycles the search demotes to poll. */
   WS_DEMOTE_AFTER_FAILURES: z.coerce.number().int().min(1).default(3),
+
+  // --- in-app login capture (web mode, D-12) ---
+  /** Real Chrome binary used for the login window. */
+  CHROME_BINARY: z
+    .string()
+    .min(1)
+    .default('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+  /** Where the dedicated login Chrome profile lives. */
+  LOGIN_PROFILE_DIR: z.string().min(1).default('./data'),
 
   // --- persistence hygiene ---
   /** Hit history is pruned to the newest N rows (bounded growth). */

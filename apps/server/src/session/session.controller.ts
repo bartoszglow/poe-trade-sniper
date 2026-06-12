@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { SessionPublicStatus } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { NoSessionError, TradeApiClient } from '../trade-api/trade-api.client.js';
+import { LoginCaptureService, type LoginCaptureStatus } from './login-capture.service.js';
 import { SessionService } from './session.service.js';
 
 const setCookiesSchema = z.object({
@@ -21,8 +22,25 @@ export class SessionController {
   constructor(
     @Inject(SessionService) private readonly sessionService: SessionService,
     @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
+    @Inject(LoginCaptureService) private readonly loginCapture: LoginCaptureService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /** In-app login (D-12): opens the real GGG page in the user's Chrome. */
+  @Post('login/start')
+  loginStart(): LoginCaptureStatus {
+    return this.loginCapture.start();
+  }
+
+  @Get('login')
+  loginStatus(): LoginCaptureStatus {
+    return this.loginCapture.status();
+  }
+
+  @Post('login/cancel')
+  loginCancel(): LoginCaptureStatus {
+    return this.loginCapture.cancel();
+  }
 
   @Get('status')
   status(): SessionPublicStatus {
