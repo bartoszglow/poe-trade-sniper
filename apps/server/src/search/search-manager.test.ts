@@ -4,9 +4,12 @@ import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
 import { PollEngine } from '../engines/poll-engine.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
+import type { OutboundGuard } from '../guard/outbound-guard.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 import type { EngineFactory } from './engine-registry.js';
 import { SearchManager } from './search-manager.js';
+
+const ARMED_GUARD = { tripped: false } as OutboundGuard;
 
 const SECURABLE_QUERY = { status: { option: 'securable' }, stats: [] };
 const ANY_QUERY = { status: { option: 'any' }, stats: [] };
@@ -42,7 +45,7 @@ function createManager(resolvedQuery: unknown = SECURABLE_QUERY) {
     },
   ];
 
-  const manager = new SearchManager(config, database, registry, tradeApi, realtimeBus);
+  const manager = new SearchManager(config, database, registry, tradeApi, realtimeBus, ARMED_GUARD);
   return { manager, database, tradeApi, events, executeSearch };
 }
 
@@ -188,6 +191,7 @@ describe('SearchManager', () => {
         ],
         { resolveQuery: vi.fn() } as unknown as TradeApiClient,
         new RealtimeBus(),
+        ARMED_GUARD,
       );
       reborn.onApplicationBootstrap();
       try {

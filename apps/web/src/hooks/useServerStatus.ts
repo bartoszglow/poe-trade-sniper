@@ -25,6 +25,12 @@ export interface ServerStatus {
     queueLength: number;
     lastTravel: { phase: string; itemName: string | null; at: string } | null;
   };
+  guard: {
+    tripped: boolean;
+    reason: string | null;
+    httpInLastMinute: number;
+    wsConnectsInLastMinute: number;
+  };
 }
 
 const POLL_INTERVAL_MS = 10_000;

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
+import { RealtimeBus } from '../events/realtime-bus.js';
+import { OutboundGuard } from '../guard/outbound-guard.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { DbSessionStore } from '../session/db-session-store.js';
 import { SessionService } from '../session/session.service.js';
@@ -28,7 +30,13 @@ function createClient(fetchStub: FetchFunction, withSession = true) {
     sessionService.setFromCookies({ POESESSID: 'secret' }, 'TestAgent/1.0');
   }
   const config = loadConfig({ FETCH_SPACING_MS: '100' });
-  const client = new TradeApiClient(config, sessionService, new RateLimitGovernor(), fetchStub);
+  const client = new TradeApiClient(
+    config,
+    sessionService,
+    new RateLimitGovernor(),
+    new OutboundGuard(config, new RealtimeBus()),
+    fetchStub,
+  );
   return { client, sessionService, database };
 }
 

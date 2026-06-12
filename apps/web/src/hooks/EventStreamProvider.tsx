@@ -20,6 +20,11 @@ export interface TravelState {
   detail: string | null;
 }
 
+export interface GuardState {
+  tripped: boolean;
+  reason: string | null;
+}
+
 export interface EventStreamState {
   /** SSE connection state — drives the "live" dot. */
   connected: boolean;
@@ -29,6 +34,8 @@ export interface EventStreamState {
   travelStateByListingId: Record<string, TravelState>;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
   searchesVersion: number;
+  /** Live guard state; null until the first guard event (poll fills the gap). */
+  guard: GuardState | null;
 }
 
 const INITIAL_STATE: EventStreamState = {
@@ -37,6 +44,7 @@ const INITIAL_STATE: EventStreamState = {
   engineStateBySearchId: {},
   travelStateByListingId: {},
   searchesVersion: 0,
+  guard: null,
 };
 
 const EventStreamContext = createContext<EventStreamState>(INITIAL_STATE);
@@ -67,6 +75,12 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
           ...state.travelStateByListingId,
           [event.listingId]: { phase: event.phase, detail: event.detail },
         },
+      };
+    case 'guard':
+      return {
+        ...state,
+        guard: { tripped: event.state === 'tripped', reason: event.reason },
+        searchesVersion: state.searchesVersion + 1,
       };
     case 'log':
       return state;

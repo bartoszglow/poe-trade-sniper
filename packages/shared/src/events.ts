@@ -10,7 +10,19 @@ export type DomainEvent =
   | SearchesChangedEvent
   | EngineStatusEvent
   | TravelEvent
+  | GuardEvent
   | LogEvent;
+
+/**
+ * Safety-guard state change. `tripped` = the outbound watchdog detected
+ * runaway behavior and halted ALL GGG traffic; operator must reset.
+ */
+export interface GuardEvent {
+  type: 'guard';
+  state: 'tripped' | 'reset';
+  reason: string | null;
+  at: string;
+}
 
 export interface HitEvent {
   type: 'hit';

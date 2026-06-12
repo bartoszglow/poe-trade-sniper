@@ -77,6 +77,17 @@ export const envSchema = z.object({
   /** How often a poll-mode search re-probes ws for an upgrade. */
   WS_UPGRADE_PROBE_INTERVAL_MS: z.coerce.number().int().min(10_000).default(120_000),
   WS_KEEPALIVE_PING_MS: z.coerce.number().int().min(5_000).default(30_000),
+  /**
+   * A connection must survive this long before the reconnect ladder resets —
+   * otherwise a connect→instant-drop loop retries at the fastest rung forever.
+   */
+  WS_STABLE_CONNECTION_MS: z.coerce.number().int().min(5_000).default(60_000),
+
+  // --- outbound safety guard (the runaway watchdog) ---
+  /** Hard ceiling on ALL GGG HTTP requests per rolling minute. */
+  GUARD_MAX_HTTP_PER_MINUTE: z.coerce.number().int().min(10).default(90),
+  /** Hard ceiling on ws connection attempts per rolling minute (all searches). */
+  GUARD_MAX_WS_CONNECTS_PER_MINUTE: z.coerce.number().int().min(2).default(12),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

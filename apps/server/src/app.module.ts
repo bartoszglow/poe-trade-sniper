@@ -5,6 +5,7 @@ import { ConfigModule } from './config/config.module.js';
 import { loadConfig } from './config/env.js';
 import { DbModule } from './db/db.module.js';
 import { EventsModule } from './events/events.module.js';
+import { GuardModule } from './guard/guard.module.js';
 import { RateLimitModule } from './ratelimit/ratelimit.module.js';
 import { SessionModule } from './session/session.module.js';
 import { TradeApiModule } from './trade-api/trade-api.module.js';
@@ -23,6 +24,7 @@ const staticDir = loadConfig().STATIC_DIR;
       : []),
     DbModule,
     EventsModule,
+    GuardModule,
     SessionModule,
     RateLimitModule,
     TradeApiModule,

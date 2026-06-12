@@ -1,5 +1,6 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import type { SessionPublicStatus } from '@poe-sniper/shared';
+import { OutboundGuard, type GuardStatus } from '../guard/outbound-guard.js';
 import { RateLimitGovernor, type GovernorStatus } from '../ratelimit/rate-limit-governor.js';
 import { SearchManager } from '../search/search-manager.js';
 import { SessionService } from '../session/session.service.js';
@@ -10,6 +11,7 @@ interface StatusResponse {
   rateLimit: GovernorStatus;
   searches: { total: number; byStatus: Record<string, number> };
   travel: TravelStatus;
+  guard: GuardStatus;
 }
 
 @Controller('status')
@@ -19,6 +21,7 @@ export class StatusController {
     @Inject(RateLimitGovernor) private readonly governor: RateLimitGovernor,
     @Inject(SearchManager) private readonly searchManager: SearchManager,
     @Inject(TravelService) private readonly travelService: TravelService,
+    @Inject(OutboundGuard) private readonly guard: OutboundGuard,
   ) {}
 
   @Get()
@@ -28,6 +31,7 @@ export class StatusController {
       rateLimit: this.governor.status,
       searches: this.searchManager.summary(),
       travel: this.travelService.status(),
+      guard: this.guard.status(),
     };
   }
 }

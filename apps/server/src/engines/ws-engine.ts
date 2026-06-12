@@ -11,9 +11,15 @@ type WsConfig = Pick<
   | 'POE_BASE_URL'
   | 'WS_HANDSHAKE_TIMEOUT_MS'
   | 'WS_RECONNECT_LADDER_MS'
+  | 'WS_STABLE_CONNECTION_MS'
   | 'WS_KEEPALIVE_PING_MS'
   | 'MAX_FRESH_IDS_PER_TICK'
 >;
+
+/** The slice of the safety guard the engine needs (kept narrow for tests). */
+export interface WsConnectGate {
+  allowWsConnect(detail: string): boolean;
+}
 
 export function liveWebSocketUrl(baseUrl: string, search: TradeSearchRef): string {
   return `${baseUrl.replace(/^http/, 'ws')}/api/trade2/live/${search.realm}/${encodeURIComponent(search.league)}/${search.searchId}`;
@@ -69,8 +75,10 @@ export class WsEngine implements DetectionEngine {
   private socket: WebSocket | null = null;
   private keepaliveTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  /** Consecutive failures since the last successful connect (ladder index). */
+  /** Consecutive unstable connections (ladder index). */
   private reconnectAttempt = 0;
+  /** When the current connection opened — gates the ladder reset. */
+  private connectedAtMs = 0;
   private stopped = false;
   private context: EngineContext | null = null;
   private callbacks: EngineCallbacks | null = null;
@@ -79,6 +87,7 @@ export class WsEngine implements DetectionEngine {
     private readonly config: WsConfig,
     private readonly tradeApi: Pick<TradeApiClient, 'fetchListings'>,
     private readonly sessionProvider: () => SessionState | null,
+    private readonly connectGate: WsConnectGate,
   ) {}
 
   start(context: EngineContext, callbacks: EngineCallbacks): void {
@@ -106,6 +115,12 @@ export class WsEngine implements DetectionEngine {
       this.callbacks.onStatus('degraded', 'no session for live websocket');
       return;
     }
+    if (!this.connectGate.allowWsConnect(this.context.search.searchId)) {
+      // No retry timer on purpose: the guard stays tripped until the operator
+      // resets it; the SearchManager restarts engines afterwards.
+      this.callbacks.onStatus('degraded', 'safety guard tripped — ws connections halted');
+      return;
+    }
 
     this.callbacks.onStatus('connecting', null);
     const socket = new WebSocket(liveWebSocketUrl(this.config.POE_BASE_URL, this.context.search), {
@@ -115,7 +130,10 @@ export class WsEngine implements DetectionEngine {
     this.socket = socket;
 
     socket.on('open', () => {
-      this.reconnectAttempt = 0;
+      // NOT resetting the ladder here: a connect→instant-drop loop would
+      // otherwise hammer the fastest rung forever. Reset happens on close,
+      // only if the connection proved stable.
+      this.connectedAtMs = Date.now();
       this.callbacks?.onStatus('active', 'live websocket connected');
       this.keepaliveTimer = setInterval(() => socket.ping(), this.config.WS_KEEPALIVE_PING_MS);
     });
@@ -132,6 +150,11 @@ export class WsEngine implements DetectionEngine {
       if (this.keepaliveTimer) clearInterval(this.keepaliveTimer);
       this.keepaliveTimer = null;
       if (this.stopped) return;
+      const wasStable =
+        this.connectedAtMs > 0 &&
+        Date.now() - this.connectedAtMs >= this.config.WS_STABLE_CONNECTION_MS;
+      this.connectedAtMs = 0;
+      if (wasStable) this.reconnectAttempt = 0;
       const delayMs = reconnectDelayFromLadder(
         this.config.WS_RECONNECT_LADDER_MS,
         this.reconnectAttempt,

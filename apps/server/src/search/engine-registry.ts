@@ -3,6 +3,7 @@ import type { AppConfig } from '../config/env.js';
 import type { DetectionEngine } from '../engines/detection-engine.js';
 import { PollEngine } from '../engines/poll-engine.js';
 import { probeLiveWebSocket, WsEngine } from '../engines/ws-engine.js';
+import type { OutboundGuard } from '../guard/outbound-guard.js';
 import type { SessionService } from '../session/session.service.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 
@@ -25,6 +26,7 @@ export function buildEngineRegistry(
   config: AppConfig,
   tradeApi: TradeApiClient,
   sessionService: SessionService,
+  guard: OutboundGuard,
 ): EngineFactory[] {
   return [
     {
@@ -32,9 +34,11 @@ export function buildEngineRegistry(
       probe: (search) => {
         const session = sessionService.getSession();
         if (!session) return Promise.resolve(false);
+        // A probe IS a ws connection attempt — it counts against the guard.
+        if (!guard.allowWsConnect(`probe ${search.searchId}`)) return Promise.resolve(false);
         return probeLiveWebSocket(config, search, session);
       },
-      create: () => new WsEngine(config, tradeApi, () => sessionService.getSession()),
+      create: () => new WsEngine(config, tradeApi, () => sessionService.getSession(), guard),
     },
     {
       kind: 'poll',

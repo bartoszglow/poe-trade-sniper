@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { LeagueInfo, Listing, SessionState } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { OutboundGuard } from '../guard/outbound-guard.js';
 import { normalizeListing } from '../items/item-normalizer.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { SessionService } from '../session/session.service.js';
@@ -35,6 +36,13 @@ export class NoSessionError extends Error {
   }
 }
 
+export class GuardTrippedError extends Error {
+  constructor() {
+    super('safety guard tripped — all GGG traffic halted until operator reset');
+    this.name = 'GuardTrippedError';
+  }
+}
+
 export type FetchFunction = typeof fetch;
 export const HTTP_FETCH = Symbol('HTTP_FETCH');
 
@@ -66,6 +74,7 @@ export class TradeApiClient {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(SessionService) private readonly sessionService: SessionService,
     @Inject(RateLimitGovernor) private readonly governor: RateLimitGovernor,
+    @Inject(OutboundGuard) private readonly guard: OutboundGuard,
     @Optional() @Inject(HTTP_FETCH) fetchFn: FetchFunction | null,
   ) {
     this.fetchFn = fetchFn ?? fetch;
@@ -243,6 +252,9 @@ export class TradeApiClient {
     correlationId: string,
   ): Promise<Response> {
     const sessionState = this.session();
+    if (!this.guard.allowHttp(`${init.method ?? 'GET'} ${url}`)) {
+      throw new GuardTrippedError();
+    }
     await this.governor.acquire(policyKey, spacingMs);
     const response = await this.fetchFn(url, {
       ...init,

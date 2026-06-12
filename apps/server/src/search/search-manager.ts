@@ -20,6 +20,7 @@ import type {
   SearchRuntimeInfo,
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { OutboundGuard } from '../guard/outbound-guard.js';
 import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import { hits, searches } from '../db/schema.js';
@@ -79,6 +80,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(ENGINE_REGISTRY) private readonly engineRegistry: EngineFactory[],
     @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
     @Inject(RealtimeBus) private readonly realtimeBus: RealtimeBus,
+    @Inject(OutboundGuard) private readonly guard: OutboundGuard,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -233,6 +235,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     if (this.tickInFlight) return;
     this.tickInFlight = true;
     try {
+      // Guard tripped → wind everything down and stay idle until reset.
+      if (this.guard.tripped) {
+        this.windDownForGuard();
+        return;
+      }
       await this.startPendingWatchers();
       await this.upgradeOnePollWatcher();
 
@@ -249,6 +256,17 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       }
     } finally {
       this.tickInFlight = false;
+    }
+  }
+
+  /** Stops every engine; watchers return to pending and auto-restart post-reset. */
+  private windDownForGuard(): void {
+    for (const watcher of this.watchers.values()) {
+      if (watcher.engine) {
+        watcher.engine.stop();
+        watcher.engine = null;
+        this.setStatus(watcher, 'degraded', 'safety guard tripped — detection halted');
+      }
     }
   }
 
