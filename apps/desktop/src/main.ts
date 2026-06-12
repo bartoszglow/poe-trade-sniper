@@ -24,13 +24,29 @@ function configureEnvironment(): void {
   // Each desktop install owns its data; the dev stack on :3500 stays untouched.
   process.env['PORT'] ??= DEFAULT_DESKTOP_PORT;
   process.env['DB_PATH'] ??= join(app.getPath('userData'), 'sniper.db');
-  // Unpackaged dev run: the web build sits next to this workspace package.
-  process.env['STATIC_DIR'] ??= join(import.meta.dirname, '../../web/dist');
+  if (app.isPackaged) {
+    process.env['STATIC_DIR'] ??= join(process.resourcesPath, 'web');
+    process.env['MIGRATIONS_DIR'] ??= join(process.resourcesPath, 'migrations');
+    process.env['LOGIN_PROFILE_DIR'] ??= app.getPath('userData');
+  } else {
+    // Unpackaged dev run: the web build sits next to this workspace package.
+    process.env['STATIC_DIR'] ??= join(import.meta.dirname, '../../web/dist');
+  }
 }
 
 async function bootServer(): Promise<RunningServer> {
   configureEnvironment();
   // Import AFTER the environment is set — the server reads it at module load.
+  // Packaged: the esbuild CJS bundle; dev: the workspace package.
+  if (app.isPackaged) {
+    const { createRequire } = await import('node:module');
+    const requireCjs = createRequire(import.meta.url);
+    // dist/main.js → ../bundle/server.cjs at the asar root.
+    const bundled = requireCjs('../bundle/server.cjs') as {
+      startServer: () => Promise<RunningServer>;
+    };
+    return bundled.startServer();
+  }
   const { startServer } = await import('@poe-sniper/server');
   return startServer();
 }
@@ -43,7 +59,10 @@ function createWindow(url: string): BrowserWindow {
     minHeight: 600,
     backgroundColor: '#0b0a08',
     title: 'poe-trade-sniper',
+    // D-8: our app bar IS the title bar; macOS traffic lights overlay it.
+    titleBarStyle: 'hiddenInset',
     webPreferences: {
+      preload: join(import.meta.dirname, 'preload.cjs'),
       // Renderer is plain web content — no Node access, fully sandboxed.
       contextIsolation: true,
       nodeIntegration: false,

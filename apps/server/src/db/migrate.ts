@@ -8,9 +8,12 @@ import * as schema from './schema.js';
 
 /**
  * Migrations live at the package root (apps/server/db/migrations) so the same
- * relative hop works from src/ (tsx dev) and dist/ (built) alike.
+ * relative hop works from src/ (tsx dev) and dist/ (built) alike. The esbuild
+ * bundle in the packaged desktop app loses that anchoring — it ships the
+ * folder as an extraResource and points MIGRATIONS_DIR at it.
  */
-const migrationsFolder = fileURLToPath(new URL('../../db/migrations', import.meta.url));
+const migrationsFolder =
+  process.env['MIGRATIONS_DIR'] ?? fileURLToPath(new URL('../../db/migrations', import.meta.url));
 
 export type SniperDatabase = ReturnType<typeof openDatabase>;
 

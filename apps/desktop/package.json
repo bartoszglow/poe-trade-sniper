@@ -5,20 +5,62 @@
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
+    "bundle:server": "esbuild ../server/src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=bundle/server.cjs --external:better-sqlite3 --external:@nestjs/microservices --external:@nestjs/websockets/socket-module --external:@nestjs/platform-socket.io --external:class-validator --external:class-transformer --external:class-transformer/storage --external:@fastify/static",
     "dev": "pnpm build && SNIPER_DEV_URL=http://localhost:5180 electron .",
     "preview": "pnpm build && pnpm abi:electron && electron .",
+    "dist": "pnpm build && pnpm bundle:server && electron-builder --mac --arm64",
     "abi:electron": "node scripts/sqlite-abi.mjs electron",
     "abi:node": "node scripts/sqlite-abi.mjs node",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"no tests yet: thin shell\""
   },
-  "dependencies": {
-    "@poe-sniper/server": "workspace:*"
+  "build": {
+    "appId": "best.bartosz.poe-trade-sniper",
+    "productName": "PoE Trade Sniper",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "bundle/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      },
+      {
+        "from": "../server/db/migrations",
+        "to": "migrations"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "identity": null
+    }
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
+    "@poe-sniper/server": "workspace:*",
     "@types/node": "^25.9.2",
-    "electron": "^41.7.2"
+    "electron": "^41.7.2",
+    "electron-builder": "^26.15.2",
+    "esbuild": "^0.28.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0"
   }
 }
