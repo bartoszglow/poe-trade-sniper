@@ -35,11 +35,12 @@ Read this first, every session.
 
 ## State of the build
 
-Phases 1–3 shipped — detection (`/api/searches`, SSE), browser-free travel
-(queue + auto-travel opt-in), and the full operator web UI (Searches/Hits/
-Settings, live hits panel with Travel, cookie-paste auth). Session capture +
-in-app login (Phase 4) and Electron (Phase 5) pending. NOT yet validated
-against live GGG.
+Phases 1–4 shipped + preliminary Electron shell: detection (SSE, ws/poll with
+demotion + safety guard), browser-free travel, full operator UI, dual-path
+auth (in-app Chrome login + cookie paste), session encrypted at rest.
+Live-validated 2026-06-12: session probe, ws connect (GGG live is back; 1013
+backoff handled), league endpoint. Remaining: first-hit/travel live proof,
+full Phase 5 packaging. Self-review: `docs/process/reviews/2026-06-12-self-review.md`.
 
 Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
 NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no

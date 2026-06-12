@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 4 session productionization: session encrypted at rest (AES-256-GCM,
+  key in the OS keychain — D-7 closed); in-app "Log in with Path of Exile"
+  for web mode (real Chrome + CDP cookie capture, probe-gated); boot-time
+  session validity probe. Security review pass: loopback-only bind,
+  Host-header guard (DNS-rebinding), Electron renderer hardening, isolated
+  e2e server (was able to wipe the dev session).
 - Outbound safety guard (runaway watchdog): hard per-minute ceilings on all
   GGG HTTP/ws traffic, trip-and-halt with red UI banner and manual reset
   (`POST /api/guard/reset`); ws reconnect ladder resets only after a stable

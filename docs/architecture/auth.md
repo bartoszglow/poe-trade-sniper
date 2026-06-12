@@ -25,19 +25,20 @@ BrowserWindow on desktop, assisted system-browser capture on web) **and** the
 manual cookie-paste form for users who won't type credentials anywhere near a
 third-party app. Neither is a fallback for the other.
 
-| Source                                                                          | Mode          | Trust story                                                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Manual cookie paste** (`POST /api/session/cookies`, Settings form in Phase 3) | web + desktop | User copies `POESESSID` (+ `cf_clearance` if needed) from their own browser's devtools. **Credentials never touch the app.** For users who won't type a password anywhere near us.                                                |
-| **Prototype JSON import** (`pnpm session:import`)                               | dev           | One-off bootstrap from `poe2-live-sniper`'s `session-state.json`.                                                                                                                                                                 |
-| **Electron `BrowserWindow` login** (Phase 5)                                    | desktop       | The window renders the REAL pathofexile.com login page; credentials go only to GGG, we read cookies from the window session afterwards. Same trust model as "login via redirect" in other apps — the app never sees the password. |
-| **System-browser capture** (Phase 4)                                            | web           | Assisted capture without Electron.                                                                                                                                                                                                |
+| Source                                                                                       | Mode          | Trust story                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Manual cookie paste** (`POST /api/session/cookies`, Settings form)                         | web + desktop | User copies `POESESSID` (+ `cf_clearance` if needed) from their own browser's devtools. **Credentials never touch the app.** For users who won't type a password anywhere near us.                                                |
+| **In-app login / system-browser capture** (`POST /api/session/login/start`, SHIPPED Phase 4) | web           | Launches the user's real Chrome (dedicated profile) on the genuine GGG page; we attach over CDP and poll the cookie jar; a POESESSID set that passes the /my-account probe is saved and Chrome closes. No automation fingerprint. |
+| **Prototype JSON import** (`pnpm session:import`)                                            | dev           | One-off bootstrap from `poe2-live-sniper`'s `session-state.json`.                                                                                                                                                                 |
+| **Electron `BrowserWindow` login** (Phase 5)                                                 | desktop       | The window renders the REAL pathofexile.com login page; credentials go only to GGG, we read cookies from the window session afterwards. Same trust model as "login via redirect" in other apps — the app never sees the password. |
 
 ## Rules
 
 - The session is a credential: never logged, never returned by the API
   (`/api/session/status` exposes only `{loggedIn, capturedAt, cookieNames}` —
-  names, never values), stored via `SessionStore` (plain file/DB until
-  Phase 4 — D-7).
+  names, never values). **Encrypted at rest since Phase 4** (D-7 closed):
+  AES-256-GCM, key in the OS keychain; plaintext fallback with a loud warning
+  where no keychain exists (Electron safeStorage takes over when packaged).
 - Login signal is a `/my-account` 200 probe, never cookie presence (guests get
   a `POESESSID` too).
 - `TODO(verify)`: whether `POESESSID` alone satisfies the API endpoints or
