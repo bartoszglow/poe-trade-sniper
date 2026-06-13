@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The Searches view shows a clear "log in to start sniping" prompt with a button
+  to Settings when there is no valid Path of Exile session, instead of an
+  add-search form that could not work yet.
+
 ### Fixed
 
 - Live WebSocket detection now actually delivers hits on PoE2 (it was silently

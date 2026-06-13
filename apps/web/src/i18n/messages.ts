@@ -141,6 +141,10 @@ export const EN = {
   'searches.autoFor': 'Auto travel for {label}',
   'searches.remove': 'Remove {label}',
   'searches.last': 'last {time}',
+  'searches.loginRequiredTitle': 'Log in to start sniping',
+  'searches.loginRequiredBody':
+    'Connect your Path of Exile session before you can add searches and detect listings.',
+  'searches.loginRequiredCta': 'Go to Settings',
 
   // Search criteria view
   'criteria.show': 'Show criteria',
@@ -372,6 +376,10 @@ export const PL: Record<MessageKey, string> = {
   'searches.autoFor': 'Automatyczna podróż dla {label}',
   'searches.remove': 'Usuń {label}',
   'searches.last': 'ostatnie {time}',
+  'searches.loginRequiredTitle': 'Zaloguj się, aby zacząć',
+  'searches.loginRequiredBody':
+    'Połącz swoją sesję Path of Exile, zanim dodasz wyszukiwania i zaczniesz wykrywać oferty.',
+  'searches.loginRequiredCta': 'Przejdź do Ustawień',
 
   // Search criteria view
   'criteria.show': 'Pokaż kryteria',

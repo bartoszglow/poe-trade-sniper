@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { ListFilter, Plus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ListFilter, LogIn, Plus, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import type { EngineStatus, SearchPreview, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
@@ -11,6 +12,7 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useSearches } from '../hooks/useSearches';
+import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { ApiError, apiSend } from '../lib/api';
@@ -286,27 +288,66 @@ function SearchRow({
   );
 }
 
+/**
+ * Login gate: without a valid GGG session there is nothing to add a search to,
+ * so the form is replaced by a prominent prompt that routes to Settings (where
+ * the in-app login lives). Shown for both "never logged in" and an expired
+ * session — the same condition the boot LoginOverlay uses.
+ */
+function LoginRequired() {
+  const t = useT();
+  const navigate = useNavigate();
+  return (
+    <div className="flex flex-col items-center gap-4 rounded-lg border border-edge bg-surface-1 px-6 py-16 text-center">
+      <div className="rounded-full border border-edge bg-surface-0 p-4">
+        <LogIn className="h-8 w-8 text-gold" />
+      </div>
+      <h2 className="text-xl font-semibold text-ink">{t('searches.loginRequiredTitle')}</h2>
+      <p className="max-w-md text-sm text-ink-muted">{t('searches.loginRequiredBody')}</p>
+      <Button
+        variant="primary"
+        onClick={() => {
+          void navigate('/settings');
+        }}
+      >
+        <SettingsIcon className="h-4 w-4" />
+        {t('searches.loginRequiredCta')}
+      </Button>
+    </div>
+  );
+}
+
 export function SearchesPage() {
   const t = useT();
+  const { status } = useServerStatus();
   const { searches, loaded, add, update, remove } = useSearches();
+
+  const needsLogin =
+    status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
   return (
     <section className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold text-ink">{t('searches.title')}</h1>
-      <AddSearchForm onAdd={add} />
-      {loaded && searches.length === 0 && (
-        <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
+      {needsLogin ? (
+        <LoginRequired />
+      ) : (
+        <>
+          <AddSearchForm onAdd={add} />
+          {loaded && searches.length === 0 && (
+            <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
+          )}
+          <ul className="flex flex-col gap-2">
+            {searches.map((search) => (
+              <SearchRow
+                key={search.id}
+                search={search}
+                onUpdate={(payload) => update(search.id, payload)}
+                onRemove={() => remove(search.id)}
+              />
+            ))}
+          </ul>
+        </>
       )}
-      <ul className="flex flex-col gap-2">
-        {searches.map((search) => (
-          <SearchRow
-            key={search.id}
-            search={search}
-            onUpdate={(payload) => update(search.id, payload)}
-            onRemove={() => remove(search.id)}
-          />
-        ))}
-      </ul>
     </section>
   );
 }
