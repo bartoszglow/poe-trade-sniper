@@ -13,6 +13,8 @@ there.
 ![platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![license](https://img.shields.io/badge/license-UNLICENSED-lightgrey)
 
+![PoE Trade Sniper — live WebSocket detection streaming new listings in real time](docs/screenshots/main-search.png)
+
 ---
 
 ## Why you want this

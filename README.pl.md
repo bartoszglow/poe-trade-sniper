@@ -13,6 +13,8 @@ whisperów.** Przełączasz się do gry, a przedmiot już tam jest.
 ![platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![license](https://img.shields.io/badge/license-UNLICENSED-lightgrey)
 
+![PoE Trade Sniper — wykrywanie na żywo przez WebSocket, nowe oferty w czasie rzeczywistym](docs/screenshots/main-search.png)
+
 ---
 
 ## Dlaczego warto
