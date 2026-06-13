@@ -181,14 +181,12 @@ export class WsEngine implements DetectionEngine {
 
   private async handleMessage(text: string): Promise<void> {
     if (!this.context || !this.callbacks) return;
+    // Record every raw frame for Network-view visibility: GGG sends an
+    // {"auth":true} ack on connect and then {"new":[ids]} batches. Logging the
+    // raw payload makes "connected but silent" diagnosable (no auth = no feed).
+    this.recordWs('ws-frame', null, text.slice(0, 200));
     const newIds = parseLiveMessage(text);
     if (!newIds) return;
-    const preview = newIds.slice(0, 5).join(', ');
-    this.recordWs(
-      'ws-frame',
-      null,
-      `${newIds.length} new: ${preview}${newIds.length > 5 ? '…' : ''}`,
-    );
     const idsToFetch = newIds.slice(0, this.config.MAX_FRESH_IDS_PER_TICK);
     const listings = await this.tradeApi.fetchListings(
       this.context.search,

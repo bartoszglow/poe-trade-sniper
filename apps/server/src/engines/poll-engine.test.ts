@@ -106,10 +106,15 @@ describe('parseLiveMessage', () => {
     expect(parseLiveMessage('{"new":["a","b"]}')).toEqual(['a', 'b']);
   });
 
-  it('ignores keepalives, junk and empty frames', () => {
+  it('returns the PoE2 {result: "<token>"} fetch token verbatim', () => {
+    expect(parseLiveMessage('{"result":"eyJ0eXA.eyJpc3M.sig"}')).toEqual(['eyJ0eXA.eyJpc3M.sig']);
+  });
+
+  it('ignores keepalives, junk, the auth ack and empty frames', () => {
     expect(parseLiveMessage('ping')).toBeNull();
     expect(parseLiveMessage('{"auth":true}')).toBeNull();
     expect(parseLiveMessage('{"new":[]}')).toBeNull();
+    expect(parseLiveMessage('{"result":""}')).toBeNull();
   });
 });
 

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Live WebSocket detection now actually delivers hits on PoE2 (it was silently
+  doing nothing and the search ran on polling only). Two distinct bugs, both
+  found by comparing our socket to a real browser tab against live GGG:
+  1. We sent a WebSocket keepalive ping every 30s. A browser cannot send ws
+     ping frames, so GGG's live endpoint treats a client ping as a policy
+     violation and closed every connection with code 1008 at the 30s mark —
+     which is why the socket never stayed up and detection fell back to polling.
+     We now stay silent and let the library auto-pong GGG's server pings, like a
+     browser; the socket holds for minutes.
+  2. PoE2's live feed does not send `{"new":[ids]}` (the PoE1 shape we parsed) —
+     it sends one `{"result":"<jwt>"}` per new listing, an opaque short-lived
+     signed fetch token. We now pass that token straight to
+     `/api/trade2/fetch/<token>?query=<id>&realm=poe2`, exactly as the official
+     client does, so a new listing becomes a hit within seconds.
+
 ## [0.1.0] - 2026-06-13
 
 First public release: cross-platform desktop installers (Windows, macOS,
