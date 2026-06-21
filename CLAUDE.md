@@ -4,9 +4,8 @@ Read this first, every session.
 
 ## Hard rules
 
-1. **The old prototype `~/Projects/poe2-live-sniper` is OFF-LIMITS** —
-   read-only reference. Bartosz uses it daily; it runs on :3411. Cutover
-   happens at Phase 5, not before.
+1. **The old poe2-live-sniper prototype has been retired** — cutover is done;
+   this is the sole sniper. (Removed in the 2026-06 Workspaces restructure.)
 2. **No guessing about the GGG API.** It is undocumented. Discovered behaviour
    → `docs/integration/api-notes.md` with evidence + date; assumptions in code
    marked `TODO(verify)`.
@@ -31,7 +30,7 @@ Read this first, every session.
 - Conventions + quality gates: `docs/process/conventions.md`
 - Dev quickstart: `docs/operations/run.md`
 - **Planning, phases, decisions** (master plan, decisions log, open
-  questions): `~/Vault/Projects/Poe-Trade-Sniper/`
+  questions): `docs/planning/`
 
 ## State of the build
 
