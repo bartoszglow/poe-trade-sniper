@@ -5,8 +5,8 @@ nothing here is official. Each entry carries the date it was last verified and
 where the evidence came from. Assumptions in code are marked `TODO(verify)`.
 **Never silently assume an endpoint shape — extend this file instead.**
 
-Evidence source for all 2026-06-11 entries: the working prototype
-`~/Projects/poe2-live-sniper` (read-only reference), validated live that day.
+Evidence source for all 2026-06-11 entries: the old `poe2-live-sniper` prototype
+(since retired/archived), validated live that day.
 
 ## Endpoints
 
