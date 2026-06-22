@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PurchaseMode, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { apiGet, apiSend } from '../lib/api';
 import { useEventStream } from './EventStreamProvider';
@@ -23,14 +23,24 @@ export function useSearches() {
   const { searchesVersion } = useEventStream();
   const [searches, setSearches] = useState<SearchRuntimeInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // A refetch fires on every searches-changed/engine-status bump. Without
+  // ordering, a slower earlier response can land after a newer one and clobber
+  // it — e.g. the "poll" gap-cover response overwriting the fresh "ws" badge,
+  // which then sticks until the next status change. Apply only the latest
+  // request's response.
+  const latestRequestId = useRef(0);
 
   const refresh = useCallback(() => {
+    const requestId = (latestRequestId.current += 1);
     apiGet<SearchRuntimeInfo[]>('/api/searches')
       .then((rows) => {
+        if (requestId !== latestRequestId.current) return;
         setSearches(rows);
         setLoaded(true);
       })
-      .catch(() => setLoaded(true));
+      .catch(() => {
+        if (requestId === latestRequestId.current) setLoaded(true);
+      });
   }, []);
 
   useEffect(() => {
