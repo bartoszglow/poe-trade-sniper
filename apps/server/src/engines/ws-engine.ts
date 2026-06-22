@@ -124,7 +124,14 @@ export class WsEngine implements DetectionEngine {
     });
 
     socket.on('message', (data: Buffer) => {
-      void this.handleMessage(data.toString());
+      // Defense-in-depth: handleMessage fetches + normalizes live listings, so
+      // an unexpected throw must never become an unhandled rejection that kills
+      // the process. Per-listing failures are already isolated in fetchListings.
+      this.handleMessage(data.toString()).catch((error: unknown) => {
+        this.logger.warn(
+          `[${this.context?.correlationId}] live message handling failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
     });
 
     socket.on('error', (error: Error) => {

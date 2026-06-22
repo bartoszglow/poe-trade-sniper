@@ -163,7 +163,18 @@ export class TradeApiClient {
       const payload = (await response.json()) as { result?: unknown[] };
       const detectedAt = new Date().toISOString();
       for (const entry of payload.result ?? []) {
-        listings.push(normalizeListing(entry, search.searchId, detectedAt));
+        // One malformed listing from the undocumented GGG payload must never
+        // take down detection — log the offender (id only, no body) and skip.
+        // TODO(verify): capture the real shape that breaks the normalizer and
+        // teach it to parse it (docs/integration/api-notes.md).
+        try {
+          listings.push(normalizeListing(entry, search.searchId, detectedAt));
+        } catch (error) {
+          const listingId = (entry as { id?: string } | null)?.id ?? '(unknown)';
+          this.logger.warn(
+            `[${correlationId}] skipped unparseable listing ${listingId}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
     }
     return listings;
