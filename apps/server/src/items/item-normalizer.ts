@@ -17,6 +17,31 @@ interface RawProperty {
   values?: Array<[string, number]>;
 }
 
+/**
+ * A mod entry in a trade2 fetch payload is EITHER the display string
+ * ("+40 to [Strength|Strength]") OR a structured object that carries the same
+ * text under `description` plus roll magnitudes we don't model yet. Both shapes
+ * were observed in a single item (implicitMods as strings, explicitMods as
+ * objects) — see docs/integration/api-notes.md (2026-06-23).
+ */
+type RawMod = string | { description?: string };
+
+function modText(mod: RawMod): string | null {
+  if (typeof mod === 'string') return mod;
+  if (mod && typeof mod === 'object' && typeof mod.description === 'string') {
+    return mod.description;
+  }
+  return null;
+}
+
+/** Collapse either mod shape to clean display strings (the domain model). */
+function normalizeMods(mods: readonly RawMod[] | undefined): string[] {
+  return (mods ?? [])
+    .map(modText)
+    .filter((text): text is string => text !== null)
+    .map(cleanMarkup);
+}
+
 function normalizeProperty(raw: RawProperty): ItemProperty {
   const value = (raw.values ?? []).map((entry) => entry[0]).join(', ') || null;
   return { label: cleanMarkup(raw.name ?? ''), value: value ? cleanMarkup(value) : null };
@@ -40,10 +65,10 @@ export function normalizeItemDetail(item: unknown): ItemDetail | null {
     corrupted?: boolean;
     properties?: RawProperty[];
     requirements?: RawProperty[];
-    implicitMods?: string[];
-    explicitMods?: string[];
-    runeMods?: string[];
-    craftedMods?: string[];
+    implicitMods?: RawMod[];
+    explicitMods?: RawMod[];
+    runeMods?: RawMod[];
+    craftedMods?: RawMod[];
   };
   return {
     rarity:
@@ -54,10 +79,10 @@ export function normalizeItemDetail(item: unknown): ItemDetail | null {
     corrupted: record.corrupted ?? false,
     properties: (record.properties ?? []).map(normalizeProperty),
     requirements: (record.requirements ?? []).map(normalizeProperty),
-    implicitMods: (record.implicitMods ?? []).map(cleanMarkup),
-    explicitMods: (record.explicitMods ?? []).map(cleanMarkup),
-    runeMods: (record.runeMods ?? []).map(cleanMarkup),
-    craftedMods: (record.craftedMods ?? []).map(cleanMarkup),
+    implicitMods: normalizeMods(record.implicitMods),
+    explicitMods: normalizeMods(record.explicitMods),
+    runeMods: normalizeMods(record.runeMods),
+    craftedMods: normalizeMods(record.craftedMods),
   };
 }
 

@@ -77,6 +77,18 @@ Served to the UI via cached `GET /api/leagues`.
   `runeMods` / `craftedMods`; display strings carry `[tag|display]` markup to
   strip. Normalization lives in `items/` (`normalizeItemDetail`,
   `cleanMarkup`). (2026-06-11)
+- **Mod arrays are NOT always `string[]`.** The same item can return
+  `implicitMods` as plain strings **and** `explicitMods` as **objects** of the
+  form `{ description, hash, mods: [{ magnitudes: [{ min, max }] }] }` — the
+  object form appears alongside an `item.extended` block (`{mods, hashes}`) and
+  carries roll ranges. `description` holds the same `[tag|display]` display text.
+  The normalizer now reads the string OR `description` and `cleanMarkup`s it
+  (`normalizeMods`); roll magnitudes are currently **discarded** (domain model
+  is `string[]`). Evidence: live capture of a Unique listing, 2026-06-23 —
+  `implicitMods: ["20% increased [StunThreshold|Stun Threshold]"]`,
+  `explicitMods: [{description:"+54 to maximum Life", hash:"stat.explicit.stat_3299347043", mods:[{magnitudes:[{min:"40",max:"60"}]}]}, …]`.
+  Before this fix, `explicitMods.map(cleanMarkup)` fed an object to
+  `String.replace` and the uncaught throw crashed the whole server. (2026-06-23)
 
 ## Adding entries
 

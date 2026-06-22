@@ -54,6 +54,28 @@ describe('normalizeItemDetail', () => {
     });
   });
 
+  it('normalizes structured (object) mods and drops unparseable entries', () => {
+    // Observed live (2026-06-23): GGG returns implicitMods as strings but
+    // explicitMods as {description, hash, mods:[{magnitudes}]} objects on the
+    // same item. The bug was .map(cleanMarkup) feeding an object to .replace().
+    const detail = normalizeItemDetail({
+      rarity: 'Unique',
+      implicitMods: ['20% increased [StunThreshold|Stun Threshold]'],
+      explicitMods: [
+        { description: '+54 to maximum Life', hash: 'stat.explicit.stat_3299347043', mods: [] },
+        {
+          description: '+40 to [Strength|Strength]',
+          hash: 'stat.explicit.stat_4080418644',
+          mods: [],
+        },
+        { hash: 'no-description-here' }, // structured but no text → dropped
+        42, // wholly unexpected element → dropped, must never throw
+      ],
+    });
+    expect(detail?.implicitMods).toEqual(['20% increased Stun Threshold']);
+    expect(detail?.explicitMods).toEqual(['+54 to maximum Life', '+40 to Strength']);
+  });
+
   it('falls back to frameType when rarity is absent', () => {
     expect(normalizeItemDetail({ frameType: 3 })?.rarity).toBe('Unique');
     expect(normalizeItemDetail({ frameType: 9 })?.rarity).toBeNull();
