@@ -1,6 +1,8 @@
 import { Controller, Get, Inject } from '@nestjs/common';
-import type { SessionPublicStatus } from '@poe-sniper/shared';
+import type { PermissionsStatus, SessionPublicStatus } from '@poe-sniper/shared';
 import { OutboundGuard, type GuardStatus } from '../guard/outbound-guard.js';
+import { PermissionGateService } from '../permissions/permission-gate.service.js';
+import { PermissionsService } from '../permissions/permissions.service.js';
 import { RateLimitGovernor, type GovernorStatus } from '../ratelimit/rate-limit-governor.js';
 import { SearchManager } from '../search/search-manager.js';
 import { SessionService } from '../session/session.service.js';
@@ -12,6 +14,9 @@ interface StatusResponse {
   searches: { total: number; byStatus: Record<string, number> };
   travel: TravelStatus;
   guard: GuardStatus;
+  /** Live OS permission state + derived capabilities (single source of truth for the UI). */
+  permissions: PermissionsStatus;
+  capabilities: { canCapture: boolean; canControl: boolean };
 }
 
 @Controller('status')
@@ -22,6 +27,8 @@ export class StatusController {
     @Inject(SearchManager) private readonly searchManager: SearchManager,
     @Inject(TravelService) private readonly travelService: TravelService,
     @Inject(OutboundGuard) private readonly guard: OutboundGuard,
+    @Inject(PermissionsService) private readonly permissions: PermissionsService,
+    @Inject(PermissionGateService) private readonly gate: PermissionGateService,
   ) {}
 
   @Get()
@@ -32,6 +39,8 @@ export class StatusController {
       searches: this.searchManager.summary(),
       travel: this.travelService.status(),
       guard: this.guard.status(),
+      permissions: this.permissions.status(),
+      capabilities: { canCapture: this.gate.canCapture(), canControl: this.gate.canControl() },
     };
   }
 }

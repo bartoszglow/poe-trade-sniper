@@ -1,4 +1,5 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import { PermissionsModule } from '../permissions/permissions.module.js';
 import { SearchModule } from '../search/search.module.js';
 import { TravelModule } from '../travel/travel.module.js';
 import { CorrelationIdMiddleware } from './correlation-id.middleware.js';
@@ -10,7 +11,7 @@ import { StatsController } from './stats.controller.js';
 import { StatusController } from './status.controller.js';
 
 @Module({
-  imports: [SearchModule, TravelModule],
+  imports: [SearchModule, TravelModule, PermissionsModule],
   controllers: [
     HealthController,
     LeaguesController,
