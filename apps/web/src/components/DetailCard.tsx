@@ -1,16 +1,18 @@
 import type { ReactNode } from 'react';
 
 /**
- * A bordered group box with an uppercase header — the shared visual unit for
- * both the search-criteria view and the hit item-detail view, so they read the
- * same. Arrange several in a responsive grid (`grid-cols-1 sm:2 xl:3`).
+ * A bordered group box whose title sits as a label notched into the top border
+ * (a fieldset-style legend) — saves the vertical space a stacked header takes,
+ * so more boxes fit per row. The shared visual unit for both the search-criteria
+ * view and the hit item-detail view. Arrange several in a responsive grid
+ * (`grid-cols-1 sm:2 xl:3 2xl:4`); the grid's `gap-y` clears the raised label.
  */
 export function DetailCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-md border border-edge bg-surface-2 p-3">
-      <div className="mb-2 text-[0.6rem] font-semibold tracking-widest text-ink-faint uppercase">
+    <div className="relative rounded-md border border-edge bg-surface-2 px-3 pt-3.5 pb-3">
+      <span className="absolute -top-2 left-2.5 rounded bg-surface-3 px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-widest text-ink-muted uppercase">
         {title}
-      </div>
+      </span>
       <dl className="flex flex-col gap-1">{children}</dl>
     </div>
   );
