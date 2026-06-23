@@ -11,6 +11,7 @@ import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { SearchManager } from '../search/search-manager.js';
 import { TradeApiClient, type TradeSearchRef } from '../trade-api/trade-api.client.js';
+import { GameFocusService } from './game-focus.service.js';
 
 export interface TravelRequest {
   hideoutToken: string;
@@ -58,6 +59,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
     @Inject(SearchManager) private readonly searchManager: SearchManager,
     @Inject(RealtimeBus) private readonly realtimeBus: RealtimeBus,
+    @Inject(GameFocusService) private readonly gameFocus: GameFocusService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -121,6 +123,9 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
           await this.tradeApi.travel(request.hideoutToken, request.search, randomUUID());
           this.rememberTraveled(request.listingId);
           this.publish('success', request, null);
+          // Auto-travel teleported the character — pull the (backgrounded, low-FPS)
+          // game window to the foreground so the operator can act at full FPS.
+          if (request.source === 'auto') this.gameFocus.focus();
         } catch (error) {
           this.publish('failed', request, error instanceof Error ? error.message : String(error));
         }

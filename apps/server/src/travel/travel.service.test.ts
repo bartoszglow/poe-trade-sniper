@@ -5,6 +5,7 @@ import { RealtimeBus } from '../events/realtime-bus.js';
 import type { SearchManager } from '../search/search-manager.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import { TravelService, type TravelRequest } from './travel.service.js';
+import type { GameFocusService } from './game-focus.service.js';
 
 const SEARCH: TradeSearchRef = { realm: 'poe2', league: 'Standard', searchId: 's1' };
 
@@ -56,9 +57,16 @@ function createService(options: { autoTravel?: boolean; travelDelayMs?: number }
     getSearchRef: vi.fn(() => SEARCH),
   } as unknown as SearchManager;
 
-  const service = new TravelService(config, tradeApi, searchManager, realtimeBus);
+  const gameFocus = { focus: vi.fn() };
+  const service = new TravelService(
+    config,
+    tradeApi,
+    searchManager,
+    realtimeBus,
+    gameFocus as unknown as GameFocusService,
+  );
   service.onApplicationBootstrap();
-  return { service, tradeApi, realtimeBus, travelEvents, travelCalls };
+  return { service, tradeApi, realtimeBus, travelEvents, travelCalls, gameFocus };
 }
 
 async function flushQueue(): Promise<void> {
@@ -121,6 +129,20 @@ describe('TravelService', () => {
     tokenless.service.onApplicationShutdown();
   });
 
+  it('focuses the game on auto-travel success, but not on manual travel', async () => {
+    const auto = createService({ autoTravel: true });
+    auto.realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-x') });
+    await flushQueue();
+    expect(auto.gameFocus.focus).toHaveBeenCalledTimes(1);
+    auto.service.onApplicationShutdown();
+
+    const manual = createService({ autoTravel: false });
+    manual.service.enqueue(manualRequest());
+    await flushQueue();
+    expect(manual.gameFocus.focus).not.toHaveBeenCalled();
+    manual.service.onApplicationShutdown();
+  });
+
   it('never auto-travels twice to the same listing (re-detection after returning)', async () => {
     const { service, tradeApi, realtimeBus } = createService({ autoTravel: true });
     realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-first') });
@@ -169,6 +191,7 @@ describe('TravelService', () => {
       tradeApi,
       { isAutoTravelEnabled: () => true, getSearchRef: () => SEARCH } as unknown as SearchManager,
       realtimeBus,
+      { focus: vi.fn() } as unknown as GameFocusService,
     );
     service.onApplicationBootstrap();
 
@@ -215,6 +238,7 @@ describe('TravelService', () => {
       tradeApi,
       { isAutoTravelEnabled: () => false, getSearchRef: () => SEARCH } as unknown as SearchManager,
       realtimeBus,
+      { focus: vi.fn() } as unknown as GameFocusService,
     );
 
     vi.useFakeTimers({ toFake: ['Date'] });

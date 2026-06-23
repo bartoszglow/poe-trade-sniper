@@ -125,6 +125,22 @@ export const envSchema = z.object({
   GUARD_MAX_HTTP_PER_MINUTE: z.coerce.number().int().min(10).default(90),
   /** Hard ceiling on ws connection attempts per rolling minute (all searches). */
   GUARD_MAX_WS_CONNECTS_PER_MINUTE: z.coerce.number().int().min(2).default(12),
+
+  // --- desktop: focus the game window after an auto-travel ---
+  /**
+   * When true, a successful AUTO travel brings the game window to the
+   * foreground (macOS only) — it runs at a low frame rate in the background,
+   * so focusing it the moment the character teleports restores full FPS.
+   */
+  GAME_FOCUS_ON_TRAVEL: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  /** macOS process name to focus — PoE2 runs under a Wine wrapper ("wine"). */
+  GAME_FOCUS_PROCESS: z
+    .string()
+    .regex(/^[A-Za-z0-9 ._-]+$/, 'letters, digits, space, . _ - only')
+    .default('wine'),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
