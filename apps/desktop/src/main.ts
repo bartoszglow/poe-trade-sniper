@@ -1,5 +1,6 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, nativeImage, shell } from 'electron';
 import type { RunningServer } from '@poe-sniper/server';
 
 /**
@@ -56,6 +57,21 @@ async function bootServer(): Promise<RunningServer> {
   return startServer();
 }
 
+/**
+ * Set the macOS dock icon to our brand mark. Packaged builds already get it
+ * from the app bundle (electron-builder picks up build/icon.icns); this covers
+ * the `electron .` dev run, where the dock would otherwise show the generic
+ * Electron icon.
+ */
+function applyDockIcon(): void {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  // dist/main.js → ../assets/icon.png in this package.
+  const iconPath = join(import.meta.dirname, '../assets/icon.png');
+  if (!existsSync(iconPath)) return;
+  const icon = nativeImage.createFromPath(iconPath);
+  if (!icon.isEmpty()) app.dock.setIcon(icon);
+}
+
 function createWindow(url: string): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
@@ -97,6 +113,7 @@ if (!singleInstance) {
   app
     .whenReady()
     .then(async () => {
+      applyDockIcon();
       if (!devUrl) {
         runningServer = await bootServer();
         windowUrl = `http://localhost:${runningServer.port}`;
