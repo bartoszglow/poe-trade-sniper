@@ -103,10 +103,12 @@ export const EN = {
   'engineStatus.active': 'active',
   'engineStatus.degraded': 'degraded',
   'engineStatus.stopped': 'stopped',
+  'engineStatus.paused': 'paused',
 
   // Live hits panel
   'hitsPanel.title': 'Live hits',
   'hitsPanel.empty': 'New listings stream here the moment an engine detects them.',
+  'hitsPanel.clear': 'Clear the live feed',
 
   // Hit card / travel
   'hitCard.queued': 'queued…',
@@ -134,6 +136,10 @@ export const EN = {
   'searches.autoTravelInline': 'auto-travel',
   'searches.autoTravelWarning': 'teleports your character — Instant Buyout only',
   'searches.watch': 'Watch search',
+  'searches.addCta': 'Watch a search',
+  'searches.detectionToggle': 'Detection',
+  'searches.editLabel': 'Rename',
+  'searches.saveLabel': 'Save name',
   'searches.empty': 'No watched searches yet — paste a trade search id or URL above.',
   'searches.travelToggle': 'TRAVEL',
   'searches.activeToggle': 'ACTIVE',
@@ -339,10 +345,12 @@ export const PL: Record<MessageKey, string> = {
   'engineStatus.active': 'aktywny',
   'engineStatus.degraded': 'niestabilny',
   'engineStatus.stopped': 'zatrzymany',
+  'engineStatus.paused': 'wstrzymany',
 
   // Live hits panel
   'hitsPanel.title': 'Trafienia na żywo',
   'hitsPanel.empty': 'Nowe oferty pojawią się tutaj, gdy tylko silnik je wykryje.',
+  'hitsPanel.clear': 'Wyczyść widok',
 
   // Hit card / travel
   'hitCard.queued': 'w kolejce…',
@@ -369,6 +377,10 @@ export const PL: Record<MessageKey, string> = {
   'searches.autoTravelInline': 'auto-podróż',
   'searches.autoTravelWarning': 'teleportuje twoją postać — tylko Instant Buyout',
   'searches.watch': 'Obserwuj wyszukiwanie',
+  'searches.addCta': 'Obserwuj wyszukiwanie',
+  'searches.detectionToggle': 'Detekcja',
+  'searches.editLabel': 'Zmień nazwę',
+  'searches.saveLabel': 'Zapisz nazwę',
   'searches.empty': 'Brak obserwowanych wyszukiwań — wklej powyżej id lub URL wyszukiwania.',
   'searches.travelToggle': 'PODRÓŻ',
   'searches.activeToggle': 'AKTYWNY',

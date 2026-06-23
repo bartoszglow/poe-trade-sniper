@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Zap } from 'lucide-react';
+import { Eraser, Zap } from 'lucide-react';
 import type { Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { HitCard } from '../components/HitCard';
@@ -12,10 +12,12 @@ import { apiSend } from '../lib/api';
 const TOKEN_FRESH_MS = 240_000;
 /** Re-render cadence: ages out Travel buttons AND ticks the "x ago" labels. */
 const FRESHNESS_TICK_MS = 5_000;
+/** Hits older than this are greyed out in the live feed (visual only). */
+const STALE_HIT_MS = 300_000;
 
 export function HitsPanel() {
   const t = useT();
-  const { connected, liveHits, travelStateByListingId } = useEventStream();
+  const { connected, liveHits, travelStateByListingId, clearLiveHits } = useEventStream();
   const { searches } = useSearches();
   // Clock snapshot in state: render stays pure, buttons age out on the tick.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -48,6 +50,17 @@ export function HitsPanel() {
           {t('hitsPanel.title')}
         </span>
         <div className="flex-1" />
+        {liveHits.length > 0 && (
+          <button
+            type="button"
+            onClick={clearLiveHits}
+            title={t('hitsPanel.clear')}
+            aria-label={t('hitsPanel.clear')}
+            className="rounded p-1 text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <Eraser className="h-3.5 w-3.5" />
+          </button>
+        )}
         <Badge tone={connected ? 'ok' : 'danger'}>
           {connected ? t('common.live') : t('common.offline')}
         </Badge>
@@ -64,6 +77,7 @@ export function HitsPanel() {
               listing={listing}
               travelState={travelStateByListingId[listing.listingId]}
               tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
+              stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
               nowMs={nowMs}
               onTravel={() => travel(listing)}
             />

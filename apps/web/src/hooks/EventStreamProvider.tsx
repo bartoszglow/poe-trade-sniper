@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import type {
   DomainEvent,
   EngineKind,
@@ -56,7 +64,15 @@ const INITIAL_STATE: EventStreamState = {
   networkEvents: [],
 };
 
-const EventStreamContext = createContext<EventStreamState>(INITIAL_STATE);
+export interface EventStreamContextValue extends EventStreamState {
+  /** Clears the session-local live-hits feed on demand (view-only, not persisted). */
+  clearLiveHits: () => void;
+}
+
+const EventStreamContext = createContext<EventStreamContextValue>({
+  ...INITIAL_STATE,
+  clearLiveHits: () => {},
+});
 
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
@@ -136,10 +152,14 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
     return () => source.close();
   }, []);
 
-  const value = useMemo(() => state, [state]);
+  const clearLiveHits = useCallback(
+    () => setState((previous) => ({ ...previous, liveHits: [] })),
+    [],
+  );
+  const value = useMemo(() => ({ ...state, clearLiveHits }), [state, clearLiveHits]);
   return <EventStreamContext.Provider value={value}>{children}</EventStreamContext.Provider>;
 }
 
-export function useEventStream(): EventStreamState {
+export function useEventStream(): EventStreamContextValue {
   return useContext(EventStreamContext);
 }

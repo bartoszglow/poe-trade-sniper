@@ -1,6 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ListFilter, LogIn, Plus, Settings as SettingsIcon, Trash2 } from 'lucide-react';
+import {
+  Check,
+  ListFilter,
+  LogIn,
+  Pencil,
+  Plus,
+  Settings as SettingsIcon,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type { EngineStatus, SearchPreview, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
@@ -11,11 +20,21 @@ import { Select } from '../components/Select';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
+import { useDetection } from '../hooks/useDetection';
+import { useFlipList } from '../hooks/useFlipList';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { ApiError, apiSend } from '../lib/api';
+
+/**
+ * Display order: inactive searches sink to the bottom; within each group
+ * auto-travel searches rise to the top. Stable — ties keep insertion order.
+ */
+function searchSortRank(search: SearchRuntimeInfo): number {
+  return (search.enabled ? 0 : 2) + (search.autoTravel ? 0 : 1);
+}
 
 const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   pending: 'neutral',
@@ -23,6 +42,7 @@ const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   active: 'ok',
   degraded: 'danger',
   stopped: 'neutral',
+  paused: 'info',
 };
 
 const STATUS_LABEL_KEYS: Record<EngineStatus, MessageKey> = {
@@ -31,6 +51,7 @@ const STATUS_LABEL_KEYS: Record<EngineStatus, MessageKey> = {
   active: 'engineStatus.active',
   degraded: 'engineStatus.degraded',
   stopped: 'engineStatus.stopped',
+  paused: 'engineStatus.paused',
 };
 
 function AddSearchForm({
@@ -54,6 +75,7 @@ function AddSearchForm({
   const [previewQuery, setPreviewQuery] = useState<unknown>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   // The URL is the source of truth for league + purchase type (D-14).
   // Only a bare id needs a league — the resolve endpoint takes it in the path.
@@ -99,11 +121,29 @@ function AddSearchForm({
       setInput('');
       setLabel('');
       setAutoTravel(false);
+      // After a successful add, collapse the form (and any open preview) so the
+      // search list isn't pushed down by the editor — it reopens on click.
+      setPreviewOpen(false);
+      setPreviewQuery(null);
+      setCollapsed(true);
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-edge bg-surface-1 px-4 py-2.5 text-sm text-ink-muted transition-colors hover:text-ink"
+      >
+        <Plus className="h-4 w-4" />
+        {t('searches.addCta')}
+      </button>
+    );
   }
 
   return (
@@ -196,7 +236,7 @@ function SearchRow({
   onRemove,
 }: {
   search: SearchRuntimeInfo;
-  onUpdate: (payload: { autoTravel?: boolean; enabled?: boolean }) => Promise<void>;
+  onUpdate: (payload: { autoTravel?: boolean; enabled?: boolean; label?: string }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
   const t = useT();
@@ -204,6 +244,21 @@ function SearchRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [criteriaOpen, setCriteriaOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [draftLabel, setDraftLabel] = useState(search.label);
+
+  function startEditingLabel(): void {
+    setDraftLabel(search.label);
+    setEditingLabel(true);
+  }
+
+  async function saveLabel(): Promise<void> {
+    const nextLabel = draftLabel.trim();
+    setEditingLabel(false);
+    if (nextLabel && nextLabel !== search.label) {
+      await run(() => onUpdate({ label: nextLabel }));
+    }
+  }
 
   async function run(action: () => Promise<void>) {
     setErrorMessage(null);
@@ -215,11 +270,56 @@ function SearchRow({
   }
 
   return (
-    <li className="rounded-lg border border-edge bg-surface-1 px-4 py-3">
+    <li data-flip-id={search.id} className="rounded-lg border border-edge bg-surface-1 px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate font-medium text-ink">{search.label}</span>
+            {editingLabel ? (
+              <span className="flex items-center gap-1">
+                <input
+                  value={draftLabel}
+                  onChange={(changeEvent) => setDraftLabel(changeEvent.target.value)}
+                  onKeyDown={(keyEvent) => {
+                    if (keyEvent.key === 'Enter') {
+                      keyEvent.preventDefault();
+                      void saveLabel();
+                    } else if (keyEvent.key === 'Escape') {
+                      setEditingLabel(false);
+                    }
+                  }}
+                  autoFocus
+                  className="w-44 rounded border border-edge bg-surface-0 px-2 py-0.5 text-sm text-ink focus:border-gold focus:outline-none"
+                />
+                <IconButton
+                  variant="ghost"
+                  aria-label={t('searches.saveLabel')}
+                  title={t('searches.saveLabel')}
+                  onClick={() => void saveLabel()}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </IconButton>
+                <IconButton
+                  variant="ghost"
+                  aria-label={t('common.cancel')}
+                  title={t('common.cancel')}
+                  onClick={() => setEditingLabel(false)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </IconButton>
+              </span>
+            ) : (
+              <>
+                <span className="truncate font-medium text-ink">{search.label}</span>
+                <IconButton
+                  variant="ghost"
+                  aria-label={t('searches.editLabel')}
+                  title={t('searches.editLabel')}
+                  onClick={startEditingLabel}
+                >
+                  <Pencil className="h-3 w-3" />
+                </IconButton>
+              </>
+            )}
             <Badge tone={STATUS_TONES[search.status]}>{t(STATUS_LABEL_KEYS[search.status])}</Badge>
             {search.engine && (
               <Badge tone={search.engine === 'ws' ? 'gold' : 'neutral'}>{search.engine}</Badge>
@@ -247,6 +347,7 @@ function SearchRow({
             checked={search.enabled}
             onChange={(checked) => void run(() => onUpdate({ enabled: checked }))}
             label={t('searches.activeFor', { label: search.label })}
+            tone={search.status === 'paused' ? 'info' : 'gold'}
           />
           {t('searches.activeToggle')}
         </span>
@@ -321,13 +422,32 @@ export function SearchesPage() {
   const t = useT();
   const { status } = useServerStatus();
   const { searches, loaded, add, update, remove } = useSearches();
+  const { paused, setDetectionPaused } = useDetection();
+  // FLIP animation: rows glide to their new slot on a re-sort instead of jumping.
+  const listParent = useFlipList<HTMLUListElement>();
+  const orderedSearches = [...searches].sort((left, right) => {
+    const byRank = searchSortRank(left) - searchSortRank(right);
+    if (byRank !== 0) return byRank;
+    // Same group → newest first (addedAt is ISO-8601, so lexicographic = chrono).
+    return right.addedAt.localeCompare(left.addedAt);
+  });
 
   const needsLogin =
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-ink">{t('searches.title')}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-ink">{t('searches.title')}</h1>
+        <span className="flex items-center gap-2 text-xs text-ink-muted">
+          {t('searches.detectionToggle')}
+          <Switch
+            checked={!paused}
+            onChange={(detectionOn) => void setDetectionPaused(!detectionOn)}
+            label={t('searches.detectionToggle')}
+          />
+        </span>
+      </div>
       {needsLogin ? (
         <LoginRequired />
       ) : (
@@ -336,8 +456,8 @@ export function SearchesPage() {
           {loaded && searches.length === 0 && (
             <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
           )}
-          <ul className="flex flex-col gap-2">
-            {searches.map((search) => (
+          <ul ref={listParent} className="flex flex-col gap-2">
+            {orderedSearches.map((search) => (
               <SearchRow
                 key={search.id}
                 search={search}

@@ -12,18 +12,31 @@ interface HitCardProps {
   travelState: TravelState | undefined;
   /** Tokens die at ~300 s; the button greys out client-side at 240 s. */
   tokenFresh: boolean;
+  /** Older than the freshness window — dimmed so the eye tracks recent hits. */
+  stale?: boolean;
   /** Clock snapshot for the live "x ago" — passed in so render stays pure. */
   nowMs: number;
   onTravel: () => void;
 }
 
-export function HitCard({ listing, travelState, tokenFresh, nowMs, onTravel }: HitCardProps) {
+export function HitCard({
+  listing,
+  travelState,
+  tokenFresh,
+  stale = false,
+  nowMs,
+  onTravel,
+}: HitCardProps) {
   const t = useT();
   const phase = travelState?.phase;
   const travelBusy = phase === 'queued' || phase === 'started';
 
   return (
-    <div className="rounded-md border border-edge bg-surface-2 px-3 py-2">
+    <div
+      className={`rounded-md border border-edge bg-surface-2 px-3 py-2 transition-opacity ${
+        stale ? 'opacity-45' : ''
+      }`}
+    >
       <div className="flex items-baseline gap-2">
         <span
           className="font-mono text-[0.65rem] text-ink-faint"

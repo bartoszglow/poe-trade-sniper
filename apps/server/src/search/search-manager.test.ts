@@ -143,6 +143,54 @@ describe('SearchManager', () => {
     }
   });
 
+  it('global pause halts enabled searches as PAUSED, resume brings them back', async () => {
+    const { manager, database, executeSearch } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      expect(manager.isDetectionPaused()).toBe(false);
+
+      expect(manager.setDetectionPaused(true)).toBe(true);
+      expect(manager.isDetectionPaused()).toBe(true);
+      const paused = manager.list()[0]!;
+      expect(paused.status).toBe('paused');
+      expect(paused.engine).toBeNull();
+      expect(paused.enabled).toBe(true); // enabled flag preserved, just halted
+
+      // Globally paused → zero outbound on scheduler ticks.
+      executeSearch.mockClear();
+      await manager.runSchedulerTick();
+      await manager.runSchedulerTick();
+      expect(executeSearch).not.toHaveBeenCalled();
+
+      manager.setDetectionPaused(false);
+      const resumed = manager.list()[0]!;
+      expect(resumed.status).toBe('active');
+      expect(resumed.engine).toBe('poll');
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('global pause leaves an already-disabled search STOPPED, and resume keeps it so', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      manager.update('AbCdEf123', { enabled: false });
+
+      manager.setDetectionPaused(true);
+      expect(manager.list()[0]!.status).toBe('stopped'); // not PAUSED — it was disabled
+
+      manager.setDetectionPaused(false);
+      const info = manager.list()[0]!;
+      expect(info.status).toBe('stopped'); // resume must not re-activate a disabled search
+      expect(info.enabled).toBe(false);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('pause stops detection, resume restarts it, both survive scheduler ticks', async () => {
     const { manager, database, executeSearch } = createManager();
     try {

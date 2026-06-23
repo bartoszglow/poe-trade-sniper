@@ -108,6 +108,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private roundRobinIndex = 0;
   private tickInFlight = false;
   private hitsSincePrune = 0;
+  /** Global pause: every enabled search halts as PAUSED until resumed. */
+  private detectionPaused = false;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -201,7 +203,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const watcher = this.createWatcher(row);
     watcher.correlationId = correlationId;
     this.watchers.set(row.id, watcher);
-    this.startWatcher(watcher);
+    if (this.detectionPaused) {
+      this.publishEngineStatus(watcher, 'paused', 'globally paused');
+    } else {
+      this.startWatcher(watcher);
+    }
     this.publishSearchesChanged();
     return this.toRuntimeInfo(watcher);
   }
@@ -234,12 +240,18 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       .run();
 
     if (!enabled && wasEnabled) {
-      // Paused: stop detection but keep the search and its config.
+      // Per-search disable: stop detection but keep the search and its config.
       this.stopEngines(watcher);
       this.publishEngineStatus(watcher, 'stopped', 'paused');
     } else if (enabled && !wasEnabled) {
-      this.startWatcher(watcher);
-    } else if (options.purchaseMode !== undefined && enabled) {
+      // Re-enabled — start now, unless detection is globally paused (then it
+      // waits as PAUSED and comes up on the next global resume).
+      if (this.detectionPaused) {
+        this.publishEngineStatus(watcher, 'paused', 'globally paused');
+      } else {
+        this.startWatcher(watcher);
+      }
+    } else if (options.purchaseMode !== undefined && enabled && !this.detectionPaused) {
       // A purchase-mode change alters the executed query — restart detection.
       this.stopEngines(watcher);
       this.startWatcher(watcher);
@@ -313,6 +325,31 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return { total: this.watchers.size, byStatus };
   }
 
+  isDetectionPaused(): boolean {
+    return this.detectionPaused;
+  }
+
+  /**
+   * Global pause/resume. Pausing halts every ENABLED search as PAUSED (distinct
+   * from a per-search STOPPED) without clearing its enabled flag; resuming
+   * brings them all back. Already-disabled searches are left untouched.
+   */
+  setDetectionPaused(paused: boolean): boolean {
+    if (paused === this.detectionPaused) return this.detectionPaused;
+    this.detectionPaused = paused;
+    for (const watcher of this.watchers.values()) {
+      if (!watcher.row.enabled) continue;
+      if (paused) {
+        this.stopEngines(watcher);
+        this.publishEngineStatus(watcher, 'paused', 'globally paused');
+      } else {
+        this.startWatcher(watcher);
+      }
+    }
+    this.publishSearchesChanged();
+    return this.detectionPaused;
+  }
+
   /** One scheduler tick — exposed for tests; production runs it on a timer. */
   async runSchedulerTick(): Promise<void> {
     if (this.tickInFlight) return;
@@ -323,6 +360,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         this.windDownForGuard();
         return;
       }
+      if (this.detectionPaused) return;
       this.startPendingWatchers();
 
       // Poll only the watchers whose ws is NOT currently connected — i.e. cover
@@ -359,6 +397,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   private startPendingWatchers(): void {
+    if (this.detectionPaused) return;
     for (const watcher of this.watchers.values()) {
       if (!watcher.row.enabled) continue;
       if (

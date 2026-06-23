@@ -78,7 +78,14 @@ export interface SearchPreview {
 /** Engine currently serving a search's detection. */
 export type EngineKind = 'ws' | 'poll';
 
-export type EngineStatus = 'pending' | 'connecting' | 'active' | 'degraded' | 'stopped';
+export type EngineStatus =
+  | 'pending'
+  | 'connecting'
+  | 'active'
+  | 'degraded'
+  | 'stopped'
+  /** Halted by the global detection pause (distinct from a per-search stop). */
+  | 'paused';
 
 /** A managed search plus its live detection state (GET /api/searches). */
 export interface SearchRuntimeInfo extends ManagedSearch {

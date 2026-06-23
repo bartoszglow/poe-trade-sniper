@@ -83,6 +83,18 @@ export class SearchesController {
     return this.searchManager.list();
   }
 
+  /** Global detection pause state — drives the Searches-view master toggle. */
+  @Get('detection')
+  detection(): { paused: boolean } {
+    return { paused: this.searchManager.isDetectionPaused() };
+  }
+
+  @Post('detection')
+  setDetection(@Body() body: unknown): { paused: boolean } {
+    const { paused } = parseOrBadRequest(z.object({ paused: z.boolean() }), body);
+    return { paused: this.searchManager.setDetectionPaused(paused) };
+  }
+
   @Post('searches')
   async add(@Body() body: unknown): Promise<SearchRuntimeInfo> {
     const payload = parseOrBadRequest(addSearchSchema, body);
