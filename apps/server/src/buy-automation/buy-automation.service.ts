@@ -197,15 +197,16 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       // no-op, and bringing a (fullscreen) window forward can lag a Space switch,
       // so poll the frontmost-pid check briefly rather than checking once.
       await untilAbort(this.capture.focusGameWindow(), controller.signal);
+      // Park the cursor in the CENTRE of the game window IMMEDIATELY on focus —
+      // it may have been on another monitor or outside the window. windowCenter
+      // is the geometry locked during focus (no extra osascript), so this is
+      // instant and happens before the (cheap) focus-confirm poll.
+      const center = await untilAbort(this.capture.windowCenter(), controller.signal);
+      if (center) await this.input.moveHumanLike(center, controller.signal);
       if (!(await this.confirmFocus(controller.signal))) {
         this.emit('failed', searchId, listingId, itemName, 'focus-failed');
         return;
       }
-      // Park the cursor in the CENTRE of the game window — it may have been on
-      // another monitor or outside the window, and the move eases from wherever
-      // the cursor currently sits, so we anchor it inside the game first.
-      const center = await untilAbort(this.capture.windowCenter(), controller.signal);
-      if (center) await this.input.moveHumanLike(center, controller.signal);
 
       // Capture loop until the trade window is detected (or give-up / abort).
       const region = await this.detectTradeWindow(controller.signal);
