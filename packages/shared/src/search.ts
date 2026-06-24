@@ -36,6 +36,12 @@ export interface ManagedSearch {
   label: string;
   /** When true, a detected hit triggers an automatic hideout travel. Explicit opt-in. */
   autoTravel: boolean;
+  /**
+   * When true, a successful AUTO travel triggers Buy automation (focus → capture
+   * → locate → human-like move; no click). Requires `autoTravel` AND the macOS
+   * `control` permission; Electron-only. Explicit opt-in.
+   */
+  autoBuy: boolean;
   /** Paused (false) searches stay listed and configured but run no detection. */
   enabled: boolean;
   /**

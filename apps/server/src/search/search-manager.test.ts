@@ -11,11 +11,15 @@ import type {
 import { PollEngine } from '../engines/poll-engine.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import type { OutboundGuard } from '../guard/outbound-guard.js';
+import type { PermissionGateService } from '../permissions/permission-gate.service.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 import type { EngineFactory } from './engine-registry.js';
 import { SearchManager } from './search-manager.js';
 
 const ARMED_GUARD = { tripped: false } as unknown as OutboundGuard;
+/** Gate that grants control (auto-buy allowed); the inverse refuses it. */
+const ALLOW_GATE = { canControl: () => true } as unknown as PermissionGateService;
+const DENY_GATE = { canControl: () => false } as unknown as PermissionGateService;
 
 const SECURABLE_QUERY = { status: { option: 'securable' }, stats: [] };
 const ANY_QUERY = { status: { option: 'any' }, stats: [] };
@@ -30,7 +34,9 @@ class FakeWsEngine implements DetectionEngine {
   stop(): void {}
 }
 
-function createManager(options: { resolvedQuery?: unknown; guard?: OutboundGuard } = {}) {
+function createManager(
+  options: { resolvedQuery?: unknown; guard?: OutboundGuard; gate?: PermissionGateService } = {},
+) {
   const resolvedQuery = options.resolvedQuery ?? SECURABLE_QUERY;
   const database = openDatabase(':memory:');
   const config = loadConfig({});
@@ -71,6 +77,7 @@ function createManager(options: { resolvedQuery?: unknown; guard?: OutboundGuard
     tradeApi,
     realtimeBus,
     options.guard ?? ARMED_GUARD,
+    options.gate ?? ALLOW_GATE,
   );
   return { manager, database, tradeApi, events, executeSearch, wsEngines };
 }
@@ -116,6 +123,48 @@ describe('SearchManager', () => {
       await expect(
         manager.add('AbCdEf123', { autoTravel: true, purchaseMode: 'instant' }),
       ).resolves.toMatchObject({ autoTravel: true });
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('rejects auto-buy without auto-travel, and without the control permission (decision #2=B)', async () => {
+    const needsTravel = createManager();
+    try {
+      await expect(needsTravel.manager.add('AbCdEf123', { autoBuy: true })).rejects.toThrowError(
+        /auto-travel/,
+      );
+    } finally {
+      needsTravel.manager.onApplicationShutdown();
+      needsTravel.database.$client.close();
+    }
+
+    const noControl = createManager({ gate: DENY_GATE });
+    try {
+      await expect(
+        noControl.manager.add('AbCdEf123', { autoTravel: true, autoBuy: true }),
+      ).rejects.toThrowError(/Screen Recording/);
+    } finally {
+      noControl.manager.onApplicationShutdown();
+      noControl.database.$client.close();
+    }
+  });
+
+  it('persists auto-buy with travel + control permission, round-trips, and toggles off', async () => {
+    const { manager, database } = createManager();
+    try {
+      const info = await manager.add('AbCdEf123', { autoTravel: true, autoBuy: true });
+      expect(info.autoBuy).toBe(true);
+      expect(manager.isAutoBuyEnabled('AbCdEf123')).toBe(true);
+      const persisted = database.$client
+        .prepare('SELECT auto_buy FROM searches WHERE id = ?')
+        .get('AbCdEf123') as { auto_buy: number };
+      expect(persisted.auto_buy).toBe(1);
+
+      const off = manager.update('AbCdEf123', { autoBuy: false });
+      expect(off.autoBuy).toBe(false);
+      expect(manager.isAutoBuyEnabled('AbCdEf123')).toBe(false);
     } finally {
       manager.onApplicationShutdown();
       database.$client.close();
@@ -260,6 +309,7 @@ describe('SearchManager', () => {
         {} as TradeApiClient,
         new RealtimeBus(),
         ARMED_GUARD,
+        ALLOW_GATE,
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -354,6 +404,7 @@ describe('SearchManager', () => {
         {} as TradeApiClient,
         new RealtimeBus(),
         ARMED_GUARD,
+        ALLOW_GATE,
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -503,6 +554,7 @@ describe('SearchManager', () => {
         { resolveQuery: vi.fn() } as unknown as TradeApiClient,
         new RealtimeBus(),
         ARMED_GUARD,
+        ALLOW_GATE,
       );
       reloaded.onApplicationBootstrap(); // bootstrap prunes
       try {
@@ -544,6 +596,7 @@ describe('SearchManager', () => {
         { resolveQuery: vi.fn() } as unknown as TradeApiClient,
         new RealtimeBus(),
         ARMED_GUARD,
+        ALLOW_GATE,
       );
       reborn.onApplicationBootstrap();
       try {

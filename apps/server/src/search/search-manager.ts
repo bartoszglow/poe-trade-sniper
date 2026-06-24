@@ -23,6 +23,7 @@ import type {
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
+import { PermissionGateService } from '../permissions/permission-gate.service.js';
 import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import { hits, searches } from '../db/schema.js';
@@ -42,12 +43,14 @@ export interface AddSearchOptions {
   label?: string;
   league?: string;
   autoTravel?: boolean;
+  autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
 }
 
 export interface UpdateSearchOptions {
   label?: string;
   autoTravel?: boolean;
+  autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
   enabled?: boolean;
 }
@@ -118,6 +121,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
     @Inject(RealtimeBus) private readonly realtimeBus: RealtimeBus,
     @Inject(OutboundGuard) private readonly guard: OutboundGuard,
+    @Inject(PermissionGateService) private readonly gate: PermissionGateService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -183,6 +187,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const purchaseMode = options.purchaseMode ?? null;
     const autoTravel = options.autoTravel ?? false;
     this.assertAutoTravelAllowed(autoTravel, resolvedQuery, purchaseMode);
+    const autoBuy = options.autoBuy ?? false;
+    this.assertAutoBuyAllowed(autoBuy, autoTravel);
 
     const row: ManagedSearch = {
       id: ref.searchId,
@@ -190,6 +196,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       league: ref.league,
       label: options.label ?? ref.searchId,
       autoTravel,
+      autoBuy,
       enabled: true,
       purchaseMode,
       filters: resolvedQuery,
@@ -218,6 +225,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       options.purchaseMode !== undefined ? options.purchaseMode : watcher.row.purchaseMode;
     const autoTravel = options.autoTravel ?? watcher.row.autoTravel;
     this.assertAutoTravelAllowed(autoTravel, watcher.row.filters, purchaseMode);
+    const autoBuy = options.autoBuy ?? watcher.row.autoBuy;
+    this.assertAutoBuyAllowed(autoBuy, autoTravel);
     const wasEnabled = watcher.row.enabled;
     const enabled = options.enabled ?? wasEnabled;
 
@@ -225,6 +234,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       ...watcher.row,
       label: options.label ?? watcher.row.label,
       autoTravel,
+      autoBuy,
       purchaseMode,
       enabled,
     };
@@ -233,6 +243,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       .set({
         label: watcher.row.label,
         autoTravel: watcher.row.autoTravel,
+        autoBuy: watcher.row.autoBuy,
         purchaseMode: watcher.row.purchaseMode,
         enabled: watcher.row.enabled,
       })
@@ -310,6 +321,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   /** Narrow read used by the TravelService's hit-event subscriber. */
   isAutoTravelEnabled(searchId: string): boolean {
     return this.watchers.get(searchId)?.row.autoTravel ?? false;
+  }
+
+  /** Narrow read used by the BuyAutomationService's travel-success subscriber. */
+  isAutoBuyEnabled(searchId: string): boolean {
+    return this.watchers.get(searchId)?.row.autoBuy ?? false;
   }
 
   getSearchRef(searchId: string): TradeSearchRef | null {
@@ -577,6 +593,22 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
   }
 
+  /**
+   * Buy automation is opt-in on top of auto-travel and (decision #2 = B) requires
+   * the macOS `control` permission. Rejected at the API boundary so a search can
+   * never persist an unsatisfiable intent; the desktop adapters re-check at the
+   * resource boundary too (the structural guarantee).
+   */
+  private assertAutoBuyAllowed(autoBuy: boolean, autoTravel: boolean): void {
+    if (!autoBuy) return;
+    if (!autoTravel) {
+      throw new BadRequestException('auto-buy requires auto-travel to be enabled');
+    }
+    if (!this.gate.canControl()) {
+      throw new BadRequestException('grant Screen Recording + Accessibility to enable auto-buy');
+    }
+  }
+
   private parseRef(input: string, league: string | undefined): TradeSearchRef {
     try {
       return parseSearchInput(input, league ?? this.config.DEFAULT_LEAGUE);
@@ -628,6 +660,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       league: row.league,
       label: row.label,
       autoTravel: row.autoTravel,
+      autoBuy: row.autoBuy,
       enabled: row.enabled,
       purchaseMode: (row.purchaseMode as PurchaseMode | null) ?? null,
       filters: row.filters,

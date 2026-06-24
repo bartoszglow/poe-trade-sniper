@@ -1,0 +1,1 @@
+ALTER TABLE `searches` ADD `auto_buy` integer DEFAULT false NOT NULL;
