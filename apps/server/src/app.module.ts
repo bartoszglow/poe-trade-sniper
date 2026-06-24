@@ -1,6 +1,7 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ApiModule } from './api/api.module.js';
+import { BuyAutomationModule } from './buy-automation/buy-automation.module.js';
 import { ConfigModule } from './config/config.module.js';
 import { loadConfig } from './config/env.js';
 import { DbModule } from './db/db.module.js';
@@ -47,6 +48,7 @@ export class AppModule {
         TravelModule,
         UpdateModule,
         PermissionsModule,
+        BuyAutomationModule,
         ApiModule,
       ],
     };
