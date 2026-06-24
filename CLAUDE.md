@@ -41,6 +41,14 @@ Live-validated 2026-06-12: session probe, ws connect (GGG live is back; 1013
 backoff handled), league endpoint. Remaining: first-hit/travel live proof,
 full Phase 5 packaging. Self-review: `docs/process/reviews/2026-06-12-self-review.md`.
 
+macOS desktop-automation track (2026-06-24): **Phase 1** permission framework
+(Screen Recording + Accessibility, Option A, capability gate) and **Phase 2**
+per-search Buy automation (focus → capture → detect → human-like move, **NO
+click**; Electron-only; independent of auto-travel, D-19) shipped + reviewed (52
+findings → fix plan `docs/planning/25`, fixes applied D-20). Native input/capture
+(`nut.js`/`uiohook`/`desktopCapturer` + raw-pixel CV) still needs on-Mac hardware
+validation: capture-stream non-black, CV thresholds, uiohook-for-synthetic.
+
 Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
 NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no
 decorator metadata).

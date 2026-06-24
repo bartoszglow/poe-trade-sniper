@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **macOS permissions in Settings** (desktop only): Screen Recording +
+  Accessibility toggles that reflect the live OS status and prompt / deep-link to
+  grant them — the foundation for screen-capture-based automation.
+- **Per-search Buy automation** (macOS desktop only, opt-in): on a successful
+  travel it focuses the game, finds the open trade window, and moves the cursor
+  onto the selected item. It never clicks — you confirm the purchase. Requires
+  the Screen Recording + Accessibility permissions; independent of auto-travel.
 - The Searches view shows a clear "log in to start sniping" prompt with a button
   to Settings when there is no valid Path of Exile session, instead of an
   add-search form that could not work yet.

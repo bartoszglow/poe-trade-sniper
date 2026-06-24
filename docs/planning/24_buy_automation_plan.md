@@ -348,3 +348,15 @@ Deliberately deferred (S4, safe): IPC `senderFrame`-origin assertion (non-exploi
 ## 8. Phase-2 as-built deviations (2026-06-24)
 
 - **Buy decoupled from auto-travel (D-19).** §4.1's `assertAutoBuyAllowed(autoBuy, autoTravel)` and the "auto-buy requires auto-travel" 400 are **removed**: the gate keeps only `canControl` (decision #2=B holds). §4.2's subscriber filter drops `source === 'auto'` — `maybeBuy` now fires on **any** travel `success` (auto OR manual). Buy still acts only once the character is at the seller (a travel success), so there is no teleport/capture race, but the **toggles are independent**. §4.5's "requires-travel" state (and its `searches.buyRequiresTravel` key) are dropped from the resolver. Rationale + record: decision D-19. Decision #6's "buy-without-travel rejected" clause is superseded.
+
+### Post-review deviations + deferrals (D-20, 2026-06-24)
+
+- **Vision = raw-pixel, not OpenCV.** The shipped `trade-vision.adapter.ts` is a dependency-free violet selection-frame colour threshold (no `opencv-wasm`, no `trade-vision.worker.ts`). Supersedes §2.1/§4.3 + D-18's adapter list; **O-10 resolved**. The synchronous main-thread scan is accepted (stride-sampled, 5 s-bounded, opt-in); a worker offload is deferred (PERF-2/3).
+- **nut.js** is `@nut-tree-fork/nut-js ^4.x` (upstream `@nut-tree/nut-js` paywalled past v4), not the plan's `>=5`; abort is implemented in the adapter, not via nut's AbortSignal.
+- **`StatusResponse.buyAutomation` (§4.4) was not added** — `capabilities.canControl` covers "supported" and the SSE buy-state covers the live result; a polled `lastResult` would duplicate SSE-owned state.
+- **Deferred review findings (with reason):**
+  - **PERF-2/3** (cache/downscale capture + move the scan to a worker): needs on-hardware validation — it changes capture timing + coordinate mapping, only tunable against a real trade window. Bounded today (stride-sampled, 5 s timeout, opt-in).
+  - **DUP-1** (shared `sanitizeProcessName` for the osascript charset): the clean fix (one helper in `packages/shared`) is infeasible for the desktop — `build-desktop-platform` runs in the packaged main, which can't runtime-import a workspace package (same constraint as the kind-list). Kept inline + cross-referenced; 2 validated enforcement points.
+  - **PERF-5** (keyset pagination), **PERF-8** (lighter `/api/searches` shape), **SSE-1** (network-event coalesce): bounded for a single-operator local tool (≤10k-row table, `latestRequestId` guard, rate-governed cadence).
+  - **DUP-3/4** (osascript-predicate unify, abortable-delay extract): the two focus predicates are intentionally different + delegating breaks the dev server; the delay helper is only 2 copies (below the radar threshold).
+  - **TEST-5** (e2e for the auto-buy refusal) + **DOC-7** (architecture.md/frontend.md ports-seam note): the refusal is unit-tested + adapter-gated and the canonical decision survives in D-18/D-20 — low-priority follow-ups.
