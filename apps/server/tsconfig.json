@@ -4,7 +4,12 @@
     "rootDir": "src",
     "outDir": "dist",
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
+    // OFF on purpose: the runtime never has decorator metadata — tsx (dev) and
+    // the esbuild bundle (packaged) don't emit it, hence the explicit-@Inject
+    // rule (D-11). The tsc dist (run by dev:desktop + preview) must match, or
+    // Nest tries to inject optional/interface params that have no @Inject
+    // (e.g. SessionCipher.keyLoader) and boot fails.
+    "emitDecoratorMetadata": false,
     "types": ["node"]
   },
   "include": ["src"]
