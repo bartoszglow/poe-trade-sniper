@@ -215,17 +215,15 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       }
       this.emit('window-found', searchId, listingId, itemName, null);
 
-      // Locate, then VERIFY-THEN-ACT on a fresh frame before moving.
-      if (!(await this.locate(region, itemName, controller.signal))) {
-        this.emit('failed', searchId, listingId, itemName, 'item-not-located');
-        return;
-      }
-      this.emit('item-located', searchId, listingId, itemName, null);
+      // Verify-then-act: re-detect on ONE fresh frame to get the precise point and
+      // confirm the selection is still there before moving (one detection, not the
+      // old redundant double-locate).
       const confirmed = await this.locate(region, itemName, controller.signal);
       if (!confirmed) {
         this.emit('failed', searchId, listingId, itemName, 'item-vanished-before-move');
         return;
       }
+      this.emit('item-located', searchId, listingId, itemName, null);
 
       // Don't place if the operator grabbed the mouse during detect/locate.
       if (controller.signal.aborted) {

@@ -52,18 +52,38 @@ export class DevController {
    */
   @Post('capture-probe')
   async captureProbe(): Promise<unknown> {
+    const now = () => Date.now();
+    let mark = now();
     const focusIssued = await this.capture.focusGameWindow();
+    const focusMs = now() - mark;
+    mark = now();
     const focusConfirmed = await this.capture.isGameWindowFocused();
-    const frames: Array<{ width: number; height: number }> = [];
+    const confirmMs = now() - mark;
+    const captureMs: number[] = [];
     let frame: RawFrame | null = null;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      mark = now();
       frame = await this.capture.capture();
-      frames.push({ width: frame.width, height: frame.height });
-      await new Promise((resolve) => setTimeout(resolve, 120));
+      captureMs.push(now() - mark);
     }
+    mark = now();
     const region = frame ? await this.vision.detectTradeWindow(frame) : null;
+    const detectMs = now() - mark;
+    mark = now();
     const point = frame && region ? await this.vision.locateItem(frame, region, null) : null;
+    const locateMs = now() - mark;
     const screen = point ? this.capture.frameToScreen(point) : null;
-    return { focusIssued, focusConfirmed, frames, region, point, screen };
+    return {
+      focusIssued,
+      focusConfirmed,
+      focusMs,
+      confirmMs,
+      captureMs,
+      detectMs,
+      locateMs,
+      region,
+      point,
+      screen,
+    };
   }
 }

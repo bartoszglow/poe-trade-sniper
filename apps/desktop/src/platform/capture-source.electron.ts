@@ -120,11 +120,15 @@ const OSASCRIPT_TIMEOUT_MS = 10_000;
  * read the OTHER wine process's (Steam's) bounds. `title` is pre-sanitized to
  * `[A-Za-z0-9 ._-]`, so inlining it can't break the AppleScript string.
  */
-function focusAndReadWindowScript(title: string, settleMs: number): string {
+function focusAndReadWindowScript(title: string, settleMs: number, narrow: boolean): string {
   const settleSeconds = (settleMs / 1000).toFixed(3);
+  // The game runs under Wine, so the process is named "wine" — scanning only
+  // those (~10) is far cheaper than every GUI process's every window (each window
+  // query is a slow Apple Event from Electron). `narrow=false` is the safety net.
+  const filter = narrow ? 'name contains "wine"' : 'background only is false';
   return [
     'tell application "System Events"',
-    '  repeat with proc in (every process whose background only is false)',
+    `  repeat with proc in (every process whose ${filter})`,
     '    repeat with win in (windows of proc)',
     `      if (name of win) contains "${title}" then`,
     '        set frontmost of proc to true',
@@ -136,6 +140,33 @@ function focusAndReadWindowScript(title: string, settleMs: number): string {
     '    end repeat',
     '  end repeat',
     '  return "not-found"',
+    'end tell',
+  ].join('\n');
+}
+
+/**
+ * FAST PATH: focus a KNOWN process by pid and read its window-1 bounds, WITHOUT
+ * enumerating every window of every process (the ~3s cost). Verifies the window
+ * title still matches so a recycled pid can't focus the wrong app. Returns
+ * "pid|x,y,w,h" / "wrong" / "missing". `pid` is digits-only (validated).
+ */
+function focusByPidScript(pid: string, title: string, settleMs: number): string {
+  const settleSeconds = (settleMs / 1000).toFixed(3);
+  // ONE `tell (process whose unix id is …)` block — minimal Apple Events (each
+  // round-trip is ~100ms when sent from the Electron app, so the count matters).
+  // A dead pid errors → caller falls back to the scan; a recycled pid fails the
+  // title check → "wrong".
+  return [
+    'tell application "System Events"',
+    `  tell (first process whose unix id is ${pid})`,
+    '    if (count of windows) is 0 then return "missing"',
+    `    if (name of window 1) does not contain "${title}" then return "wrong"`,
+    '    set frontmost to true',
+    `    delay ${settleSeconds}`,
+    '    set p to position of window 1',
+    '    set s to size of window 1',
+    `    return "${pid}|" & ((item 1 of p) as text) & "," & ((item 2 of p) as text) & "," & ((item 1 of s) as text) & "," & ((item 2 of s) as text)`,
+    '  end tell',
     'end tell',
   ].join('\n');
 }
@@ -194,16 +225,99 @@ export function createElectronCaptureSource(
     cropW: number;
     cropH: number;
   } | null = null;
+  // After the first successful focus we remember the game's pid and re-focus it
+  // DIRECTLY next time (no per-window scan — that scan is the ~3s cost). A restart
+  // recycles the pid, so the by-pid script verifies the title and asks for a
+  // re-scan on a miss.
+  let cachedPid: string | null = null;
+
+  type FocusResult = { pid: string; x: number; y: number; w: number; h: number };
+
+  /** Run a focus osascript and parse "pid|x,y,w,h" → bounds, "wrong"/"missing" →
+   *  'retry' (cached pid stale), anything else / error → null. */
+  async function runFocus(script: string): Promise<FocusResult | 'retry' | null> {
+    let stdout: string;
+    try {
+      ({ stdout } = await execFileAsync('osascript', ['-e', script], {
+        timeout: OSASCRIPT_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
+      }));
+    } catch (error) {
+      const detail = error as { stderr?: string; signal?: string; killed?: boolean };
+      console.warn(
+        '[focus] osascript failed:',
+        JSON.stringify({
+          stderr: detail.stderr?.trim(),
+          signal: detail.signal,
+          killed: detail.killed,
+        }),
+      );
+      return null;
+    }
+    const text = stdout.trim();
+    if (text === 'wrong' || text === 'missing') return 'retry';
+    const [pid, rect] = text.split('|');
+    const parts = (rect ?? '').split(',').map((value) => Number(value.trim()));
+    if (
+      text === 'not-found' ||
+      !pid ||
+      parts.length !== 4 ||
+      parts.some((value) => !Number.isFinite(value))
+    ) {
+      return null;
+    }
+    const [x, y, w, h] = parts as [number, number, number, number];
+    return { pid, x, y, w, h };
+  }
+
+  /** Cache the pid + lock the capture geometry from a focus result. */
+  function applyFocus(result: FocusResult): boolean {
+    lastFocusedPid = result.pid;
+    cachedPid = /^\d+$/.test(result.pid) ? result.pid : null;
+    const center = {
+      x: Math.round(result.x + result.w / 2),
+      y: Math.round(result.y + result.h / 2),
+    };
+    const display = screen.getDisplayNearestPoint(center);
+    geometry = {
+      displayId: String(display.id),
+      thumbWidth: display.size.width,
+      thumbHeight: display.size.height,
+      displayOriginX: display.bounds.x,
+      displayOriginY: display.bounds.y,
+      windowX: result.x,
+      windowY: result.y,
+      windowW: result.w,
+      windowH: result.h,
+      scaleX: 1,
+      scaleY: 1,
+      cropW: result.w,
+      cropH: result.h,
+    };
+    console.warn(
+      '[capture] locked',
+      JSON.stringify({
+        pid: result.pid,
+        window: { x: result.x, y: result.y, w: result.w, h: result.h },
+        displayId: display.id,
+        displayBounds: display.bounds,
+        displaySize: display.size,
+      }),
+    );
+    return true;
+  }
 
   return {
     async capture(): Promise<RawFrame> {
       requireGrant(probe, 'capture', ['screenRecording']);
       const geo = geometry;
       if (!geo) return EMPTY_FRAME; // focus (which locks geometry) must run first
+      const tGetSources = Date.now();
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
         thumbnailSize: { width: geo.thumbWidth, height: geo.thumbHeight },
       });
+      const getSourcesMs = Date.now() - tGetSources;
       const source = sources.find((candidate) => candidate.display_id === geo.displayId);
       if (!source || source.thumbnail.isEmpty()) return EMPTY_FRAME;
       const size = source.thumbnail.getSize();
@@ -222,6 +336,7 @@ export function createElectronCaptureSource(
       };
       const cropped = cropFrame(full, cropX, cropY, geo.cropW, geo.cropH);
       if (DEBUG_DUMP_DIR && dumpSeq < DEBUG_DUMP_FRAMES) {
+        const tDump = Date.now();
         dumpPng(`cap-full-${dumpSeq}`, full);
         dumpPng(`cap-crop-${dumpSeq}`, cropped);
         const purple = analyzePurple(cropped);
@@ -230,6 +345,8 @@ export function createElectronCaptureSource(
           '[capture] dump',
           JSON.stringify({
             seq: dumpSeq,
+            getSourcesMs,
+            dumpMs: Date.now() - tDump,
             crop: {
               x: Math.round(cropX),
               y: Math.round(cropY),
@@ -241,75 +358,34 @@ export function createElectronCaptureSource(
           }),
         );
         dumpSeq += 1;
+      } else if (DEBUG_DUMP_DIR) {
+        console.warn(
+          '[capture] timing',
+          JSON.stringify({ getSourcesMs, w: cropped.width, h: cropped.height }),
+        );
       }
       return cropped;
     },
 
     async focusGameWindow(): Promise<boolean> {
       dumpSeq = 0; // fresh debug frames per buy (DEBUG_DUMP_DIR only)
-      let stdout: string;
-      try {
-        ({ stdout } = await execFileAsync(
-          'osascript',
-          ['-e', focusAndReadWindowScript(gameWindowTitle, focusSettleMs)],
-          { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
-        ));
-      } catch (error) {
-        const detail = error as { stderr?: string; signal?: string; killed?: boolean };
-        console.warn(
-          '[focus] focusAndRead failed:',
-          JSON.stringify({
-            stderr: detail.stderr?.trim(),
-            signal: detail.signal,
-            killed: detail.killed,
-          }),
+      // Fast path: re-focus the cached pid directly — minimal Apple Events.
+      if (cachedPid) {
+        const fast = await runFocus(focusByPidScript(cachedPid, gameWindowTitle, focusSettleMs));
+        if (fast && fast !== 'retry') return applyFocus(fast);
+        cachedPid = null; // stale (restart / window gone) → re-acquire by scan
+      }
+      // Cold path: scan the Wine processes first, then every GUI process as a
+      // fallback (also re-acquires the pid for the next fast path).
+      for (const narrow of [true, false]) {
+        const found = await runFocus(
+          focusAndReadWindowScript(gameWindowTitle, focusSettleMs, narrow),
         );
-        lastFocusedPid = null;
-        geometry = null;
-        return false;
+        if (found && found !== 'retry') return applyFocus(found);
       }
-      const text = stdout.trim();
-      const [pid, rect] = text.split('|');
-      const parts = (rect ?? '').split(',').map((value) => Number(value.trim()));
-      if (
-        text === 'not-found' ||
-        !pid ||
-        parts.length !== 4 ||
-        parts.some((v) => !Number.isFinite(v))
-      ) {
-        lastFocusedPid = null;
-        geometry = null;
-        return false;
-      }
-      const [windowX, windowY, windowW, windowH] = parts as [number, number, number, number];
-      lastFocusedPid = pid;
-      const center = { x: Math.round(windowX + windowW / 2), y: Math.round(windowY + windowH / 2) };
-      const display = screen.getDisplayNearestPoint(center);
-      geometry = {
-        displayId: String(display.id),
-        thumbWidth: display.size.width,
-        thumbHeight: display.size.height,
-        displayOriginX: display.bounds.x,
-        displayOriginY: display.bounds.y,
-        windowX,
-        windowY,
-        windowW,
-        windowH,
-        scaleX: 1,
-        scaleY: 1,
-        cropW: windowW,
-        cropH: windowH,
-      };
-      console.warn(
-        '[capture] locked',
-        JSON.stringify({
-          window: { x: windowX, y: windowY, w: windowW, h: windowH },
-          displayId: display.id,
-          displayBounds: display.bounds,
-          displaySize: display.size,
-        }),
-      );
-      return true;
+      lastFocusedPid = null;
+      geometry = null;
+      return false;
     },
 
     async isGameWindowFocused(): Promise<boolean> {
