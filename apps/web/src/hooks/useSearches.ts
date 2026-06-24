@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PurchaseMode, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { apiGet, apiSend } from '../lib/api';
+import { useDebouncedValue } from './useDebouncedValue';
 import { useEventStream } from './EventStreamProvider';
+
+/** Coalesce engine-status SSE bursts (GGG socket churn) into one refetch. */
+const REFETCH_DEBOUNCE_MS = 300;
 
 export interface AddSearchPayload {
   input: string;
@@ -23,6 +27,9 @@ export interface UpdateSearchPayload {
 /** Fetches the watched searches; refetches whenever SSE signals a change. */
 export function useSearches() {
   const { searchesVersion } = useEventStream();
+  // Debounce the SSE-driven refetch (engine-status bursts); user actions below
+  // call refresh() directly, so add/edit/remove stay immediate.
+  const debouncedVersion = useDebouncedValue(searchesVersion, REFETCH_DEBOUNCE_MS);
   const [searches, setSearches] = useState<SearchRuntimeInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
   // A refetch fires on every searches-changed/engine-status bump. Without
@@ -47,7 +54,7 @@ export function useSearches() {
 
   useEffect(() => {
     refresh();
-  }, [refresh, searchesVersion]);
+  }, [refresh, debouncedVersion]);
 
   const add = useCallback(
     async (payload: AddSearchPayload) => {

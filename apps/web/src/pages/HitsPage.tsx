@@ -7,6 +7,7 @@ import { PriceTag } from '../components/PriceTag';
 import { RarityName } from '../components/RarityName';
 import { Select } from '../components/Select';
 import { TextInput } from '../components/TextInput';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useSearches } from '../hooks/useSearches';
 import { useT } from '../i18n/i18n';
 import { apiGet } from '../lib/api';
@@ -44,7 +45,8 @@ export function HitsPage() {
   const t = useT();
   const { searches } = useSearches();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [debouncedText, setDebouncedText] = useState('');
+  // Debounce the free-text box so we don't refetch on every keystroke.
+  const debouncedText = useDebouncedValue(filters.text, SEARCH_DEBOUNCE_MS);
   const [hits, setHits] = useState<Hit[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -55,12 +57,6 @@ export function HitsPage() {
   // Next offset to fetch — a ref so loadPage reads the current value without
   // being recreated (and resetting itself) every time it changes.
   const offsetRef = useRef(0);
-
-  // Debounce the free-text box so we don't refetch on every keystroke.
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedText(filters.text), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [filters.text]);
 
   const { searchId, from, to, sort } = filters;
   const loadPage = useCallback(

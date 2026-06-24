@@ -10,8 +10,6 @@ import {
 import type {
   BuyAutomationEvent,
   DomainEvent,
-  EngineKind,
-  EngineStatus,
   Listing,
   NetworkLogEntry,
   TravelEvent,
@@ -24,11 +22,6 @@ import { isNotifyEnabled, showSystemNotification } from '../lib/notifications';
 const LIVE_HITS_CAP = 100;
 /** Dev network view keeps a deeper buffer than the hits feed. */
 const NETWORK_CAP = 1000;
-
-export interface EngineState {
-  engine: EngineKind;
-  status: EngineStatus;
-}
 
 export interface TravelState {
   phase: TravelEvent['phase'];
@@ -50,7 +43,6 @@ export interface EventStreamState {
   connected: boolean;
   /** Newest-first live hits (session-local, capped). */
   liveHits: Listing[];
-  engineStateBySearchId: Record<string, EngineState>;
   travelStateByListingId: Record<string, TravelState>;
   buyStateByListingId: Record<string, BuyState>;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
@@ -64,7 +56,6 @@ export interface EventStreamState {
 const INITIAL_STATE: EventStreamState = {
   connected: false,
   liveHits: [],
-  engineStateBySearchId: {},
   travelStateByListingId: {},
   buyStateByListingId: {},
   searchesVersion: 0,
@@ -96,15 +87,9 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
         liveHits: [event.listing, ...state.liveHits].slice(0, LIVE_HITS_CAP),
       };
     case 'engine-status':
-      return {
-        ...state,
-        engineStateBySearchId: {
-          ...state.engineStateBySearchId,
-          [event.searchId]: { engine: event.engine, status: event.status },
-        },
-        searchesVersion: state.searchesVersion + 1,
-      };
     case 'searches-changed':
+      // Live engine/status + add/remove/edit land on the rows via a (debounced)
+      // /api/searches refetch — see useSearches. Bump the version to trigger it.
       return { ...state, searchesVersion: state.searchesVersion + 1 };
     case 'travel':
       if (event.listingId === null) return state;
