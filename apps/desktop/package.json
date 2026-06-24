@@ -95,6 +95,8 @@
     "esbuild": "^0.28.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0"
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "better-sqlite3": "^12.10.0",
+    "uiohook-napi": "^1.5.5"
   }
 }

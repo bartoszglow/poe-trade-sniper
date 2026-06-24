@@ -1,31 +1,28 @@
 import type { DesktopPlatform } from '@poe-sniper/server';
+import { createElectronCaptureSource } from './capture-source.electron.js';
 import { createElectronPermissionProbe } from './permission-probe.electron.js';
+import { createNutInputController } from './input-controller.nut.js';
+import { createRawPixelTradeVision } from './trade-vision.adapter.js';
+import { createUiohookUserInputWatcher } from './user-input-watcher.uiohook.js';
 
 /**
  * Assembles the real desktop-platform aggregate the Electron shell injects into
  * the in-process server (preview/packaged) and reuses for the permission IPC.
- *
- * The Phase-2 capture / vision / input / watcher ports are inert here until P2.6
- * wires the native adapters (`desktopCapturer` / OpenCV-wasm / `nut.js` /
- * `uiohook-napi`). While inert, BuyAutomationService finds no window and no-ops.
+ * Native deps (nut.js / uiohook-napi / Electron `desktopCapturer`) live ONLY
+ * behind these adapters — the server depends solely on the port interfaces.
  */
 export function createDesktopPlatform(): DesktopPlatform {
+  const permissionProbe = createElectronPermissionProbe();
+  // Sanitized for the osascript focus call; the server validates the same var via Zod.
+  const gameProcessName = (process.env['GAME_FOCUS_PROCESS'] ?? 'wine').replace(
+    /[^A-Za-z0-9 ._-]/g,
+    '',
+  );
   return {
-    permissionProbe: createElectronPermissionProbe(),
-    captureSource: {
-      capture: () => Promise.resolve({ width: 0, height: 0, pixels: new Uint8Array(0) }),
-      focusGameWindow: () => Promise.resolve(false),
-      isGameWindowFocused: () => Promise.resolve(false),
-    },
-    tradeVision: {
-      detectTradeWindow: () => Promise.resolve(null),
-      locateItem: () => Promise.resolve(null),
-    },
-    inputController: {
-      moveHumanLike: () => Promise.resolve(),
-    },
-    userInputWatcher: {
-      onRealInput: () => () => {},
-    },
+    permissionProbe,
+    captureSource: createElectronCaptureSource(permissionProbe, gameProcessName),
+    tradeVision: createRawPixelTradeVision(),
+    inputController: createNutInputController(permissionProbe),
+    userInputWatcher: createUiohookUserInputWatcher(),
   };
 }

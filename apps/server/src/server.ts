@@ -14,7 +14,17 @@ export interface RunningServer {
 
 // Re-exported so the desktop shell (its only @poe-sniper/* dependency) can type
 // the platform adapters it injects, without depending on @poe-sniper/shared.
-export type { DesktopPlatform, PermissionProbe } from './platform/ports.js';
+export type {
+  DesktopPlatform,
+  PermissionProbe,
+  CaptureSource,
+  TradeVision,
+  InputController,
+  UserInputWatcher,
+  RawFrame,
+  WindowRegion,
+  Point,
+} from './platform/ports.js';
 export type { PermissionKind, PermissionState } from '@poe-sniper/shared';
 
 export interface StartServerOptions {
