@@ -2,12 +2,19 @@ import { ipcMain } from 'electron';
 import type { PermissionKind, PermissionProbe } from '@poe-sniper/server';
 
 /**
- * Validate the renderer-supplied kind (the only untrusted IPC payload). If a new
- * PermissionKind is added in shared, extend this guard too — kept narrow on
- * purpose so the main process never acts on an unknown string.
+ * Local kind allow-list. A *value* import of `PERMISSION_KINDS` from
+ * `@poe-sniper/server` would drag the workspace server into the packaged main
+ * (which loads the esbuild bundle, not the package) — so we keep a copy.
+ * `satisfies` makes a typo or a removed kind fail typecheck.
  */
+const KNOWN_KINDS = [
+  'screenRecording',
+  'accessibility',
+] as const satisfies readonly PermissionKind[];
+
+/** Validate the renderer-supplied kind (the only untrusted IPC payload). */
 function isPermissionKind(value: unknown): value is PermissionKind {
-  return value === 'screenRecording' || value === 'accessibility';
+  return (KNOWN_KINDS as readonly string[]).includes(value as string);
 }
 
 /**

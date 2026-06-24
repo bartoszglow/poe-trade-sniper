@@ -151,8 +151,10 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const networkViewEnabled = useNetworkViewEnabled();
-  // macOS permission controls are desktop-only and (decision #1=A) dev-gated by
-  // the network-view dev flag until the app ships signed.
+  // macOS permission controls are desktop-only. Decision #1=A defers signing;
+  // every current build is unsigned/dev, so we simply show on macOS desktop —
+  // a release-time gate + stable signing land with Phase 5 packaging. (Not
+  // coupled to the network-view flag: hiding the request log shouldn't hide this.)
   const isMacDesktop =
     window.systemInfo?.platform === 'darwin' &&
     document.documentElement.dataset['shell'] === 'desktop';

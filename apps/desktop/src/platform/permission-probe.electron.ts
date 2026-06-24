@@ -46,6 +46,8 @@ export function createElectronPermissionProbe(): PermissionProbe {
       }
       // Accessibility (no prompt on a pure read). The API is boolean-only, so a
       // non-trusted client reads as askable rather than hard-denied.
+      // TODO(verify): confirm denied-vs-not-determined on the target macOS and
+      // record in docs/integration/ (extends the no-guessing discipline to TCC).
       return systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'not-determined';
     },
 

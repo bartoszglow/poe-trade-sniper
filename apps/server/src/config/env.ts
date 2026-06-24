@@ -141,11 +141,6 @@ export const envSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9 ._-]+$/, 'letters, digits, space, . _ - only')
     .default('wine'),
-
-  // --- desktop: OS permission status (macOS TCC) ---
-  /** Cadence (ms) the UI polls /api/status for live permission state (so a
-   *  revocation in System Settings is detected and gates dependent actions). */
-  PERMISSIONS_POLL_MS: z.coerce.number().int().min(1_000).default(4_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -328,3 +328,17 @@ Each step: `pnpm verify` green before commit; explicit-path staging; verify `git
 ---
 
 Plan complete. The two S2 blockers are resolved in the design itself (deterministic pre-`listen` registration; signing as a hard precondition with dev-flag fallback), and the S3/S4 fixes (gate at the adapter boundary, `assertNever` SSE exhaustiveness, single `isGrant` predicate, corrected isolation rationale + CI import guard, fire-and-forget IPC with feature-detection, status-poll as the single permission-truth source, dumb `SearchRow`, tunable grace window, distinct Windows message) are all folded in — no known violations left in.
+
+---
+
+## 7. Phase-1 as-built deviations (post-implementation review, 2026-06-24)
+
+Adversarial review of the shipped Phase-1 diff (`b65165d`, `54b4474`, `1ceb746`) returned **fix-then-ship, no S1/S2**. Resolved deviations from §1–§6 above:
+
+- **`PERMISSIONS_POLL_MS` dropped.** The separate 4 s cadence was dead config (no consumer); permission status rides the **existing 10 s `/api/status` poll** (`useServerStatus`). Decision #10 amended: the _truth_ is server-owned over HTTP (status carries `permissions`+`capabilities`); the _cadence_ is the one existing client poll (10 s). Acceptable — Phase 1 has no gated action, and the Phase-2 gate re-checks live at action time, so revocation never rides the poll for enforcement.
+- **`isPermissionKind` keeps a local `KNOWN_KINDS … satisfies readonly PermissionKind[]`** rather than importing the runtime `PERMISSION_KINDS`. The review's suggested value-import would pull `@poe-sniper/server` into the **packaged main** (which loads the esbuild bundle, not the package) — it would break packaging. `satisfies` gives typo/removed-kind safety without the runtime dep.
+- **Permission card gate simplified to `isMacDesktop`** (removed the `networkViewEnabled` coupling — hiding the request log shouldn't hide the card). Every current build is unsigned/dev, so "show on macOS desktop" == decision #1=A's intent for now; a real release gate + stable signing land in **Phase 5**.
+- **Accessibility probe** `denied → not-determined` collapse marked `TODO(verify)` (boolean-only API; gating is unaffected since `isGrant` is false either way).
+- **Windows "not required" line NOT implemented** — the card renders nothing off macOS-desktop (matches step 1.8). §3.5's `settings.permissions.notRequired` wording is **superseded**; Windows is not a Phase-1 target.
+
+Deliberately deferred (S4, safe): IPC `senderFrame`-origin assertion (non-exploitable — `will-navigate` pinned, sandbox+contextIsolation on, both acts benign); visible-label click target (SR-correct via `aria-label`); permission-row `flex-wrap` (bounded by `minWidth: 900`).
