@@ -14,7 +14,7 @@
     "abi:electron": "node scripts/sqlite-abi.mjs electron",
     "abi:node": "node scripts/sqlite-abi.mjs node",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests yet: thin shell\""
+    "test": "vitest run"
   },
   "build": {
     "appId": "best.bartosz.poe-trade-sniper",
@@ -92,7 +92,8 @@
     "@types/node": "^25.9.2",
     "electron": "^41.7.2",
     "electron-builder": "^26.15.2",
-    "esbuild": "^0.28.0"
+    "esbuild": "^0.28.0",
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
