@@ -1,7 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow, nativeImage, shell } from 'electron';
-import type { RunningServer } from '@poe-sniper/server';
+import type { DesktopPlatform, RunningServer, StartServerOptions } from '@poe-sniper/server';
+import { createDesktopPlatform } from './platform/build-desktop-platform.js';
+import { registerPermissionsIpc } from './ipc/permissions.ipc.js';
 
 /**
  * Desktop shell (preliminary, D-4: one server, two shells): boots the NestJS
@@ -40,8 +42,11 @@ function configureEnvironment(): void {
   }
 }
 
-async function bootServer(): Promise<RunningServer> {
+async function bootServer(platform: DesktopPlatform): Promise<RunningServer> {
   configureEnvironment();
+  // Inject the real desktop adapters (permissions now; capture/input in Phase 2)
+  // BEFORE the server boots, so DI holds them from the first request.
+  const options: StartServerOptions = { platformFactory: () => platform };
   // Import AFTER the environment is set — the server reads it at module load.
   // Packaged: the esbuild CJS bundle; dev: the workspace package.
   if (app.isPackaged) {
@@ -49,12 +54,12 @@ async function bootServer(): Promise<RunningServer> {
     const requireCjs = createRequire(import.meta.url);
     // dist/main.js → ../bundle/server.cjs at the asar root.
     const bundled = requireCjs('../bundle/server.cjs') as {
-      startServer: () => Promise<RunningServer>;
+      startServer: (options?: StartServerOptions) => Promise<RunningServer>;
     };
-    return bundled.startServer();
+    return bundled.startServer(options);
   }
   const { startServer } = await import('@poe-sniper/server');
-  return startServer();
+  return startServer(options);
 }
 
 /**
@@ -114,8 +119,14 @@ if (!singleInstance) {
     .whenReady()
     .then(async () => {
       applyDockIcon();
+      // The permission probe lives in the Electron main; build it once and (a)
+      // wire the request/open-pane IPC (works in dev AND packaged) and (b) inject
+      // it into the in-process server when we boot one (preview/packaged). In dev
+      // the window points at the standalone server, which keeps the no-op probe.
+      const platform = createDesktopPlatform();
+      registerPermissionsIpc(platform.permissionProbe);
       if (!devUrl) {
-        runningServer = await bootServer();
+        runningServer = await bootServer(platform);
         windowUrl = `http://localhost:${runningServer.port}`;
       }
       createWindow(windowUrl);
