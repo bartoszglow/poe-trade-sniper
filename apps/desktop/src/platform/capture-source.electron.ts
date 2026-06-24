@@ -1,11 +1,113 @@
 import { execFile } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { desktopCapturer, screen } from 'electron';
+import { desktopCapturer, nativeImage, screen } from 'electron';
 import type { CaptureSource, PermissionProbe, Point, RawFrame } from '@poe-sniper/server';
 import { requireGrant } from './require-grant.js';
 
 const execFileAsync = promisify(execFile);
 const EMPTY_FRAME: RawFrame = { width: 0, height: 0, pixels: new Uint8Array(0) };
+
+/** DEV ONLY: when set, capture() writes the first frames of each buy as PNGs here
+ *  (full display + cropped window) + logs pixel stats, so the actual capture can
+ *  be inspected (is it black? right crop? what colour is the selection frame?). */
+const DEBUG_DUMP_DIR = process.env['BUY_DEBUG_DUMP_DIR'] ?? null;
+const DEBUG_DUMP_FRAMES = 8;
+let dumpSeq = 0;
+
+/** Strided pixel stats for a BGRA frame — non-black coverage, mean luma, and a
+ *  rough violet count — to tell black-vs-content + violet presence numerically. */
+function frameStats(frame: RawFrame): { nonBlackPct: number; violet: number; meanLuma: number } {
+  const { width, height, pixels } = frame;
+  if (width === 0 || height === 0) return { nonBlackPct: 0, violet: 0, meanLuma: 0 };
+  let nonBlack = 0;
+  let violet = 0;
+  let lumaSum = 0;
+  let samples = 0;
+  for (let y = 0; y < height; y += 4) {
+    for (let x = 0; x < width; x += 4) {
+      const index = (y * width + x) * 4;
+      const blue = pixels[index] ?? 0;
+      const green = pixels[index + 1] ?? 0;
+      const red = pixels[index + 2] ?? 0;
+      samples += 1;
+      lumaSum += (red + green + blue) / 3;
+      if (red + green + blue > 72) nonBlack += 1;
+      if (red > 120 && blue > 120 && green < 90 && Math.abs(red - blue) < 80) violet += 1;
+    }
+  }
+  return {
+    nonBlackPct: Math.round((nonBlack / samples) * 100),
+    violet,
+    meanLuma: Math.round(lumaSum / samples),
+  };
+}
+
+/** DEV: reveal the REAL selection-frame colour. Over candidate "purple" pixels
+ *  (red & blue both clearly above green), report count + average RGB + bbox, and
+ *  build a black/white mask frame (white = candidate) to dump as a PNG so the
+ *  matched shape is visible. Looser than `isViolet` on purpose — it's the probe. */
+function analyzePurple(frame: RawFrame): {
+  count: number;
+  avg: { r: number; g: number; b: number };
+  bbox: { x: number; y: number; width: number; height: number } | null;
+  mask: RawFrame;
+} {
+  const { width, height, pixels } = frame;
+  const mask = new Uint8Array(width * height * 4);
+  let count = 0;
+  let sumR = 0;
+  let sumG = 0;
+  let sumB = 0;
+  let minX = width;
+  let minY = height;
+  let maxX = 0;
+  let maxY = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const blue = pixels[index] ?? 0;
+      const green = pixels[index + 1] ?? 0;
+      const red = pixels[index + 2] ?? 0;
+      const isCandidate = red > 90 && blue > 90 && green < red - 15 && green < blue - 15;
+      mask[index + 3] = 255; // opaque
+      if (isCandidate) {
+        count += 1;
+        sumR += red;
+        sumG += green;
+        sumB += blue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        mask[index] = 255;
+        mask[index + 1] = 255;
+        mask[index + 2] = 255;
+      }
+    }
+  }
+  return {
+    count,
+    avg: count
+      ? { r: Math.round(sumR / count), g: Math.round(sumG / count), b: Math.round(sumB / count) }
+      : { r: 0, g: 0, b: 0 },
+    bbox: count ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null,
+    mask: { width, height, pixels: mask },
+  };
+}
+
+function dumpPng(label: string, frame: RawFrame): void {
+  if (!DEBUG_DUMP_DIR || frame.width === 0 || frame.height === 0) return;
+  try {
+    const png = nativeImage
+      .createFromBitmap(Buffer.from(frame.pixels), { width: frame.width, height: frame.height })
+      .toPNG();
+    writeFileSync(join(DEBUG_DUMP_DIR, `${label}.png`), png);
+  } catch (error) {
+    console.warn('[capture] dump failed:', error instanceof Error ? error.message : error);
+  }
+}
 /** Generous — the script includes an in-script settle delay; still bounded so a
  *  wedged System Events / Automation prompt never hangs the buy run. */
 const OSASCRIPT_TIMEOUT_MS = 10_000;
@@ -118,10 +220,33 @@ export function createElectronCaptureSource(
         height: size.height,
         pixels: source.thumbnail.toBitmap(),
       };
-      return cropFrame(full, cropX, cropY, geo.cropW, geo.cropH);
+      const cropped = cropFrame(full, cropX, cropY, geo.cropW, geo.cropH);
+      if (DEBUG_DUMP_DIR && dumpSeq < DEBUG_DUMP_FRAMES) {
+        dumpPng(`cap-full-${dumpSeq}`, full);
+        dumpPng(`cap-crop-${dumpSeq}`, cropped);
+        const purple = analyzePurple(cropped);
+        dumpPng(`cap-mask-${dumpSeq}`, purple.mask);
+        console.warn(
+          '[capture] dump',
+          JSON.stringify({
+            seq: dumpSeq,
+            crop: {
+              x: Math.round(cropX),
+              y: Math.round(cropY),
+              w: cropped.width,
+              h: cropped.height,
+            },
+            cropStats: frameStats(cropped),
+            purple: { count: purple.count, avg: purple.avg, bbox: purple.bbox },
+          }),
+        );
+        dumpSeq += 1;
+      }
+      return cropped;
     },
 
     async focusGameWindow(): Promise<boolean> {
+      dumpSeq = 0; // fresh debug frames per buy (DEBUG_DUMP_DIR only)
       let stdout: string;
       try {
         ({ stdout } = await execFileAsync(

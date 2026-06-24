@@ -19,6 +19,7 @@ import type {
   CaptureSource,
   InputController,
   Point,
+  RawFrame,
   TradeVision,
   UserInputWatcher,
   WindowRegion,
@@ -264,18 +265,27 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     return false;
   }
 
-  private async detectTradeWindow(signal: AbortSignal): Promise<WindowRegion | null> {
-    // Give-up timer for "no trade window yet" — a NORMAL outcome (clean null),
-    // distinct from the run-level abort that `untilAbort` turns into a throw.
+  /**
+   * Capture frames until `analyze` returns non-null or the give-up timeout fires
+   * (a NORMAL clean-null outcome, distinct from the run-level abort that
+   * `untilAbort` turns into a throw). Shared by detection AND the verify-locate,
+   * so neither is fooled by the selection frame's PULSE — a single dim frame no
+   * longer reads as "no window" / "item vanished".
+   */
+  private async captureUntil<T>(
+    signal: AbortSignal,
+    timeoutMs: number,
+    analyze: (frame: RawFrame) => Promise<T | null>,
+  ): Promise<T | null> {
     let timedOut = false;
     const giveUp = setTimeout(() => {
       timedOut = true;
-    }, this.config.BUY_CAPTURE_TIMEOUT_MS);
+    }, timeoutMs);
     try {
       while (!signal.aborted && !timedOut) {
         const frame = await untilAbort(this.capture.capture(), signal);
-        const region = await this.vision.detectTradeWindow(frame);
-        if (region) return region;
+        const result = await analyze(frame);
+        if (result) return result;
         try {
           await delay(this.config.BUY_CAPTURE_POLL_MS, signal);
         } catch {
@@ -288,13 +298,22 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     }
   }
 
-  private async locate(
+  private detectTradeWindow(signal: AbortSignal): Promise<WindowRegion | null> {
+    return this.captureUntil(signal, this.config.BUY_CAPTURE_TIMEOUT_MS, (frame) =>
+      this.vision.detectTradeWindow(frame),
+    );
+  }
+
+  private locate(
     region: WindowRegion,
     itemName: string | null,
     signal: AbortSignal,
   ): Promise<Point | null> {
-    const frame = await untilAbort(this.capture.capture(), signal);
-    return this.vision.locateItem(frame, region, itemName);
+    // Retry across frames (not single-shot): the frame PULSES, so a lone dim
+    // verify frame must not be mistaken for the item vanishing.
+    return this.captureUntil(signal, this.config.BUY_CAPTURE_TIMEOUT_MS, (frame) =>
+      this.vision.locateItem(frame, region, itemName),
+    );
   }
 
   private emitAbortOutcome(
