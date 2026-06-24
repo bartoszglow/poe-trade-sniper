@@ -13,14 +13,16 @@ import { createUiohookUserInputWatcher } from './user-input-watcher.uiohook.js';
  */
 export function createDesktopPlatform(): DesktopPlatform {
   const permissionProbe = createElectronPermissionProbe();
-  // Sanitized for the osascript focus call; the server validates the same var via Zod.
-  const gameProcessName = (process.env['GAME_FOCUS_PROCESS'] ?? 'wine').replace(
+  // The game WINDOW TITLE (not process name): under Wine the process is just
+  // "wine" and there are two of them, so we focus by window title. Sanitized for
+  // the osascript call; the server validates the same var via Zod.
+  const gameWindowTitle = (process.env['GAME_WINDOW_TITLE'] ?? 'Path of Exile 2').replace(
     /[^A-Za-z0-9 ._-]/g,
     '',
   );
   return {
     permissionProbe,
-    captureSource: createElectronCaptureSource(permissionProbe, gameProcessName),
+    captureSource: createElectronCaptureSource(permissionProbe, gameWindowTitle),
     tradeVision: createRawPixelTradeVision(),
     inputController: createNutInputController(permissionProbe),
     userInputWatcher: createUiohookUserInputWatcher(),

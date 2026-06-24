@@ -10,19 +10,56 @@ const EMPTY_FRAME: RawFrame = { width: 0, height: 0, pixels: new Uint8Array(0) }
 const OSASCRIPT_TIMEOUT_MS = 5_000;
 
 /**
+ * AppleScript: focus the foreground process owning a window whose title contains
+ * `title`; prints "ok" on success, "not-found" otherwise. Matches the WINDOW,
+ * not the process — under Wine the process is just "wine" and there are two
+ * (Steam + the game), so a name match focuses the wrong one. `title` is
+ * pre-sanitized to `[A-Za-z0-9 ._-]`, so inlining it can't break the string.
+ */
+function focusByTitleScript(title: string): string {
+  return [
+    'tell application "System Events"',
+    '  repeat with proc in (every process whose background only is false)',
+    '    repeat with win in (windows of proc)',
+    `      if (name of win) contains "${title}" then`,
+    '        set frontmost of proc to true',
+    '        return "ok"',
+    '      end if',
+    '    end repeat',
+    '  end repeat',
+    '  return "not-found"',
+    'end tell',
+  ].join('\n');
+}
+
+/** AppleScript: "true" if the frontmost process owns a window matching `title`. */
+function frontmostHasTitleScript(title: string): string {
+  return [
+    'tell application "System Events"',
+    '  set frontProc to first process whose frontmost is true',
+    '  repeat with win in (windows of frontProc)',
+    `    if (name of win) contains "${title}" then return "true"`,
+    '  end repeat',
+    '  return "false"',
+    'end tell',
+  ].join('\n');
+}
+
+/**
  * Captures the primary screen via Electron `desktopCapturer` at LOGICAL
  * resolution (thumbnail = display size), so a frame pixel maps 1:1 to a screen
  * logical point — no HiDPI math downstream (resolves O-8 by construction).
- * Self-gates Screen Recording (decision #3). Focus uses `osascript` because the
- * game runs under Wine (a separate process); `gameProcessName` is pre-sanitized
- * by the caller to `[A-Za-z0-9 ._-]`.
+ * Self-gates Screen Recording (decision #3). Focus matches the game's WINDOW
+ * TITLE via `osascript` (under Wine the process is just "wine", and there are
+ * two of them — Steam + the game — so a process-name match focuses the wrong
+ * one); `gameWindowTitle` is pre-sanitized by the caller to `[A-Za-z0-9 ._-]`.
  *
  * TODO(verify): toBitmap byte order (BGRA on macOS) + focus reliability under
  * Wine, against recorded fixtures on the dev Mac.
  */
 export function createElectronCaptureSource(
   probe: PermissionProbe,
-  gameProcessName: string,
+  gameWindowTitle: string,
 ): CaptureSource {
   return {
     async capture(): Promise<RawFrame> {
@@ -43,15 +80,12 @@ export function createElectronCaptureSource(
 
     async focusGameWindow(): Promise<boolean> {
       try {
-        await execFileAsync(
+        const { stdout } = await execFileAsync(
           'osascript',
-          [
-            '-e',
-            `tell application "System Events" to set frontmost of (first process whose name contains "${gameProcessName}") to true`,
-          ],
+          ['-e', focusByTitleScript(gameWindowTitle)],
           { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
         );
-        return true;
+        return stdout.trim() === 'ok';
       } catch {
         return false;
       }
@@ -61,13 +95,10 @@ export function createElectronCaptureSource(
       try {
         const { stdout } = await execFileAsync(
           'osascript',
-          [
-            '-e',
-            'tell application "System Events" to get name of first process whose frontmost is true',
-          ],
+          ['-e', frontmostHasTitleScript(gameWindowTitle)],
           { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
         );
-        return stdout.toLowerCase().includes(gameProcessName.toLowerCase());
+        return stdout.trim() === 'true';
       } catch {
         return false;
       }

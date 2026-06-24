@@ -21,11 +21,23 @@ export class GameFocusService {
   focus(): void {
     if (!this.config.GAME_FOCUS_ON_TRAVEL) return;
     if (process.platform !== 'darwin') return;
-    // GAME_FOCUS_PROCESS is charset-validated in the config schema (no quotes),
-    // so inlining it into the AppleScript here cannot break out of the string.
-    const script =
-      `tell application "System Events" to set frontmost of ` +
-      `(first process whose name is "${this.config.GAME_FOCUS_PROCESS}" and background only is false) to true`;
+    // Match the WINDOW TITLE, not the process name: under Wine the game process
+    // is just "wine", and there are two of them (Steam + the game), so a
+    // name match focuses the wrong one. GAME_WINDOW_TITLE is charset-validated
+    // (no quotes), so inlining it into the AppleScript cannot break the string.
+    const title = this.config.GAME_WINDOW_TITLE;
+    const script = [
+      'tell application "System Events"',
+      '  repeat with proc in (every process whose background only is false)',
+      '    repeat with win in (windows of proc)',
+      `      if (name of win) contains "${title}" then`,
+      '        set frontmost of proc to true',
+      '        return',
+      '      end if',
+      '    end repeat',
+      '  end repeat',
+      'end tell',
+    ].join('\n');
     // Timeout + SIGKILL so a wedged System Events never leaks a zombie child (REL-4).
     execFile('osascript', ['-e', script], { timeout: 5_000, killSignal: 'SIGKILL' }, (error) => {
       if (error) {

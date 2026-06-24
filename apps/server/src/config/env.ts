@@ -136,11 +136,16 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
-  /** macOS process name to focus — PoE2 runs under a Wine wrapper ("wine"). */
-  GAME_FOCUS_PROCESS: z
+  /**
+   * macOS WINDOW TITLE of the game. PoE2 runs under Wine, where the process is
+   * just "wine" — and there are TWO such processes (Steam + the game), so
+   * matching by process name focuses the wrong one. We match the window title
+   * instead. Charset-validated (no quotes) so it can be inlined into AppleScript.
+   */
+  GAME_WINDOW_TITLE: z
     .string()
     .regex(/^[A-Za-z0-9 ._-]+$/, 'letters, digits, space, . _ - only')
-    .default('wine'),
+    .default('Path of Exile 2'),
 
   // --- buy automation (Phase 2; Electron-only, gated) — no magic numbers inline ---
   /** Capture-loop cadence while waiting for the trade window to appear. */
