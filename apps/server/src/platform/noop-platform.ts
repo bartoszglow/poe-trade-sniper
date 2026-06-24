@@ -19,6 +19,8 @@ const noopCaptureSource: CaptureSource = {
   capture: () => Promise.resolve({ width: 0, height: 0, pixels: new Uint8Array(0) }),
   focusGameWindow: () => Promise.resolve(false),
   isGameWindowFocused: () => Promise.resolve(false),
+  windowCenter: () => Promise.resolve(null),
+  frameToScreen: (point) => point,
 };
 
 const noopTradeVision: TradeVision = {

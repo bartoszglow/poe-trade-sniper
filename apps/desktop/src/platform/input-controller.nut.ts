@@ -13,7 +13,7 @@ function jitter(): number {
   return (Math.random() - 0.5) * 2; // ±1px wobble
 }
 function stepDelayMs(): number {
-  return 8 + Math.random() * 12; // 8–20ms per step
+  return 3 + Math.random() * 4; // 3–7ms per step (~3× faster than before, still eased)
 }
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

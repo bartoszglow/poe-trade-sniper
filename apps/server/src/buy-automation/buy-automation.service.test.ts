@@ -79,6 +79,8 @@ function createHarness(options: HarnessOptions = {}) {
     ),
     focusGameWindow: vi.fn(() => Promise.resolve(true)),
     isGameWindowFocused: vi.fn(() => Promise.resolve(options.focused ?? true)),
+    windowCenter: vi.fn(() => Promise.resolve(null)),
+    frameToScreen: vi.fn((point: Point) => point),
   } as unknown as CaptureSource;
 
   const region = options.region === undefined ? REGION : options.region;

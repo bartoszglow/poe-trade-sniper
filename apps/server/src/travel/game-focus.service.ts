@@ -39,11 +39,17 @@ export class GameFocusService {
       'end tell',
     ].join('\n');
     // Timeout + SIGKILL so a wedged System Events never leaks a zombie child (REL-4).
-    execFile('osascript', ['-e', script], { timeout: 5_000, killSignal: 'SIGKILL' }, (error) => {
-      if (error) {
-        // Game not running / renamed / Automation permission denied — never fatal.
-        this.logger.debug(`game focus skipped: ${error.message}`);
-      }
-    });
+    execFile(
+      'osascript',
+      ['-e', script],
+      { timeout: 5_000, killSignal: 'SIGKILL' },
+      (error, _stdout, stderr) => {
+        if (error) {
+          // Surface the osascript STDERR (the real TCC reason, e.g. -1743), not
+          // just the command echo — never fatal, but logged so it's diagnosable.
+          this.logger.warn(`game focus skipped: ${stderr?.trim() || error.message}`);
+        }
+      },
+    );
   }
 }

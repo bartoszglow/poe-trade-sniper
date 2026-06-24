@@ -201,6 +201,11 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
         this.emit('failed', searchId, listingId, itemName, 'focus-failed');
         return;
       }
+      // Park the cursor in the CENTRE of the game window — it may have been on
+      // another monitor or outside the window, and the move eases from wherever
+      // the cursor currently sits, so we anchor it inside the game first.
+      const center = await untilAbort(this.capture.windowCenter(), controller.signal);
+      if (center) await this.input.moveHumanLike(center, controller.signal);
 
       // Capture loop until the trade window is detected (or give-up / abort).
       const region = await this.detectTradeWindow(controller.signal);
@@ -226,8 +231,10 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
         return;
       }
 
-      // Human-like MOVE — no click (decision #8). Aborts on real user input.
-      await this.input.moveHumanLike(confirmed, controller.signal);
+      // Map the violet-cluster point (frame pixels) to a real screen point, then
+      // human-like MOVE — no click (decision #8). Aborts on real user input.
+      const target = this.capture.frameToScreen(confirmed);
+      await this.input.moveHumanLike(target, controller.signal);
       if (controller.signal.aborted) {
         this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
         return;

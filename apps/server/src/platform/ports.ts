@@ -51,6 +51,20 @@ export interface CaptureSource {
   focusGameWindow(): Promise<boolean>;
   /** Verify focus actually landed (Wine `activate` can silently no-op). */
   isGameWindowFocused(): Promise<boolean>;
+  /**
+   * The game window's CENTRE in global screen points (multi-monitor aware), so
+   * the orchestrator can park the cursor inside the game right after focus —
+   * before any capture — instead of assuming it already starts there. `null`
+   * when the window can't be located.
+   */
+  windowCenter(): Promise<Point | null>;
+  /**
+   * Map a point in the LAST captured frame's pixel space to a global screen
+   * point — applying the captured display's origin + the frame→logical scale
+   * (HiDPI). This is the one capture↔screen mapping; the orchestrator moves to
+   * the result. Identity until the first `capture()`.
+   */
+  frameToScreen(point: Point): Point;
 }
 
 /**
