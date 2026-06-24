@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/preload.cjs','dist/preload.cjs')\"",
     "bundle:server": "esbuild ../server/src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=bundle/server.cjs --external:better-sqlite3 --external:@nestjs/microservices --external:@nestjs/websockets/socket-module --external:@nestjs/platform-socket.io --external:class-validator --external:class-transformer --external:class-transformer/storage --external:@fastify/static",
     "dev": "pnpm build && SNIPER_DEV_URL=http://localhost:5180 electron .",
+    "dev:desktop:run": "pnpm build && PORT=3500 SNIPER_DEV_URL=http://localhost:5180 SNIPER_DEV_INPROCESS=1 electron .",
     "preview": "pnpm build && pnpm abi:electron && electron .",
     "dist": "pnpm abi:electron && pnpm -r build && pnpm bundle:server && electron-builder --mac --arm64 && pnpm abi:node",
     "dist:ci": "pnpm abi:electron && pnpm -r build && pnpm bundle:server && electron-builder --publish always",

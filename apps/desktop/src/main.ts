@@ -36,8 +36,9 @@ function configureEnvironment(): void {
     process.env['STATIC_DIR'] ??= join(process.resourcesPath, 'web');
     process.env['MIGRATIONS_DIR'] ??= join(process.resourcesPath, 'migrations');
     process.env['LOGIN_PROFILE_DIR'] ??= app.getPath('userData');
-  } else {
-    // Unpackaged dev run: the web build sits next to this workspace package.
+  } else if (!devUrl) {
+    // Unpackaged `electron .` (preview) serves the built web. Dev / dev:desktop
+    // use Vite for the UI, so leave STATIC_DIR unset → API-only in-process server.
     process.env['STATIC_DIR'] ??= join(import.meta.dirname, '../../web/dist');
   }
 }
@@ -110,8 +111,20 @@ function createWindow(url: string): BrowserWindow {
       navigationEvent.preventDefault(); // unparseable target → block
     }
   });
-  void window.loadURL(url);
+  loadWindowUrl(window, url);
   return window;
+}
+
+/**
+ * Load with retry — in `pnpm dev:desktop` the window and Vite start in parallel,
+ * so the dev server may not be listening on the first attempt; retry until it is.
+ */
+function loadWindowUrl(window: BrowserWindow, url: string, attemptsLeft = 30): void {
+  window.loadURL(url).catch(() => {
+    if (attemptsLeft > 0 && !window.isDestroyed()) {
+      setTimeout(() => loadWindowUrl(window, url, attemptsLeft - 1), 500);
+    }
+  });
 }
 
 /**
@@ -154,11 +167,17 @@ if (!singleInstance) {
       // the window points at the standalone server, which keeps the no-op probe.
       const platform = createDesktopPlatform();
       registerPermissionsIpc(platform.permissionProbe);
-      if (devUrl) {
-        // Dev: feed the standalone server real macOS status (dev↔prod parity).
-        startDevPermissionPush(platform, devUrl);
-      } else {
+      // Boot the in-process server when packaged OR in dev:desktop (real adapters,
+      // identical to prod). Plain dev uses the standalone server + a status push.
+      const inProcessServer = !devUrl || process.env['SNIPER_DEV_INPROCESS'] === '1';
+      if (inProcessServer) {
         runningServer = await bootServer(platform);
+      }
+      if (devUrl) {
+        // Window stays on Vite (HMR). dev:desktop already has the real in-process
+        // probe; plain dev pushes real status to the standalone server for parity.
+        if (!inProcessServer) startDevPermissionPush(platform, devUrl);
+      } else if (runningServer) {
         windowUrl = `http://localhost:${runningServer.port}`;
       }
       createWindow(windowUrl);

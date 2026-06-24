@@ -10,6 +10,8 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @poe-sniper/server --filter @poe-sniper/web dev",
+    "dev:desktop": "pnpm --filter @poe-sniper/shared --filter @poe-sniper/server build && pnpm --filter @poe-sniper/desktop abi:electron && pnpm --parallel --filter @poe-sniper/web --filter @poe-sniper/desktop dev:desktop:run",
+    "abi:node": "pnpm --filter @poe-sniper/desktop abi:node",
     "build": "pnpm -r build",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
