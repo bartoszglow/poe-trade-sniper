@@ -27,6 +27,7 @@ const addSearchSchema = z.object({
   label: z.string().min(1).max(80).optional(),
   league: z.string().min(1).optional(),
   autoTravel: z.boolean().optional(),
+  autoBuy: z.boolean().optional(),
   purchaseMode: purchaseModeSchema.nullable().optional(),
 });
 
@@ -34,6 +35,7 @@ const updateSearchSchema = z
   .object({
     label: z.string().min(1).max(80).optional(),
     autoTravel: z.boolean().optional(),
+    autoBuy: z.boolean().optional(),
     purchaseMode: purchaseModeSchema.nullable().optional(),
     enabled: z.boolean().optional(),
   })
@@ -41,6 +43,7 @@ const updateSearchSchema = z
     (body) =>
       body.label !== undefined ||
       body.autoTravel !== undefined ||
+      body.autoBuy !== undefined ||
       body.purchaseMode !== undefined ||
       body.enabled !== undefined,
     { message: 'nothing to update' },
@@ -102,6 +105,7 @@ export class SearchesController {
       label: payload.label,
       league: payload.league,
       autoTravel: payload.autoTravel,
+      autoBuy: payload.autoBuy,
       purchaseMode: (payload.purchaseMode ?? null) as SearchRuntimeInfo['purchaseMode'],
     });
   }
@@ -119,6 +123,7 @@ export class SearchesController {
     return this.searchManager.update(searchId, {
       label: payload.label,
       autoTravel: payload.autoTravel,
+      autoBuy: payload.autoBuy,
       purchaseMode: payload.purchaseMode as SearchRuntimeInfo['purchaseMode'],
       enabled: payload.enabled,
     });

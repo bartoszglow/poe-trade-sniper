@@ -259,6 +259,9 @@ export const EN = {
   'notify.enabled': 'System notifications enabled',
   'notify.testBody': 'Test alert — this is how a hit looks',
   'notify.hitTitle': 'Hit: {item}',
+  'notify.buyMoved': 'Buy ready — cursor on {item}',
+  'notify.buyMovedBody': 'Review and confirm the purchase yourself (no auto-click).',
+  'notify.buyFailed': 'Buy failed — {item}',
 } as const;
 
 export type MessageKey = keyof typeof EN;
@@ -513,6 +516,9 @@ export const PL: Record<MessageKey, string> = {
   'notify.enabled': 'Powiadomienia systemowe włączone',
   'notify.testBody': 'Alert testowy — tak wygląda trafienie',
   'notify.hitTitle': 'Trafienie: {item}',
+  'notify.buyMoved': 'Zakup gotowy — kursor na {item}',
+  'notify.buyMovedBody': 'Sprawdź i potwierdź zakup samodzielnie (bez auto-kliknięcia).',
+  'notify.buyFailed': 'Zakup nieudany — {item}',
 };
 
 // --- Pluralised phrases (Intl.PluralRules categories) ---

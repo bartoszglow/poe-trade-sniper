@@ -10,6 +10,7 @@ export type DomainEvent =
   | SearchesChangedEvent
   | EngineStatusEvent
   | TravelEvent
+  | BuyAutomationEvent
   | GuardEvent
   | LogEvent
   | NetworkEvent;
@@ -47,6 +48,29 @@ export interface TravelEvent {
   type: 'travel';
   phase: 'queued' | 'started' | 'success' | 'failed';
   source: 'manual' | 'auto';
+  searchId: string | null;
+  listingId: string | null;
+  itemName: string | null;
+  detail: string | null;
+  at: string;
+}
+
+/**
+ * Lifecycle of one Buy automation run (Phase 2, Electron-only). Fires async off
+ * a successful AUTO travel; ends at a human-like mouse MOVE (`moved`) — there is
+ * no click yet. `unsupported` is emitted when the platform/capability can't run
+ * it. The UI renders terminal phases as toasts/row status.
+ */
+export interface BuyAutomationEvent {
+  type: 'buy';
+  phase:
+    | 'started'
+    | 'window-found'
+    | 'item-located'
+    | 'moved'
+    | 'aborted'
+    | 'failed'
+    | 'unsupported';
   searchId: string | null;
   listingId: string | null;
   itemName: string | null;

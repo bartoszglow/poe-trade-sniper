@@ -8,12 +8,14 @@ export interface AddSearchPayload {
   label?: string;
   league?: string;
   autoTravel?: boolean;
+  autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
 }
 
 export interface UpdateSearchPayload {
   label?: string;
   autoTravel?: boolean;
+  autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
   enabled?: boolean;
 }

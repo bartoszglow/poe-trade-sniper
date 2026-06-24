@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type {
+  BuyAutomationEvent,
   DomainEvent,
   EngineKind,
   EngineStatus,
@@ -34,6 +35,11 @@ export interface TravelState {
   detail: string | null;
 }
 
+export interface BuyState {
+  phase: BuyAutomationEvent['phase'];
+  detail: string | null;
+}
+
 export interface GuardState {
   tripped: boolean;
   reason: string | null;
@@ -46,6 +52,7 @@ export interface EventStreamState {
   liveHits: Listing[];
   engineStateBySearchId: Record<string, EngineState>;
   travelStateByListingId: Record<string, TravelState>;
+  buyStateByListingId: Record<string, BuyState>;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
   searchesVersion: number;
   /** Live guard state; null until the first guard event (poll fills the gap). */
@@ -59,6 +66,7 @@ const INITIAL_STATE: EventStreamState = {
   liveHits: [],
   engineStateBySearchId: {},
   travelStateByListingId: {},
+  buyStateByListingId: {},
   searchesVersion: 0,
   guard: null,
   networkEvents: [],
@@ -73,6 +81,12 @@ const EventStreamContext = createContext<EventStreamContextValue>({
   ...INITIAL_STATE,
   clearLiveHits: () => {},
 });
+
+/** Compile-time exhaustiveness guard — a new DomainEvent member fails typecheck
+ *  here until its `case` is added (the OCP claim becomes a real invariant). */
+function assertNever(event: never): never {
+  throw new Error(`unhandled domain event: ${JSON.stringify(event)}`);
+}
 
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
@@ -101,6 +115,15 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
           [event.listingId]: { phase: event.phase, detail: event.detail },
         },
       };
+    case 'buy':
+      if (event.listingId === null) return state;
+      return {
+        ...state,
+        buyStateByListingId: {
+          ...state.buyStateByListingId,
+          [event.listingId]: { phase: event.phase, detail: event.detail },
+        },
+      };
     case 'guard':
       return {
         ...state,
@@ -114,6 +137,8 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
       };
     case 'log':
       return state;
+    default:
+      return assertNever(event);
   }
 }
 
@@ -145,6 +170,18 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
             translateStatic('notify.hitTitle', { item: listing.itemName }),
             `${price} · ${listing.seller ?? '?'}`,
           );
+        }
+      }
+      if (event.type === 'buy' && isNotifyEnabled()) {
+        // translateStatic: this callback lives outside the React tree.
+        const item = event.itemName ?? '?';
+        if (event.phase === 'moved') {
+          showSystemNotification(
+            translateStatic('notify.buyMoved', { item }),
+            translateStatic('notify.buyMovedBody'),
+          );
+        } else if (event.phase === 'failed' || event.phase === 'aborted') {
+          showSystemNotification(translateStatic('notify.buyFailed', { item }), event.detail ?? '');
         }
       }
       setState((previous) => reduceEvent(previous, event));
