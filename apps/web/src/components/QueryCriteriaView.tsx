@@ -76,7 +76,7 @@ export function QueryCriteriaView({ query }: { query: unknown }) {
     : null;
 
   return (
-    <div className="grid grid-cols-1 gap-x-2 gap-y-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-x-2 gap-y-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {criteria.itemRows.length > 0 && (
         <DetailCard title={t('criteria.item')}>
           <RowItems rows={criteria.itemRows} disabledTag={disabledTag} />

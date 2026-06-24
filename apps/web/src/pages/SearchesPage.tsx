@@ -393,7 +393,7 @@ function SearchRow({
       )}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
       {criteriaOpen && (
-        <div className="mt-2 border-t border-edge pt-2">
+        <div className="mt-2 border-t border-edge pt-5">
           <QueryCriteriaView query={search.filters} />
         </div>
       )}
