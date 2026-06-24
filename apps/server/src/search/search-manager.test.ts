@@ -129,22 +129,23 @@ describe('SearchManager', () => {
     }
   });
 
-  it('rejects auto-buy without auto-travel, and without the control permission (decision #2=B)', async () => {
-    const needsTravel = createManager();
+  it('allows auto-buy without auto-travel (D-19) but refuses it without control permission (#2=B)', async () => {
+    // Buy is independent of auto-travel — only the macOS control permission gates it.
+    const independent = createManager();
     try {
-      await expect(needsTravel.manager.add('AbCdEf123', { autoBuy: true })).rejects.toThrowError(
-        /auto-travel/,
-      );
+      const info = await independent.manager.add('AbCdEf123', { autoBuy: true });
+      expect(info.autoBuy).toBe(true);
+      expect(info.autoTravel).toBe(false);
     } finally {
-      needsTravel.manager.onApplicationShutdown();
-      needsTravel.database.$client.close();
+      independent.manager.onApplicationShutdown();
+      independent.database.$client.close();
     }
 
     const noControl = createManager({ gate: DENY_GATE });
     try {
-      await expect(
-        noControl.manager.add('AbCdEf123', { autoTravel: true, autoBuy: true }),
-      ).rejects.toThrowError(/Screen Recording/);
+      await expect(noControl.manager.add('AbCdEf123', { autoBuy: true })).rejects.toThrowError(
+        /Screen Recording/,
+      );
     } finally {
       noControl.manager.onApplicationShutdown();
       noControl.database.$client.close();

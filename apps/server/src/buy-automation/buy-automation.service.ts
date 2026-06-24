@@ -49,8 +49,9 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 
 /**
  * Buy automation orchestrator (Phase 2, Electron-only). Subscribes to the
- * RealtimeBus and, on a SUCCESSFUL AUTO travel for an auto-buy search, runs the
- * pipeline: focus + verify → capture loop until the trade window is detected →
+ * RealtimeBus and, on a SUCCESSFUL travel (auto OR manual — independent of the
+ * auto-travel toggle, D-19) for an auto-buy search, runs the pipeline:
+ * focus + verify → capture loop until the trade window is detected →
  * locate the item → verify-then-act → human-like cursor MOVE (NO click,
  * decision #8). It touches only the game window (never the trade API) and never
  * blocks the sequential travel queue (it fires async, off the bus).
@@ -89,7 +90,10 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
 
   private maybeBuy(event: DomainEvent): void {
     if (event.type !== 'travel') return;
-    if (event.phase !== 'success' || event.source !== 'auto') return;
+    // Fires on ANY travel success — auto OR manual (D-19): Buy is independent of
+    // the auto-travel toggle, but still acts only once the character has arrived
+    // at the seller (a travel success), so there is no capture/teleport race.
+    if (event.phase !== 'success') return;
     if (event.searchId === null) return;
     if (!this.searchManager.isAutoBuyEnabled(event.searchId)) return;
     // Optimization: skip when the gate is closed. The adapters re-check at the

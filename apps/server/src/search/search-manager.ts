@@ -188,7 +188,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const autoTravel = options.autoTravel ?? false;
     this.assertAutoTravelAllowed(autoTravel, resolvedQuery, purchaseMode);
     const autoBuy = options.autoBuy ?? false;
-    this.assertAutoBuyAllowed(autoBuy, autoTravel);
+    this.assertAutoBuyAllowed(autoBuy);
 
     const row: ManagedSearch = {
       id: ref.searchId,
@@ -226,7 +226,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const autoTravel = options.autoTravel ?? watcher.row.autoTravel;
     this.assertAutoTravelAllowed(autoTravel, watcher.row.filters, purchaseMode);
     const autoBuy = options.autoBuy ?? watcher.row.autoBuy;
-    this.assertAutoBuyAllowed(autoBuy, autoTravel);
+    this.assertAutoBuyAllowed(autoBuy);
     const wasEnabled = watcher.row.enabled;
     const enabled = options.enabled ?? wasEnabled;
 
@@ -594,16 +594,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
-   * Buy automation is opt-in on top of auto-travel and (decision #2 = B) requires
-   * the macOS `control` permission. Rejected at the API boundary so a search can
-   * never persist an unsatisfiable intent; the desktop adapters re-check at the
-   * resource boundary too (the structural guarantee).
+   * Buy automation is independent of auto-travel (D-19) — only the macOS
+   * `control` permission gates it (decision #2 = B). It still triggers only on a
+   * travel `success` (auto OR manual), so it acts once the character is at the
+   * seller. Rejected at the API boundary so a search can never persist an
+   * unsatisfiable intent; the desktop adapters re-check at the resource boundary.
    */
-  private assertAutoBuyAllowed(autoBuy: boolean, autoTravel: boolean): void {
+  private assertAutoBuyAllowed(autoBuy: boolean): void {
     if (!autoBuy) return;
-    if (!autoTravel) {
-      throw new BadRequestException('auto-buy requires auto-travel to be enabled');
-    }
     if (!this.gate.canControl()) {
       throw new BadRequestException('grant Screen Recording + Accessibility to enable auto-buy');
     }

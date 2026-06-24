@@ -136,9 +136,19 @@ describe('BuyAutomationService', () => {
     }
   });
 
+  it('also fires on a successful MANUAL travel — Buy is independent of auto-travel (D-19)', async () => {
+    const harness = createHarness();
+    try {
+      harness.bus.publish(travelSuccess({ source: 'manual' }));
+      await waitFor(() => harness.phases().includes('moved'));
+      expect(harness.moveHumanLike).toHaveBeenCalledOnce();
+    } finally {
+      harness.service.onApplicationShutdown();
+    }
+  });
+
   it.each([
     ['phase not success', travelSuccess({ phase: 'started' })],
-    ['source manual', travelSuccess({ source: 'manual' })],
     ['null searchId', travelSuccess({ searchId: null })],
   ])('ignores travel events (%s)', async (_label, event) => {
     const harness = createHarness();

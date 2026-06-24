@@ -66,21 +66,18 @@ interface BuyControl {
 
 /**
  * Ordered resolver (first match wins) — composition over nested ternaries.
- * Decision #2=B: Buy needs macOS desktop + Travel + the control permission;
- * anything else yields a disabled toggle with an explanatory note.
+ * Decision #2=B: Buy needs macOS desktop + the control permission. It is
+ * INDEPENDENT of the Travel toggle (D-19) — it triggers on any travel success
+ * (auto or manual), so it needs no Travel opt-in here.
  */
 function resolveBuyControl(args: {
   isDesktop: boolean;
   isMac: boolean;
   canControl: boolean;
-  autoTravel: boolean;
   autoBuy: boolean;
 }): BuyControl {
   if (!args.isDesktop) return { enabled: false, checked: false, note: 'searches.buyWebOnly' };
   if (!args.isMac) return { enabled: false, checked: false, note: 'searches.buyUnsupportedOs' };
-  if (!args.autoTravel) {
-    return { enabled: false, checked: false, note: 'searches.buyRequiresTravel' };
-  }
   if (!args.canControl) {
     return { enabled: false, checked: false, note: 'searches.buyNeedsPermission' };
   }
@@ -521,7 +518,6 @@ export function SearchesPage() {
                   isDesktop,
                   isMac,
                   canControl,
-                  autoTravel: search.autoTravel,
                   autoBuy: search.autoBuy,
                 })}
                 onUpdate={(payload) => update(search.id, payload)}

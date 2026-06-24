@@ -342,3 +342,9 @@ Adversarial review of the shipped Phase-1 diff (`b65165d`, `54b4474`, `1ceb746`)
 - **Windows "not required" line NOT implemented** — the card renders nothing off macOS-desktop (matches step 1.8). §3.5's `settings.permissions.notRequired` wording is **superseded**; Windows is not a Phase-1 target.
 
 Deliberately deferred (S4, safe): IPC `senderFrame`-origin assertion (non-exploitable — `will-navigate` pinned, sandbox+contextIsolation on, both acts benign); visible-label click target (SR-correct via `aria-label`); permission-row `flex-wrap` (bounded by `minWidth: 900`).
+
+---
+
+## 8. Phase-2 as-built deviations (2026-06-24)
+
+- **Buy decoupled from auto-travel (D-19).** §4.1's `assertAutoBuyAllowed(autoBuy, autoTravel)` and the "auto-buy requires auto-travel" 400 are **removed**: the gate keeps only `canControl` (decision #2=B holds). §4.2's subscriber filter drops `source === 'auto'` — `maybeBuy` now fires on **any** travel `success` (auto OR manual). Buy still acts only once the character is at the seller (a travel success), so there is no teleport/capture race, but the **toggles are independent**. §4.5's "requires-travel" state (and its `searches.buyRequiresTravel` key) are dropped from the resolver. Rationale + record: decision D-19. Decision #6's "buy-without-travel rejected" clause is superseded.
