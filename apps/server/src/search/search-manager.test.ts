@@ -11,6 +11,7 @@ import type {
 import { PollEngine } from '../engines/poll-engine.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import type { OutboundGuard } from '../guard/outbound-guard.js';
+import { PermissionDeniedError } from '../permissions/permission-denied.error.js';
 import type { PermissionGateService } from '../permissions/permission-gate.service.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 import type { EngineFactory } from './engine-registry.js';
@@ -149,6 +150,30 @@ describe('SearchManager', () => {
     } finally {
       noControl.manager.onApplicationShutdown();
       noControl.database.$client.close();
+    }
+  });
+
+  it('does not block an unrelated update after control is revoked (CORR-1, #2=B)', async () => {
+    let control = true;
+    const gate = {
+      canControl: () => control,
+      assert: () => {
+        if (!control) throw new PermissionDeniedError('control', ['accessibility']);
+      },
+    } as unknown as PermissionGateService;
+    const { manager, database } = createManager({ gate });
+    try {
+      await manager.add('AbCdEf123', { autoBuy: true });
+      control = false; // operator revokes Screen Recording / Accessibility
+      // An unrelated patch (rename) must still succeed — persisted autoBuy preserved.
+      const renamed = manager.update('AbCdEf123', { label: 'renamed' });
+      expect(renamed.label).toBe('renamed');
+      expect(renamed.autoBuy).toBe(true);
+      // But turning Buy ON again while revoked is still refused.
+      expect(() => manager.update('AbCdEf123', { autoBuy: true })).toThrowError(/Screen Recording/);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
     }
   });
 

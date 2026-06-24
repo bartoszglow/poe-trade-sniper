@@ -126,12 +126,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   onApplicationBootstrap(): void {
     for (const row of this.database.select().from(searches).all()) {
-      const watcher = this.createWatcher(this.rowToManagedSearch(row));
-      // Hit count + last-hit are persisted in the hits table; without this the
-      // UI shows "0 hits" after every restart even on a long-running search.
-      this.hydrateHitStats(watcher);
-      this.watchers.set(row.id, watcher);
+      this.watchers.set(row.id, this.createWatcher(this.rowToManagedSearch(row)));
     }
+    // Restore hit count + last-hit from the hits table in ONE grouped query (not
+    // N per-search scans, PERF-6) — without it the UI shows "0 hits" after restart.
+    this.hydrateAllHitStats();
     this.pruneHits();
     this.startPendingWatchers();
     this.schedulerTimer = setInterval(() => {
@@ -226,7 +225,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const autoTravel = options.autoTravel ?? watcher.row.autoTravel;
     this.assertAutoTravelAllowed(autoTravel, watcher.row.filters, purchaseMode);
     const autoBuy = options.autoBuy ?? watcher.row.autoBuy;
-    this.assertAutoBuyAllowed(autoBuy);
+    // Only gate when Buy is being turned ON in THIS request — an unrelated patch
+    // (rename, pause, purchase-mode) on a search with a persisted autoBuy must NOT
+    // be blocked by a later permission revocation (decision #2=B: the intent is
+    // preserved and restored on re-grant; the runtime gate is the real enforcement).
+    if (options.autoBuy === true) this.assertAutoBuyAllowed(true);
     const wasEnabled = watcher.row.enabled;
     const enabled = options.enabled ?? wasEnabled;
 
@@ -526,24 +529,31 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   private recordHits(watcher: Watcher, listings: Listing[]): void {
+    if (listings.length === 0) return;
+    // One transaction (better-sqlite3 is synchronous) → a single commit/fsync per
+    // burst, and no partial DB state if a row throws mid-loop (PERF-4).
+    this.database.transaction((tx) => {
+      for (const listing of listings) {
+        tx.insert(hits)
+          .values({
+            searchId: listing.searchId,
+            listingId: listing.listingId,
+            itemName: listing.itemName,
+            price: listing.price,
+            seller: listing.seller ?? '',
+            item: listing.item,
+            detectedAt: listing.detectedAt,
+          })
+          .run();
+      }
+    });
+    // Bookkeeping + domain events only after the writes commit.
     for (const listing of listings) {
-      this.database
-        .insert(hits)
-        .values({
-          searchId: listing.searchId,
-          listingId: listing.listingId,
-          itemName: listing.itemName,
-          price: listing.price,
-          seller: listing.seller ?? '',
-          item: listing.item,
-          detectedAt: listing.detectedAt,
-        })
-        .run();
       watcher.hitCount += 1;
       watcher.lastHitAt = listing.detectedAt;
       this.hitsSincePrune += 1;
       this.realtimeBus.publish({ type: 'hit', listing });
-      // autoTravel: the TravelService consumes hit events in Phase 2.
+      // autoTravel / autoBuy: the Travel + Buy services consume hit/travel events.
     }
     if (this.hitsSincePrune >= PRUNE_EVERY_HITS) {
       this.hitsSincePrune = 0;
@@ -621,17 +631,20 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return watcher;
   }
 
-  /** Restore hitCount + lastHitAt from persisted hits (survives restarts). */
-  private hydrateHitStats(watcher: Watcher): void {
-    const stats = this.database
+  /** Restore hitCount + lastHitAt for ALL watchers in one grouped query (PERF-6). */
+  private hydrateAllHitStats(): void {
+    const rows = this.database
       .select({
+        searchId: hits.searchId,
         total: sql<number>`count(*)`,
         last: sql<string | null>`max(${hits.detectedAt})`,
       })
       .from(hits)
-      .where(eq(hits.searchId, watcher.row.id))
-      .get();
-    if (stats) {
+      .groupBy(hits.searchId)
+      .all();
+    for (const stats of rows) {
+      const watcher = this.watchers.get(stats.searchId);
+      if (!watcher) continue;
       watcher.hitCount = stats.total ?? 0;
       watcher.lastHitAt = stats.last ?? null;
     }

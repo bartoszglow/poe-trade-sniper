@@ -1,0 +1,1 @@
+CREATE INDEX `hits_search_id_detected_at` ON `hits` (`search_id`,`detected_at`);

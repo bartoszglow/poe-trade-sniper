@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 
 /** Watched trade searches (mirrors `ManagedSearch` in @poe-sniper/shared). */
 export const searches = sqliteTable('searches', {
@@ -20,20 +20,28 @@ export const searches = sqliteTable('searches', {
 });
 
 /** Detection history — enables later analytics ("what I bought / saved"). */
-export const hits = sqliteTable('hits', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  searchId: text('search_id')
-    .notNull()
-    .references(() => searches.id, { onDelete: 'cascade' }),
-  listingId: text('listing_id').notNull(),
-  itemName: text('item_name').notNull(),
-  /** ListingPrice JSON or null when the listing carries no price. */
-  price: text('price', { mode: 'json' }),
-  seller: text('seller').notNull(),
-  /** Normalized ItemDetail JSON (null when the payload had no item object). */
-  item: text('item', { mode: 'json' }),
-  detectedAt: text('detected_at').notNull(),
-});
+export const hits = sqliteTable(
+  'hits',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    searchId: text('search_id')
+      .notNull()
+      .references(() => searches.id, { onDelete: 'cascade' }),
+    listingId: text('listing_id').notNull(),
+    itemName: text('item_name').notNull(),
+    /** ListingPrice JSON or null when the listing carries no price. */
+    price: text('price', { mode: 'json' }),
+    seller: text('seller').notNull(),
+    /** Normalized ItemDetail JSON (null when the payload had no item object). */
+    item: text('item', { mode: 'json' }),
+    detectedAt: text('detected_at').notNull(),
+  },
+  (table) => [
+    // Covers listHits' per-search filter + time-range and the boot GROUP BY aggregate
+    // (the name-substring filter is a leading-wildcard LIKE — non-sargable, no index).
+    index('hits_search_id_detected_at').on(table.searchId, table.detectedAt),
+  ],
+);
 
 /**
  * Single-table key/value state: session blob, settings.
