@@ -20,9 +20,13 @@ export function createDesktopPlatform(): DesktopPlatform {
     /[^A-Za-z0-9 ._-]/g,
     '',
   );
+  // Delay (ms) inside the focus osascript so the macOS Space-switch settles
+  // before the window bounds are read; tunable via env, default 250.
+  const parsedSettle = Number(process.env['BUY_FOCUS_SETTLE_MS']);
+  const focusSettleMs = Number.isFinite(parsedSettle) && parsedSettle >= 0 ? parsedSettle : 250;
   return {
     permissionProbe,
-    captureSource: createElectronCaptureSource(permissionProbe, gameWindowTitle),
+    captureSource: createElectronCaptureSource(permissionProbe, gameWindowTitle, focusSettleMs),
     tradeVision: createRawPixelTradeVision(),
     inputController: createNutInputController(permissionProbe),
     userInputWatcher: createUiohookUserInputWatcher(),

@@ -30,6 +30,7 @@ const noopTradeVision: TradeVision = {
 
 const noopInputController: InputController = {
   moveHumanLike: () => Promise.resolve(),
+  placeCursor: () => Promise.resolve(),
 };
 
 const noopUserInputWatcher: UserInputWatcher = {

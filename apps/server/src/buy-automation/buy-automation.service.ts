@@ -197,12 +197,6 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       // no-op, and bringing a (fullscreen) window forward can lag a Space switch,
       // so poll the frontmost-pid check briefly rather than checking once.
       await untilAbort(this.capture.focusGameWindow(), controller.signal);
-      // Park the cursor in the CENTRE of the game window IMMEDIATELY on focus —
-      // it may have been on another monitor or outside the window. windowCenter
-      // is the geometry locked during focus (no extra osascript), so this is
-      // instant and happens before the (cheap) focus-confirm poll.
-      const center = await untilAbort(this.capture.windowCenter(), controller.signal);
-      if (center) await this.input.moveHumanLike(center, controller.signal);
       if (!(await this.confirmFocus(controller.signal))) {
         this.emit('failed', searchId, listingId, itemName, 'focus-failed');
         return;
@@ -232,14 +226,16 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
         return;
       }
 
-      // Map the violet-cluster point (frame pixels) to a real screen point, then
-      // human-like MOVE — no click (decision #8). Aborts on real user input.
-      const target = this.capture.frameToScreen(confirmed);
-      await this.input.moveHumanLike(target, controller.signal);
+      // Don't place if the operator grabbed the mouse during detect/locate.
       if (controller.signal.aborted) {
         this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
         return;
       }
+      // Map the violet point (cropped window-frame pixels) → screen and place the
+      // cursor there INSTANTLY — one absolute move, no easing/centering (no click,
+      // decision #8). placeCursor can't drift relative to the starting position.
+      const target = this.capture.frameToScreen(confirmed);
+      await this.input.placeCursor(target);
       this.emit('moved', searchId, listingId, itemName, null);
     } catch (error) {
       if (controller.signal.aborted) {

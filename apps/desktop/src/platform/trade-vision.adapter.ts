@@ -60,10 +60,17 @@ export function createRawPixelTradeVision(): TradeVision {
     ): Promise<Point | null> {
       const bounds = violetBounds(frame);
       if (!bounds) return Promise.resolve(null);
-      return Promise.resolve({
+      const center = {
         x: Math.round(bounds.x + bounds.width / 2),
         y: Math.round(bounds.y + bounds.height / 2),
-      });
+      };
+      // DIAGNOSTIC: frame dims + the violet cluster bounds + its centre, so we can
+      // tell whether the detected Y is mirrored vs where the item visually sits.
+      console.warn(
+        '[vision] located',
+        JSON.stringify({ frame: { w: frame.width, h: frame.height }, bounds, center }),
+      );
+      return Promise.resolve(center);
     },
   };
 }

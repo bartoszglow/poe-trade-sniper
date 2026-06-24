@@ -91,7 +91,8 @@ function createHarness(options: HarnessOptions = {}) {
   } as unknown as TradeVision;
 
   const moveHumanLike = vi.fn(options.moveImpl ?? (() => Promise.resolve()));
-  const input = { moveHumanLike } as unknown as InputController;
+  const placeCursor = vi.fn(() => Promise.resolve());
+  const input = { moveHumanLike, placeCursor } as unknown as InputController;
 
   let inputCallback: (() => void) | null = null;
   const userInput: UserInputWatcher = {
@@ -126,6 +127,7 @@ function createHarness(options: HarnessOptions = {}) {
     service,
     buyEvents,
     moveHumanLike,
+    placeCursor,
     phases: () => buyEvents.map((event) => event.phase),
     triggerUserInput: () => inputCallback?.(),
   };
@@ -138,7 +140,7 @@ describe('BuyAutomationService', () => {
       harness.bus.publish(travelSuccess());
       await waitFor(() => harness.phases().includes('moved'));
       expect(harness.phases()).toEqual(['started', 'window-found', 'item-located', 'moved']);
-      expect(harness.moveHumanLike).toHaveBeenCalledOnce();
+      expect(harness.placeCursor).toHaveBeenCalledOnce();
     } finally {
       harness.service.onApplicationShutdown();
     }
@@ -149,7 +151,7 @@ describe('BuyAutomationService', () => {
     try {
       harness.bus.publish(travelSuccess({ source: 'manual' }));
       await waitFor(() => harness.phases().includes('moved'));
-      expect(harness.moveHumanLike).toHaveBeenCalledOnce();
+      expect(harness.placeCursor).toHaveBeenCalledOnce();
     } finally {
       harness.service.onApplicationShutdown();
     }
@@ -175,14 +177,14 @@ describe('BuyAutomationService', () => {
       harness.service.requestManualBuy('l1'); // operator clicked Buy on listing l1
       harness.bus.publish(travelSuccess({ source: 'manual' }));
       await waitFor(() => harness.phases().includes('moved'));
-      expect(harness.moveHumanLike).toHaveBeenCalledOnce();
+      expect(harness.placeCursor).toHaveBeenCalledOnce();
 
       // One-shot: a second travel success for the same listing does NOT re-fire
       // (autoBuy is off and the manual intent was consumed on the first success).
-      harness.moveHumanLike.mockClear();
+      harness.placeCursor.mockClear();
       harness.bus.publish(travelSuccess({ source: 'manual' }));
       await new Promise((resolve) => setTimeout(resolve, 60));
-      expect(harness.moveHumanLike).not.toHaveBeenCalled();
+      expect(harness.placeCursor).not.toHaveBeenCalled();
     } finally {
       harness.service.onApplicationShutdown();
     }
@@ -258,28 +260,17 @@ describe('BuyAutomationService', () => {
     }
   });
 
-  it('aborts the move when the user moves the mouse (never reaches moved)', async () => {
-    let abortSeen = false;
-    const harness = createHarness({
-      moveImpl: (_to, signal) =>
-        new Promise((_resolve, reject) => {
-          signal.addEventListener(
-            'abort',
-            () => {
-              abortSeen = true;
-              reject(new Error('aborted'));
-            },
-            { once: true },
-          );
-        }),
-    });
+  it('aborts the buy when the user moves the mouse during capture (never reaches moved)', async () => {
+    // Instant placement isn't abortable mid-move; the abortable window is the
+    // capture loop. A hung capture keeps us there until the user grabs the mouse.
+    const harness = createHarness({ captureHangs: true });
     try {
       harness.bus.publish(travelSuccess());
-      await waitFor(() => harness.phases().includes('item-located'));
+      await new Promise((resolve) => setTimeout(resolve, 40));
       harness.triggerUserInput();
       await waitFor(() => harness.phases().includes('aborted'));
-      expect(abortSeen).toBe(true);
       expect(harness.phases()).not.toContain('moved');
+      expect(harness.placeCursor).not.toHaveBeenCalled();
     } finally {
       harness.service.onApplicationShutdown();
     }

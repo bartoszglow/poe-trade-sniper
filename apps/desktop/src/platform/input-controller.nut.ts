@@ -57,5 +57,13 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
       markSyntheticMove();
       await mouse.setPosition(new NutPoint(to.x, to.y));
     },
+
+    async placeCursor(to: Point): Promise<void> {
+      requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
+      // Instant absolute placement — one setPosition, NO getPosition / easing, so
+      // it lands exactly on `to` regardless of where the cursor started.
+      markSyntheticMove();
+      await mouse.setPosition(new NutPoint(Math.round(to.x), Math.round(to.y)));
+    },
   };
 }

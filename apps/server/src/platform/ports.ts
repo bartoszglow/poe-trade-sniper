@@ -86,6 +86,12 @@ export interface TradeVision {
 export interface InputController {
   /** Move to `to` in small jittered, awaited steps; abort promptly on `signal`. */
   moveHumanLike(to: Point, signal: AbortSignal): Promise<void>;
+  /**
+   * Place the cursor AT `to` instantly — one absolute `setPosition`, no easing,
+   * no read of the current position. The default "instant" buy mode: because it
+   * sets the absolute target it can't drift relative to where the cursor started.
+   */
+  placeCursor(to: Point): Promise<void>;
 }
 
 /**
