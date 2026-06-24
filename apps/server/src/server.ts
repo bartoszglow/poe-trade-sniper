@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { loadConfig, type AppConfig } from './config/env.js';
-import { createNoopPlatform } from './platform/noop-platform.js';
+import { createDevPlatform, createNoopPlatform } from './platform/noop-platform.js';
 import type { DesktopPlatform } from './platform/ports.js';
 
 export interface RunningServer {
@@ -47,7 +47,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   // Parse config before Nest boots so a bad .env dies with a readable error,
   // not a DI stack trace.
   const config = loadConfig();
-  const platform = options.platformFactory?.() ?? createNoopPlatform();
+  // No factory = standalone (web / CLI / test). In dev, use the dev platform —
+  // its permission probe is pushable, so the Electron main feeds it real macOS
+  // status and the gate behaves the same as packaged (dev↔prod parity); other
+  // environments stay fully inert.
+  const platform =
+    options.platformFactory?.() ??
+    (config.APP_ENV === 'development' ? createDevPlatform() : createNoopPlatform());
 
   const app = await NestFactory.create(AppModule.register(platform));
   app.setGlobalPrefix('api');

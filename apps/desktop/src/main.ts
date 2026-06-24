@@ -114,6 +114,29 @@ function createWindow(url: string): BrowserWindow {
   return window;
 }
 
+/**
+ * Dev↔prod parity: the standalone dev server runs in plain Node and can't read
+ * macOS TCC, so push the real status from here (the main process owns the probe)
+ * to its dev endpoint, on a timer. This makes the capability gate + /api/status
+ * real in `pnpm dev` exactly as in the packaged app. No-op in packaged (devUrl
+ * unset → not called). Vite proxies /api → the standalone server.
+ */
+function startDevPermissionPush(platform: DesktopPlatform, devServerUrl: string): void {
+  const push = (): void => {
+    const status = {
+      screenRecording: platform.permissionProbe.query('screenRecording'),
+      accessibility: platform.permissionProbe.query('accessibility'),
+    };
+    void fetch(`${devServerUrl}/api/dev/permissions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(status),
+    }).catch(() => undefined);
+  };
+  push();
+  setInterval(push, 3_000);
+}
+
 const singleInstance = app.requestSingleInstanceLock();
 if (!singleInstance) {
   app.quit();
@@ -131,7 +154,10 @@ if (!singleInstance) {
       // the window points at the standalone server, which keeps the no-op probe.
       const platform = createDesktopPlatform();
       registerPermissionsIpc(platform.permissionProbe);
-      if (!devUrl) {
+      if (devUrl) {
+        // Dev: feed the standalone server real macOS status (dev↔prod parity).
+        startDevPermissionPush(platform, devUrl);
+      } else {
         runningServer = await bootServer(platform);
         windowUrl = `http://localhost:${runningServer.port}`;
       }

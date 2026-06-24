@@ -5,6 +5,7 @@ import { BuyAutomationModule } from './buy-automation/buy-automation.module.js';
 import { ConfigModule } from './config/config.module.js';
 import { loadConfig } from './config/env.js';
 import { DbModule } from './db/db.module.js';
+import { DevModule } from './dev/dev.module.js';
 import { EventsModule } from './events/events.module.js';
 import { GuardModule } from './guard/guard.module.js';
 import { NetworkModule } from './network/network.module.js';
@@ -28,16 +29,23 @@ export class AppModule {
   static register(platform: DesktopPlatform): DynamicModule {
     // Resolved at register time, not via DI: the module list itself depends on it.
     // Callers (CLI, Electron main) set the environment before calling startServer.
-    const staticDir = loadConfig().STATIC_DIR;
+    const config = loadConfig();
     return {
       module: AppModule,
       imports: [
         PlatformModule.register(platform),
         ConfigModule,
         // Desktop/one-origin mode: serve the built web UI next to the API.
-        ...(staticDir
-          ? [ServeStaticModule.forRoot({ rootPath: staticDir, exclude: ['/api/{*splat}'] })]
+        ...(config.STATIC_DIR
+          ? [
+              ServeStaticModule.forRoot({
+                rootPath: config.STATIC_DIR,
+                exclude: ['/api/{*splat}'],
+              }),
+            ]
           : []),
+        // Dev-only: the permission-status push endpoint (dev↔prod parity).
+        ...(config.APP_ENV === 'development' ? [DevModule] : []),
         DbModule,
         EventsModule,
         NetworkModule,

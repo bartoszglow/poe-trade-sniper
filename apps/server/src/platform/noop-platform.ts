@@ -6,6 +6,7 @@ import type {
   TradeVision,
   UserInputWatcher,
 } from './ports.js';
+import { PushedPermissionProbe } from './pushed-permission-probe.js';
 
 /** Every capability inert — the default for web, CLI, dev (Vite), and tests. */
 const noopPermissionProbe: PermissionProbe = {
@@ -46,4 +47,15 @@ export function createNoopPlatform(): DesktopPlatform {
     inputController: noopInputController,
     userInputWatcher: noopUserInputWatcher,
   };
+}
+
+/**
+ * The standalone DEV server's platform: no-op everywhere except a pushable
+ * permission probe, so the Electron main can feed it real macOS TCC status and
+ * the gate behaves the same in `pnpm dev` as in the packaged app (dev↔prod
+ * parity). Capture/vision/input stay no-op — their native execution needs the
+ * in-process Electron server + real hardware.
+ */
+export function createDevPlatform(): DesktopPlatform {
+  return { ...createNoopPlatform(), permissionProbe: new PushedPermissionProbe() };
 }
