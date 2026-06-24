@@ -34,6 +34,8 @@ const addSearchSchema = z.object({
 const updateSearchSchema = z
   .object({
     label: z.string().min(1).max(80).optional(),
+    /** Re-point the row at a different trade search (bare id or URL). */
+    input: z.string().min(1).max(200).optional(),
     autoTravel: z.boolean().optional(),
     autoBuy: z.boolean().optional(),
     purchaseMode: purchaseModeSchema.nullable().optional(),
@@ -42,6 +44,7 @@ const updateSearchSchema = z
   .refine(
     (body) =>
       body.label !== undefined ||
+      body.input !== undefined ||
       body.autoTravel !== undefined ||
       body.autoBuy !== undefined ||
       body.purchaseMode !== undefined ||
@@ -118,8 +121,12 @@ export class SearchesController {
   }
 
   @Patch('searches/:id')
-  update(@Param('id') searchId: string, @Body() body: unknown): SearchRuntimeInfo {
+  async update(@Param('id') searchId: string, @Body() body: unknown): Promise<SearchRuntimeInfo> {
     const payload = parseOrBadRequest(updateSearchSchema, body);
+    // A search-id change re-resolves the new query (async) — keeps history + settings.
+    if (payload.input !== undefined) {
+      return this.searchManager.editSearch(searchId, payload.input, { label: payload.label });
+    }
     return this.searchManager.update(searchId, {
       label: payload.label,
       autoTravel: payload.autoTravel,

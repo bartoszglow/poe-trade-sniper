@@ -283,6 +283,74 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return this.toRuntimeInfo(watcher);
   }
 
+  /**
+   * Re-point an existing search at a DIFFERENT trade search (the Edit dialog),
+   * keeping the row's settings AND its hit history. A label-only edit (the search
+   * id is unchanged) is a plain update — no re-resolve, no restart. Changing the
+   * search id re-resolves the new query, validates the carried settings against
+   * it, then atomically inserts the new row, re-points hits onto it, and drops
+   * the old row (FK is ON DELETE CASCADE → re-point BEFORE delete), and swaps the
+   * detection watcher onto the new query carrying the live hit counters.
+   */
+  async editSearch(
+    searchId: string,
+    input: string,
+    options: { label?: string },
+  ): Promise<SearchRuntimeInfo> {
+    const watcher = this.requireWatcher(searchId);
+    const ref = this.parseRef(input, watcher.row.league);
+    if (ref.searchId === searchId) {
+      // Same trade search — only the label can change here; no GGG call/restart.
+      return this.update(searchId, { label: options.label });
+    }
+    if (this.watchers.has(ref.searchId)) {
+      throw new ConflictException(`search ${ref.searchId} is already watched`);
+    }
+    const correlationId = randomUUID();
+    let resolvedQuery: unknown;
+    try {
+      resolvedQuery = await this.tradeApi.resolveQuery(ref, correlationId);
+    } catch (error) {
+      if (error instanceof NoSessionError) throw new BadRequestException(error.message);
+      throw error;
+    }
+    // Validate the carried settings against the NEW query BEFORE mutating anything.
+    this.assertAutoTravelAllowed(watcher.row.autoTravel, resolvedQuery, watcher.row.purchaseMode);
+
+    const newRow: ManagedSearch = {
+      ...watcher.row,
+      id: ref.searchId,
+      realm: ref.realm as Realm,
+      league: ref.league,
+      label: options.label ?? watcher.row.label,
+      filters: resolvedQuery,
+    };
+    this.database.transaction((tx) => {
+      tx.insert(searches)
+        .values({ ...newRow, filters: resolvedQuery })
+        .run();
+      tx.update(hits).set({ searchId: newRow.id }).where(eq(hits.searchId, searchId)).run();
+      tx.delete(searches).where(eq(searches.id, searchId)).run();
+    });
+
+    this.stopEngines(watcher);
+    this.watchers.delete(searchId);
+    const newWatcher = this.createWatcher(newRow);
+    newWatcher.correlationId = correlationId;
+    newWatcher.hitCount = watcher.hitCount;
+    newWatcher.lastHitAt = watcher.lastHitAt;
+    this.watchers.set(newRow.id, newWatcher);
+    if (this.detectionPaused) {
+      this.publishEngineStatus(newWatcher, 'paused', 'globally paused');
+    } else if (newRow.enabled) {
+      this.startWatcher(newWatcher);
+    } else {
+      this.publishEngineStatus(newWatcher, 'stopped', 'paused');
+    }
+    this.publishSearchesChanged();
+    return this.toRuntimeInfo(newWatcher);
+  }
+
   remove(searchId: string): void {
     const watcher = this.requireWatcher(searchId);
     this.stopEngines(watcher);

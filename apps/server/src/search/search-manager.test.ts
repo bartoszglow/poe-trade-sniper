@@ -578,6 +578,45 @@ describe('SearchManager', () => {
     }
   });
 
+  it('editSearch re-points to a new search id, keeping hits + settings (#1)', async () => {
+    const { manager, database, wsEngines } = createManager();
+    try {
+      await manager.add('OldSearch1', { label: 'My search', autoBuy: true });
+      wsEngines[0]?.callbacks?.onStatus('active', 'connected');
+      wsEngines[0]?.callbacks?.onListings([
+        {
+          listingId: 'h1',
+          searchId: 'OldSearch1',
+          itemName: 'Storm Veil',
+          price: null,
+          seller: 'seller#1',
+          hideoutToken: 'jwt',
+          item: null,
+          detectedAt: '2026-06-12T10:00:00.000Z',
+        },
+      ]);
+
+      const info = await manager.editSearch('OldSearch1', 'NewSearch2', { label: 'Renamed' });
+      expect(info.id).toBe('NewSearch2');
+      expect(info.label).toBe('Renamed');
+      expect(info.autoBuy).toBe(true); // settings carried over
+
+      // The row is re-keyed (old id gone, new id present)…
+      const rows = database.$client.prepare('SELECT id FROM searches').all() as Array<{
+        id: string;
+      }>;
+      expect(rows).toEqual([{ id: 'NewSearch2' }]);
+      // …and the hit history is KEPT — re-pointed to the new id, not cascade-deleted.
+      const hitRows = database.$client.prepare('SELECT search_id FROM hits').all() as Array<{
+        search_id: string;
+      }>;
+      expect(hitRows).toEqual([{ search_id: 'NewSearch2' }]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('remove stops the engine and deletes rows', async () => {
     const { manager, database, executeSearch } = createManager();
     try {

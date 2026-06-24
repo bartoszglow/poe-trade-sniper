@@ -1,20 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  Check,
-  ListFilter,
-  LogIn,
-  Pencil,
-  Plus,
-  Settings as SettingsIcon,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { ListFilter, LogIn, Pencil, Plus, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import type { EngineStatus, SearchPreview, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
 import { IconButton } from '../components/IconButton';
+import { Modal } from '../components/Modal';
 import { QueryCriteriaView } from '../components/QueryCriteriaView';
 import { Select } from '../components/Select';
 import { Switch } from '../components/Switch';
@@ -235,6 +227,7 @@ function SearchRow({
     autoBuy?: boolean;
     enabled?: boolean;
     label?: string;
+    input?: string;
   }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
@@ -243,20 +236,25 @@ function SearchRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [criteriaOpen, setCriteriaOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [editingLabel, setEditingLabel] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState(search.label);
+  const [draftInput, setDraftInput] = useState(search.id);
 
-  function startEditingLabel(): void {
+  function startEditing(): void {
     setDraftLabel(search.label);
-    setEditingLabel(true);
+    setDraftInput(search.id);
+    setEditing(true);
   }
 
-  async function saveLabel(): Promise<void> {
-    const nextLabel = draftLabel.trim();
-    setEditingLabel(false);
-    if (nextLabel && nextLabel !== search.label) {
-      await run(() => onUpdate({ label: nextLabel }));
-    }
+  async function saveEdit(): Promise<void> {
+    const label = draftLabel.trim();
+    const input = draftInput.trim();
+    if (!label || !input) return;
+    setEditing(false);
+    // Nothing changed → skip the round-trip. A changed `input` re-points the row
+    // (the server keeps the hit history); an unchanged id is treated as label-only.
+    if (label === search.label && input === search.id) return;
+    await run(() => onUpdate({ label, input }));
   }
 
   async function run(action: () => Promise<void>) {
@@ -270,55 +268,49 @@ function SearchRow({
 
   return (
     <li data-flip-id={search.id} className="rounded-lg border border-edge bg-surface-1 px-4 py-3">
+      <Modal open={editing} label={t('searches.editSearch')} onClose={() => setEditing(false)}>
+        <div className="border-b border-edge px-4 py-2.5">
+          <h2 className="text-sm font-semibold text-ink">{t('searches.editSearch')}</h2>
+        </div>
+        <div className="space-y-3 p-4">
+          <Field label={t('searches.editLabelField')}>
+            <TextInput
+              value={draftLabel}
+              onChange={(changeEvent) => setDraftLabel(changeEvent.target.value)}
+            />
+          </Field>
+          <Field label={t('searches.editSearchField')} hint={t('searches.editSearchHint')}>
+            <TextInput
+              value={draftInput}
+              onChange={(changeEvent) => setDraftInput(changeEvent.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-edge px-4 py-2.5">
+          <Button variant="ghost" onClick={() => setEditing(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!draftLabel.trim() || !draftInput.trim()}
+            onClick={() => void saveEdit()}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
+      </Modal>
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            {editingLabel ? (
-              <span className="flex items-center gap-1">
-                <input
-                  value={draftLabel}
-                  onChange={(changeEvent) => setDraftLabel(changeEvent.target.value)}
-                  onKeyDown={(keyEvent) => {
-                    if (keyEvent.key === 'Enter') {
-                      keyEvent.preventDefault();
-                      void saveLabel();
-                    } else if (keyEvent.key === 'Escape') {
-                      setEditingLabel(false);
-                    }
-                  }}
-                  autoFocus
-                  className="w-44 rounded border border-edge bg-surface-0 px-2 py-0.5 text-sm text-ink focus:border-gold focus:outline-none"
-                />
-                <IconButton
-                  variant="ghost"
-                  aria-label={t('searches.saveLabel')}
-                  title={t('searches.saveLabel')}
-                  onClick={() => void saveLabel()}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </IconButton>
-                <IconButton
-                  variant="ghost"
-                  aria-label={t('common.cancel')}
-                  title={t('common.cancel')}
-                  onClick={() => setEditingLabel(false)}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </IconButton>
-              </span>
-            ) : (
-              <>
-                <span className="truncate font-medium text-ink">{search.label}</span>
-                <IconButton
-                  variant="ghost"
-                  aria-label={t('searches.editLabel')}
-                  title={t('searches.editLabel')}
-                  onClick={startEditingLabel}
-                >
-                  <Pencil className="h-3 w-3" />
-                </IconButton>
-              </>
-            )}
+            <span className="truncate font-medium text-ink">{search.label}</span>
+            <IconButton
+              variant="ghost"
+              aria-label={t('searches.editSearch')}
+              title={t('searches.editSearch')}
+              onClick={startEditing}
+            >
+              <Pencil className="h-3 w-3" />
+            </IconButton>
             <Badge tone={STATUS_TONES[search.status]}>{t(STATUS_LABEL_KEYS[search.status])}</Badge>
             {search.engine && (
               <Badge tone={search.engine === 'ws' ? 'gold' : 'neutral'}>{search.engine}</Badge>

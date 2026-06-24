@@ -18,6 +18,8 @@ export interface AddSearchPayload {
 
 export interface UpdateSearchPayload {
   label?: string;
+  /** Re-point the row at a different trade search (bare id or URL); hits stay. */
+  input?: string;
   autoTravel?: boolean;
   autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
