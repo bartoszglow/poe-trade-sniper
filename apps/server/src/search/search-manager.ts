@@ -22,6 +22,7 @@ import type {
   SearchRuntimeInfo,
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { errorMessage } from '../util/error-message.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
 import { PermissionGateService } from '../permissions/permission-gate.service.js';
 import { DATABASE } from '../db/db.module.js';
@@ -394,11 +395,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       try {
         await (watcher.pollEngine as PollEngine).tick();
       } catch (error) {
-        this.publishEngineStatus(
-          watcher,
-          'degraded',
-          error instanceof Error ? error.message : String(error),
-        );
+        this.publishEngineStatus(watcher, 'degraded', errorMessage(error));
       }
     } finally {
       this.tickInFlight = false;

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import WebSocket from 'ws';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { errorMessage } from '../util/error-message.js';
 import { TradeApiClient } from '../trade-api/trade-api.client.js';
 import { SessionService } from './session.service.js';
 
@@ -65,6 +66,9 @@ export class LoginCaptureService implements OnApplicationShutdown {
       [
         `--user-data-dir=${profileDir}`,
         `--remote-debugging-port=${debugPort}`,
+        // Bind CDP to loopback explicitly (don't rely on the default): the debug
+        // port exposes the cookie jar during the ~5 min login window (SEC-3).
+        '--remote-debugging-address=127.0.0.1',
         '--no-first-run',
         '--no-default-browser-check',
         '--new-window',
@@ -81,9 +85,7 @@ export class LoginCaptureService implements OnApplicationShutdown {
     this.detail = 'log in on the Path of Exile page that just opened';
     this.pollTimer = setInterval(() => {
       void this.poll(debugPort).catch((error: unknown) => {
-        this.logger.debug(
-          `capture poll: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        this.logger.debug(`capture poll: ${errorMessage(error)}`);
       });
     }, POLL_INTERVAL_MS);
     return this.status();

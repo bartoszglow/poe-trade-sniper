@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { DomainEvent, TravelEvent } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { errorMessage } from '../util/error-message.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { SearchManager } from '../search/search-manager.js';
 import { TradeApiClient, type TradeSearchRef } from '../trade-api/trade-api.client.js';
@@ -127,7 +128,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
           // game window to the foreground so the operator can act at full FPS.
           if (request.source === 'auto') this.gameFocus.focus();
         } catch (error) {
-          this.publish('failed', request, error instanceof Error ? error.message : String(error));
+          this.publish('failed', request, errorMessage(error));
         }
       }
     } finally {

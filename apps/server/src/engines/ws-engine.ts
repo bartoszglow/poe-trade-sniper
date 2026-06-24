@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import WebSocket from 'ws';
 import type { NetworkOutcome, SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
+import { errorMessage } from '../util/error-message.js';
 import type { NetworkLog } from '../network/network-log.service.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
 import type { DetectionEngine, EngineCallbacks, EngineContext } from './detection-engine.js';
@@ -129,7 +130,7 @@ export class WsEngine implements DetectionEngine {
       // the process. Per-listing failures are already isolated in fetchListings.
       this.handleMessage(data.toString()).catch((error: unknown) => {
         this.logger.warn(
-          `[${this.context?.correlationId}] live message handling failed: ${error instanceof Error ? error.message : String(error)}`,
+          `[${this.context?.correlationId}] live message handling failed: ${errorMessage(error)}`,
         );
       });
     });

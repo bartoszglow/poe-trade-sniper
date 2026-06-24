@@ -38,6 +38,11 @@ export function keychainKeyLoader(logger: Logger): KeyLoader {
     }
     try {
       const generated = randomBytes(32).toString('hex');
+      // SEC-2: the key is briefly visible in ps-readable argv during this one-time
+      // creation (`security add-generic-password` takes no stdin). Accepted for the
+      // single-user dev path — the packaged build moves to Electron safeStorage
+      // (D-7/D-17/D-18), and a local-code-exec attacker can already read the DB
+      // this key protects.
       execFileSync(
         'security',
         [

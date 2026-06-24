@@ -7,6 +7,7 @@ import type {
   StatDictionaryEntry,
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { errorMessage } from '../util/error-message.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
 import { NetworkLog } from '../network/network-log.service.js';
 import { normalizeListing } from '../items/item-normalizer.js';
@@ -172,7 +173,7 @@ export class TradeApiClient {
         } catch (error) {
           const listingId = (entry as { id?: string } | null)?.id ?? '(unknown)';
           this.logger.warn(
-            `[${correlationId}] skipped unparseable listing ${listingId}: ${error instanceof Error ? error.message : String(error)}`,
+            `[${correlationId}] skipped unparseable listing ${listingId}: ${errorMessage(error)}`,
           );
         }
       }
@@ -357,7 +358,7 @@ export class TradeApiClient {
         startMs,
         null,
         timedOut ? 'timeout' : 'network-error',
-        error instanceof Error ? error.message : String(error),
+        errorMessage(error),
         null,
       );
       throw error;

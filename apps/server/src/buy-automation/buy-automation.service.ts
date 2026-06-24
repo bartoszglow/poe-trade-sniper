@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { BuyAutomationEvent, DomainEvent } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
+import { errorMessage } from '../util/error-message.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import {
   CAPTURE_SOURCE,
@@ -279,8 +280,4 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       at: new Date().toISOString(),
     });
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

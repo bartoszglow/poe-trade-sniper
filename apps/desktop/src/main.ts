@@ -102,7 +102,13 @@ function createWindow(url: string): BrowserWindow {
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (navigationEvent, targetUrl) => {
-    if (!targetUrl.startsWith(url)) navigationEvent.preventDefault();
+    // Compare parsed ORIGINS, not a string prefix — a prefix would let through
+    // userinfo tricks like http://localhost:PORT@evil.com (SEC-4).
+    try {
+      if (new URL(targetUrl).origin !== new URL(url).origin) navigationEvent.preventDefault();
+    } catch {
+      navigationEvent.preventDefault(); // unparseable target → block
+    }
   });
   void window.loadURL(url);
   return window;
