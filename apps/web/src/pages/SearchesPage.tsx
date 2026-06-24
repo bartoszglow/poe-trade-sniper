@@ -54,6 +54,39 @@ const STATUS_LABEL_KEYS: Record<EngineStatus, MessageKey> = {
   paused: 'engineStatus.paused',
 };
 
+/** Resolved presentational state of a row's Buy toggle (SearchRow stays dumb). */
+interface BuyControl {
+  /** Toggle interactive (macOS desktop + Travel on + control granted). */
+  enabled: boolean;
+  /** Reflects autoBuy && canControl — a revoked permission shows off + disabled. */
+  checked: boolean;
+  /** Inline reason the toggle is disabled, or null when live. */
+  note: MessageKey | null;
+}
+
+/**
+ * Ordered resolver (first match wins) — composition over nested ternaries.
+ * Decision #2=B: Buy needs macOS desktop + Travel + the control permission;
+ * anything else yields a disabled toggle with an explanatory note.
+ */
+function resolveBuyControl(args: {
+  isDesktop: boolean;
+  isMac: boolean;
+  canControl: boolean;
+  autoTravel: boolean;
+  autoBuy: boolean;
+}): BuyControl {
+  if (!args.isDesktop) return { enabled: false, checked: false, note: 'searches.buyWebOnly' };
+  if (!args.isMac) return { enabled: false, checked: false, note: 'searches.buyUnsupportedOs' };
+  if (!args.autoTravel) {
+    return { enabled: false, checked: false, note: 'searches.buyRequiresTravel' };
+  }
+  if (!args.canControl) {
+    return { enabled: false, checked: false, note: 'searches.buyNeedsPermission' };
+  }
+  return { enabled: true, checked: args.autoBuy, note: null };
+}
+
 function AddSearchForm({
   onAdd,
 }: {
@@ -232,11 +265,18 @@ function AddSearchForm({
 
 function SearchRow({
   search,
+  buyControl,
   onUpdate,
   onRemove,
 }: {
   search: SearchRuntimeInfo;
-  onUpdate: (payload: { autoTravel?: boolean; enabled?: boolean; label?: string }) => Promise<void>;
+  buyControl: BuyControl;
+  onUpdate: (payload: {
+    autoTravel?: boolean;
+    autoBuy?: boolean;
+    enabled?: boolean;
+    label?: string;
+  }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
   const t = useT();
@@ -359,6 +399,17 @@ function SearchRow({
           />
           {t('searches.travelToggle')}
         </span>
+        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <Switch
+            checked={buyControl.checked}
+            disabled={!buyControl.enabled}
+            onChange={(checked) => void run(() => onUpdate({ autoBuy: checked }))}
+            label={t('searches.buyFor', { label: search.label })}
+            tone="gold"
+          />
+          {t('searches.buyToggle')}
+          {buyControl.note && <span className="text-ink-faint">{t(buyControl.note)}</span>}
+        </span>
         {confirmingDelete ? (
           <Button variant="danger" onClick={() => void run(onRemove)}>
             {t('common.confirm')}
@@ -432,6 +483,11 @@ export function SearchesPage() {
     return right.addedAt.localeCompare(left.addedAt);
   });
 
+  // Buy control resolved once for the whole list (SearchRow stays presentational).
+  const isDesktop = document.documentElement.dataset['shell'] === 'desktop';
+  const isMac = window.systemInfo?.platform === 'darwin';
+  const canControl = status?.capabilities.canControl ?? false;
+
   const needsLogin =
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
@@ -461,6 +517,13 @@ export function SearchesPage() {
               <SearchRow
                 key={search.id}
                 search={search}
+                buyControl={resolveBuyControl({
+                  isDesktop,
+                  isMac,
+                  canControl,
+                  autoTravel: search.autoTravel,
+                  autoBuy: search.autoBuy,
+                })}
                 onUpdate={(payload) => update(search.id, payload)}
                 onRemove={() => remove(search.id)}
               />
