@@ -64,7 +64,13 @@ export class RateLimitGovernor {
       }
     }
     if (status === 429) {
-      const retryAfterSeconds = Number(headers.get('retry-after') ?? 60);
+      // Retry-After may be absent, an HTTP-date (Cloudflare fronts pathofexile.com),
+      // or otherwise malformed. Any non-finite/non-positive value would NaN-disarm
+      // the pause (Math.max(x, NaN) = NaN → status never > now) and corrupt policy
+      // slots — so fail CLOSED to a 60s lockout.
+      const headerValue = headers.get('retry-after');
+      const parsed = headerValue === null ? Number.NaN : Number(headerValue);
+      const retryAfterSeconds = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
       this.pauseAll(retryAfterSeconds);
     }
   }

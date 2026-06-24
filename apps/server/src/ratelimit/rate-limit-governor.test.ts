@@ -52,6 +52,28 @@ describe('RateLimitGovernor', () => {
     expect(acquired).toBe(true);
   });
 
+  it('a 429 with a malformed/HTTP-date Retry-After still engages a finite 60s lockout', async () => {
+    const governor = new RateLimitGovernor();
+    // HTTP-date form → Number(...) is NaN; must fall back to 60s, never vanish.
+    governor.noteResponse(
+      'search',
+      429,
+      new Headers({ 'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT' }),
+    );
+    expect(governor.status.pausedUntil).not.toBeNull(); // pause engaged, not NaN-dropped
+
+    let acquired = false;
+    const pending = governor.acquire('fetch', 0).then(() => {
+      acquired = true;
+    });
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(acquired).toBe(false); // still locked under the 60s fallback
+    await vi.advanceTimersByTimeAsync(1_100);
+    await pending;
+    expect(acquired).toBe(true);
+    expect(governor.status.pausedUntil).toBeNull(); // and it cleanly expires
+  });
+
   it('holds a policy whose bucket reports near-cap usage', async () => {
     const governor = new RateLimitGovernor();
     governor.noteResponse(
