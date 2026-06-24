@@ -546,6 +546,38 @@ describe('SearchManager', () => {
     }
   });
 
+  it('dedups a re-served listing — same id shows once across emits (#3)', async () => {
+    const { manager, database, events, wsEngines } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      wsEngines[0]?.callbacks?.onStatus('active', 'connected');
+      const listing = {
+        listingId: 'dup1',
+        searchId: 'AbCdEf123',
+        itemName: 'Storm Veil',
+        price: { amount: 5, currency: 'divine' },
+        seller: 'seller#1',
+        hideoutToken: 'jwt',
+        item: null,
+        detectedAt: '2026-06-12T10:00:00.000Z',
+      };
+      // GGG re-serves the same listing (ws has no engine-level dedup; this also
+      // models the ws↔poll re-emit after a travel). It must count as ONE hit.
+      wsEngines[0]?.callbacks?.onListings([listing]);
+      wsEngines[0]?.callbacks?.onListings([listing]);
+      wsEngines[0]?.callbacks?.onListings([listing]);
+
+      const hitRows = database.$client.prepare('SELECT listing_id FROM hits').all() as Array<{
+        listing_id: string;
+      }>;
+      expect(hitRows).toEqual([{ listing_id: 'dup1' }]);
+      expect(events.filter((type) => type === 'hit')).toHaveLength(1);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('remove stops the engine and deletes rows', async () => {
     const { manager, database, executeSearch } = createManager();
     try {

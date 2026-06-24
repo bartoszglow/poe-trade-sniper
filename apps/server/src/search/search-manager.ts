@@ -96,6 +96,14 @@ interface Watcher {
   correlationId: string;
   hitCount: number;
   lastHitAt: string | null;
+  /**
+   * Listing ids already emitted for this search — dedup across poll cycles and
+   * ws↔poll handoffs (GGG re-serves the same id, especially right after a
+   * travel), so each listing shows ONCE in the feed and is stored once. Bounded
+   * FIFO (SEEN_IDS_CAP); in-memory, so a server restart may re-show old hits —
+   * acceptable for a single-operator local tool.
+   */
+  seenListingIds: Set<string>;
 }
 
 /**
@@ -527,10 +535,18 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
 
   private recordHits(watcher: Watcher, listings: Listing[]): void {
     if (listings.length === 0) return;
+    // Per-search dedup: GGG re-serves the same listingId across poll cycles and
+    // ws↔poll handoffs (especially right after a travel re-queries), which would
+    // spam the feed with the same item. Show each listing ONCE. Mark seen BEFORE
+    // the write so a throwing insert can't loop forever on the same id.
+    const fresh = listings.filter((listing) => !watcher.seenListingIds.has(listing.listingId));
+    if (fresh.length === 0) return;
+    for (const listing of fresh) watcher.seenListingIds.add(listing.listingId);
+    this.evictSeenIds(watcher);
     // One transaction (better-sqlite3 is synchronous) → a single commit/fsync per
     // burst, and no partial DB state if a row throws mid-loop (PERF-4).
     this.database.transaction((tx) => {
-      for (const listing of listings) {
+      for (const listing of fresh) {
         tx.insert(hits)
           .values({
             searchId: listing.searchId,
@@ -545,7 +561,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       }
     });
     // Bookkeeping + domain events only after the writes commit.
-    for (const listing of listings) {
+    for (const listing of fresh) {
       watcher.hitCount += 1;
       watcher.lastHitAt = listing.detectedAt;
       this.hitsSincePrune += 1;
@@ -555,6 +571,16 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     if (this.hitsSincePrune >= PRUNE_EVERY_HITS) {
       this.hitsSincePrune = 0;
       this.pruneHits();
+    }
+  }
+
+  /** Bounded FIFO eviction of a search's seen-id set (Set preserves insertion order). */
+  private evictSeenIds(watcher: Watcher): void {
+    const cap = this.config.SEEN_IDS_CAP;
+    if (watcher.seenListingIds.size <= cap) return;
+    for (const id of watcher.seenListingIds) {
+      if (watcher.seenListingIds.size <= cap) break;
+      watcher.seenListingIds.delete(id);
     }
   }
 
@@ -658,6 +684,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       correlationId: randomUUID(),
       hitCount: 0,
       lastHitAt: null,
+      seenListingIds: new Set(),
     };
   }
 
