@@ -148,7 +148,17 @@ if (!singleInstance) {
     app.quit();
   });
 
-  app.on('before-quit', () => {
-    void runningServer?.app.close();
+  let quitting = false;
+  app.on('before-quit', (quitEvent) => {
+    // Dev mode points the window at the standalone server → nothing to close here.
+    if (quitting || !runningServer) return;
+    // Otherwise hold the quit until the in-process server's shutdown hooks finish
+    // (engines stopped, sockets terminated, DB closed), then exit (REL-6).
+    quitting = true;
+    quitEvent.preventDefault();
+    void runningServer.app
+      .close()
+      .catch(() => undefined)
+      .finally(() => app.exit(0));
   });
 }

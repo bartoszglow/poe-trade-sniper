@@ -7,7 +7,15 @@ import { isWithinSyntheticGrace } from './synthetic-input-marker.js';
  * moves within it are our own synthetic steps, not the user's. Read from the
  * same env var (falls back to the server default) so there is one source.
  */
-const SYNTHETIC_GRACE_MS = Number(process.env['BUY_SYNTHETIC_INPUT_GRACE_MS'] ?? 120);
+// Mirrors the server's BUY_SYNTHETIC_INPUT_GRACE_MS default. The desktop main
+// can't import the server's validated config (it would pull @poe-sniper/server
+// into the packaged main), so the default is duplicated here — defensively parsed
+// so an empty/non-numeric env doesn't collapse the grace to 0 and self-abort every
+// move on step one (DESK-3).
+const DEFAULT_SYNTHETIC_GRACE_MS = 120;
+const parsedGrace = Number(process.env['BUY_SYNTHETIC_INPUT_GRACE_MS']);
+const SYNTHETIC_GRACE_MS =
+  Number.isFinite(parsedGrace) && parsedGrace > 0 ? parsedGrace : DEFAULT_SYNTHETIC_GRACE_MS;
 
 /**
  * Global input watcher (uiohook-napi). Keyboard / clicks / wheel abort

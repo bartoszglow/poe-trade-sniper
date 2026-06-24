@@ -22,6 +22,10 @@ export function useLoginCapture(onFinished: () => void) {
   }, []);
 
   const start = useCallback(() => {
+    // Guard a fast double-click: clear any in-flight poll so we never orphan an
+    // interval (the button only disables after the POST resolves) (REL-7).
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
     void apiSend<CaptureStatus>('POST', '/api/session/login/start')
       .then((started) => {
         setLoginState(started.state);

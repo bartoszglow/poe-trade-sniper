@@ -36,11 +36,9 @@ export function createElectronCaptureSource(
         sources.find((source) => source.display_id === String(display.id)) ?? sources[0];
       if (!primary || primary.thumbnail.isEmpty()) return EMPTY_FRAME;
       const size = primary.thumbnail.getSize();
-      return {
-        width: size.width,
-        height: size.height,
-        pixels: new Uint8Array(primary.thumbnail.toBitmap()),
-      };
+      // toBitmap() already returns a Buffer (a Uint8Array snapshot) — return it
+      // directly instead of forcing a second full-frame copy per capture (PERF-7).
+      return { width: size.width, height: size.height, pixels: primary.thumbnail.toBitmap() };
     },
 
     async focusGameWindow(): Promise<boolean> {
