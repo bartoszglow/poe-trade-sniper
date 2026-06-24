@@ -5,6 +5,7 @@ import { Badge } from '../components/Badge';
 import { HitCard } from '../components/HitCard';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useSearches } from '../hooks/useSearches';
+import { useServerStatus } from '../hooks/useServerStatus';
 import { useT } from '../i18n/i18n';
 import { apiSend } from '../lib/api';
 
@@ -20,6 +21,10 @@ export function HitsPanel() {
   const { connected, liveHits, travelStateByListingId, buyStateByListingId, clearLiveHits } =
     useEventStream();
   const { searches } = useSearches();
+  // Manual Buy = travel + grab; only offered when the macOS control permission
+  // is present (desktop + granted). On web this is false, so Buy never renders.
+  const { status } = useServerStatus();
+  const canBuy = status?.capabilities.canControl ?? false;
   // Clock snapshot in state: render stays pure, buttons age out on the tick.
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -40,6 +45,24 @@ export function HitsPanel() {
       itemName: listing.itemName,
     }).catch(() => {
       // Failure also arrives as a travel event on the stream; nothing to do here.
+    });
+  }
+
+  // Buy = travel + grab: enqueues the same travel and marks this listing for
+  // buy-on-arrival, so the buy pipeline runs on travel success (even if the
+  // search's autoBuy is off). The server re-checks the control permission.
+  function buy(listing: Listing): void {
+    const search = searches.find((candidate) => candidate.id === listing.searchId);
+    if (!search || !listing.hideoutToken) return;
+    void apiSend('POST', '/api/buy', {
+      token: listing.hideoutToken,
+      realm: search.realm,
+      league: search.league,
+      searchId: search.id,
+      listingId: listing.listingId,
+      itemName: listing.itemName,
+    }).catch(() => {
+      // Failure surfaces as travel/buy events on the stream; nothing to do here.
     });
   }
 
@@ -85,7 +108,9 @@ export function HitsPanel() {
               tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
               stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
               nowMs={nowMs}
+              canBuy={canBuy}
               onTravel={() => travel(listing)}
+              onBuy={() => buy(listing)}
             />
           ))}
         </div>

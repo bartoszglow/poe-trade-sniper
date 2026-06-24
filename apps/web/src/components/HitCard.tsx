@@ -1,4 +1,4 @@
-import { RotateCcw, Zap } from 'lucide-react';
+import { RotateCcw, ShoppingCart, Zap } from 'lucide-react';
 import type { Listing } from '@poe-sniper/shared';
 import type { BuyState, TravelState } from '../hooks/EventStreamProvider';
 import { useT } from '../i18n/i18n';
@@ -28,7 +28,10 @@ interface HitCardProps {
   stale?: boolean;
   /** Clock snapshot for the live "x ago" — passed in so render stays pure. */
   nowMs: number;
+  /** macOS control permission present (desktop + granted) — gates manual Buy. */
+  canBuy: boolean;
   onTravel: () => void;
+  onBuy: () => void;
 }
 
 export function HitCard({
@@ -38,7 +41,9 @@ export function HitCard({
   tokenFresh,
   stale = false,
   nowMs,
+  canBuy,
   onTravel,
+  onBuy,
 }: HitCardProps) {
   const t = useT();
   const phase = travelState?.phase;
@@ -105,6 +110,18 @@ export function HitCard({
               >
                 <Zap className="h-3 w-3" />
                 {tokenFresh ? t('hitCard.travel') : t('hitCard.expired')}
+              </Button>
+            )}
+            {canBuy && !travelBusy && (
+              <Button
+                variant="ghost"
+                className="!px-2 !py-0.5 text-xs"
+                disabled={!tokenFresh}
+                title={tokenFresh ? t('hitCard.buyTitle') : t('hitCard.tokenExpired')}
+                onClick={onBuy}
+              >
+                <ShoppingCart className="h-3 w-3" />
+                {t('hitCard.buy')}
               </Button>
             )}
           </div>

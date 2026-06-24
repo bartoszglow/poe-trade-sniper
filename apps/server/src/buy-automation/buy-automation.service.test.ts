@@ -167,6 +167,25 @@ describe('BuyAutomationService', () => {
     }
   });
 
+  it('manual buy (requestManualBuy) fires once even when autoBuy is off, then is consumed (#2)', async () => {
+    const harness = createHarness({ autoBuy: false });
+    try {
+      harness.service.requestManualBuy('l1'); // operator clicked Buy on listing l1
+      harness.bus.publish(travelSuccess({ source: 'manual' }));
+      await waitFor(() => harness.phases().includes('moved'));
+      expect(harness.moveHumanLike).toHaveBeenCalledOnce();
+
+      // One-shot: a second travel success for the same listing does NOT re-fire
+      // (autoBuy is off and the manual intent was consumed on the first success).
+      harness.moveHumanLike.mockClear();
+      harness.bus.publish(travelSuccess({ source: 'manual' }));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(harness.moveHumanLike).not.toHaveBeenCalled();
+    } finally {
+      harness.service.onApplicationShutdown();
+    }
+  });
+
   it('does nothing when autoBuy is off or control is not granted', async () => {
     for (const options of [{ autoBuy: false }, { canControl: false }]) {
       const harness = createHarness(options);

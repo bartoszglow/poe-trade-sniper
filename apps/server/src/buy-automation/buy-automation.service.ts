@@ -29,6 +29,10 @@ import { SearchManager } from '../search/search-manager.js';
 
 type BuyPhase = BuyAutomationEvent['phase'];
 
+/** Bound on pending one-shot manual-buy intents (each is consumed on the
+ *  matching travel success; this only caps listings that never travel). */
+const MANUAL_BUY_INTENT_CAP = 50;
+
 /** Abortable delay — rejects if the signal fires first (so awaits unwind promptly). */
 function delay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -92,6 +96,9 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
   private unsubscribe: (() => void) | null = null;
   /** One buy at a time — a second trigger while a buy runs is ignored. */
   private running = false;
+  /** Listing ids the operator clicked "Buy" on — buy on their next travel
+   *  success even if the search's autoBuy is off. One-shot (consumed on use). */
+  private readonly forceBuyListingIds = new Set<string>();
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -113,6 +120,20 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     this.unsubscribe = null;
   }
 
+  /**
+   * Records a one-shot manual-buy intent (the live-hits Buy button): the buy
+   * pipeline will run on this listing's next travel success even when the
+   * search's autoBuy toggle is off. The endpoint enqueues the travel separately.
+   */
+  requestManualBuy(listingId: string): void {
+    this.forceBuyListingIds.add(listingId);
+    while (this.forceBuyListingIds.size > MANUAL_BUY_INTENT_CAP) {
+      const oldest = this.forceBuyListingIds.values().next().value;
+      if (oldest === undefined) break;
+      this.forceBuyListingIds.delete(oldest);
+    }
+  }
+
   private maybeBuy(event: DomainEvent): void {
     if (event.type !== 'travel') return;
     // Fires on ANY travel success — auto OR manual (D-19): Buy is independent of
@@ -120,7 +141,11 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     // at the seller (a travel success), so there is no capture/teleport race.
     if (event.phase !== 'success') return;
     if (event.searchId === null) return;
-    if (!this.searchManager.isAutoBuyEnabled(event.searchId)) return;
+    // Buy if the search opted into autoBuy, OR the operator clicked Buy on this
+    // listing (a one-shot manual intent — consume it). Manual buy fires even with
+    // autoBuy off; both still require the live control gate below.
+    const forced = event.listingId !== null && this.forceBuyListingIds.delete(event.listingId);
+    if (!forced && !this.searchManager.isAutoBuyEnabled(event.searchId)) return;
     // Optimization: skip when the gate is closed. The adapters re-check at the
     // resource boundary, so this is not the sole guard (decision #3).
     if (!this.gate.canControl()) return;
