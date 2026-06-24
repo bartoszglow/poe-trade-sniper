@@ -6,6 +6,8 @@ import { requireGrant } from './require-grant.js';
 
 const execFileAsync = promisify(execFile);
 const EMPTY_FRAME: RawFrame = { width: 0, height: 0, pixels: new Uint8Array(0) };
+/** A wedged System Events / Automation prompt must never hang the buy run. */
+const OSASCRIPT_TIMEOUT_MS = 5_000;
 
 /**
  * Captures the primary screen via Electron `desktopCapturer` at LOGICAL
@@ -43,10 +45,14 @@ export function createElectronCaptureSource(
 
     async focusGameWindow(): Promise<boolean> {
       try {
-        await execFileAsync('osascript', [
-          '-e',
-          `tell application "System Events" to set frontmost of (first process whose name contains "${gameProcessName}") to true`,
-        ]);
+        await execFileAsync(
+          'osascript',
+          [
+            '-e',
+            `tell application "System Events" to set frontmost of (first process whose name contains "${gameProcessName}") to true`,
+          ],
+          { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
+        );
         return true;
       } catch {
         return false;
@@ -55,10 +61,14 @@ export function createElectronCaptureSource(
 
     async isGameWindowFocused(): Promise<boolean> {
       try {
-        const { stdout } = await execFileAsync('osascript', [
-          '-e',
-          'tell application "System Events" to get name of first process whose frontmost is true',
-        ]);
+        const { stdout } = await execFileAsync(
+          'osascript',
+          [
+            '-e',
+            'tell application "System Events" to get name of first process whose frontmost is true',
+          ],
+          { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
+        );
         return stdout.toLowerCase().includes(gameProcessName.toLowerCase());
       } catch {
         return false;

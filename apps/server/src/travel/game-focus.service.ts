@@ -26,7 +26,8 @@ export class GameFocusService {
     const script =
       `tell application "System Events" to set frontmost of ` +
       `(first process whose name is "${this.config.GAME_FOCUS_PROCESS}" and background only is false) to true`;
-    execFile('osascript', ['-e', script], (error) => {
+    // Timeout + SIGKILL so a wedged System Events never leaks a zombie child (REL-4).
+    execFile('osascript', ['-e', script], { timeout: 5_000, killSignal: 'SIGKILL' }, (error) => {
       if (error) {
         // Game not running / renamed / Automation permission denied — never fatal.
         this.logger.debug(`game focus skipped: ${error.message}`);

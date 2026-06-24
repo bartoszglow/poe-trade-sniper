@@ -48,6 +48,7 @@ interface HarnessOptions {
   focused?: boolean;
   region?: WindowRegion | null;
   point?: Point | null;
+  captureHangs?: boolean;
   moveImpl?: (to: Point, signal: AbortSignal) => Promise<void>;
 }
 
@@ -71,7 +72,11 @@ function createHarness(options: HarnessOptions = {}) {
   } as unknown as PermissionGateService;
 
   const capture = {
-    capture: vi.fn(() => Promise.resolve({ width: 1, height: 1, pixels: new Uint8Array(4) })),
+    capture: vi.fn(() =>
+      options.captureHangs
+        ? new Promise<never>(() => {}) // never resolves — exercises the run deadline
+        : Promise.resolve({ width: 1, height: 1, pixels: new Uint8Array(4) }),
+    ),
     focusGameWindow: vi.fn(() => Promise.resolve(true)),
     isGameWindowFocused: vi.fn(() => Promise.resolve(options.focused ?? true)),
   } as unknown as CaptureSource;
@@ -100,6 +105,7 @@ function createHarness(options: HarnessOptions = {}) {
     BUY_FOCUS_VERIFY_MS: '0',
     BUY_CAPTURE_POLL_MS: '20',
     BUY_CAPTURE_TIMEOUT_MS: '500',
+    BUY_RUN_TIMEOUT_MS: '2000',
   });
   const service = new BuyAutomationService(
     config,
@@ -208,6 +214,23 @@ describe('BuyAutomationService', () => {
       await waitFor(() => harness.phases().includes('failed'));
       expect(harness.buyEvents.find((event) => event.phase === 'failed')?.detail).toBe(
         'trade-window-not-found',
+      );
+    } finally {
+      harness.service.onApplicationShutdown();
+    }
+  });
+
+  it('resets the single-flight lock when a port call hangs past the run deadline (REL-2/3)', async () => {
+    const harness = createHarness({ captureHangs: true });
+    try {
+      harness.bus.publish(travelSuccess());
+      await waitFor(() => harness.phases().includes('failed'), 4000);
+      expect(harness.buyEvents.find((event) => event.phase === 'failed')?.detail).toBe('timeout');
+      // Lock reset → a second trigger runs again (proves no permanent wedge).
+      harness.bus.publish(travelSuccess());
+      await waitFor(
+        () => harness.phases().filter((phase) => phase === 'started').length >= 2,
+        4000,
       );
     } finally {
       harness.service.onApplicationShutdown();

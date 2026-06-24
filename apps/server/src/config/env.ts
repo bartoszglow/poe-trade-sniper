@@ -151,6 +151,9 @@ export const envSchema = z.object({
   BUY_SYNTHETIC_INPUT_GRACE_MS: z.coerce.number().int().min(0).default(120),
   /** Wait after focusGameWindow before verifying focus actually landed (Wine can no-op). */
   BUY_FOCUS_VERIFY_MS: z.coerce.number().int().min(0).default(250),
+  /** Hard wall-clock cap on a whole buy run — guarantees the single-flight lock
+   *  resets even if a desktop port call (osascript/getSources) hangs. */
+  BUY_RUN_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
