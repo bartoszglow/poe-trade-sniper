@@ -237,6 +237,18 @@ export const EN = {
   'settings.networkView': 'Network view',
   'settings.networkViewDesc':
     'show the GGG request log in the sidebar (the log file is always written)',
+  'settings.permissions.title': 'macOS permissions',
+  'settings.permissions.intro':
+    'The desktop automation needs these. Toggle to grant; if already granted, opens System Settings to manage — the app only reflects what you set there.',
+  'settings.permissions.screenRecording': 'Screen Recording',
+  'settings.permissions.screenRecordingDesc': 'See the game window (capture).',
+  'settings.permissions.accessibility': 'Accessibility',
+  'settings.permissions.accessibilityDesc': 'Move the cursor over the item.',
+  'settings.permissions.granted': 'granted',
+  'settings.permissions.denied': 'denied',
+  'settings.permissions.notDetermined': 'not granted',
+  'settings.permissions.restricted': 'managed by your organization',
+  'settings.permissions.unsupported': 'available in the installed app',
   'settings.budgets': 'Rate-limit budgets',
   'settings.budgetsEmpty':
     'No live data yet — budgets appear after the first GGG request (read from X-Rate-Limit headers, never hardcoded).',
@@ -479,6 +491,18 @@ export const PL: Record<MessageKey, string> = {
   'settings.networkView': 'Widok sieci',
   'settings.networkViewDesc':
     'pokaż log requestów GGG w panelu bocznym (plik logu pisze się zawsze)',
+  'settings.permissions.title': 'Uprawnienia macOS',
+  'settings.permissions.intro':
+    'Automatyzacja desktopowa ich wymaga. Przełącz, aby przyznać; jeśli już przyznane, otwiera Ustawienia systemowe — aplikacja tylko odzwierciedla to, co tam ustawisz.',
+  'settings.permissions.screenRecording': 'Nagrywanie ekranu',
+  'settings.permissions.screenRecordingDesc': 'Widzi okno gry (przechwytywanie).',
+  'settings.permissions.accessibility': 'Dostępność',
+  'settings.permissions.accessibilityDesc': 'Ruch kursora nad przedmiotem.',
+  'settings.permissions.granted': 'przyznane',
+  'settings.permissions.denied': 'odrzucone',
+  'settings.permissions.notDetermined': 'nieprzyznane',
+  'settings.permissions.restricted': 'zarządzane przez organizację',
+  'settings.permissions.unsupported': 'dostępne w zainstalowanej aplikacji',
   'settings.budgets': 'Limity zapytań',
   'settings.budgetsEmpty':
     'Brak danych — limity pojawią się po pierwszym zapytaniu do GGG (odczytywane z nagłówków X-Rate-Limit, nigdy nie zaszyte na stałe).',

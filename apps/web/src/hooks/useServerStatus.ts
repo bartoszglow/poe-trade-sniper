@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { SessionPublicStatus } from '@poe-sniper/shared';
+import type { PermissionsStatus, SessionPublicStatus } from '@poe-sniper/shared';
 import { apiGet } from '../lib/api';
 
 interface RateLimitRule {
@@ -31,6 +31,8 @@ export interface ServerStatus {
     httpInLastMinute: number;
     wsConnectsInLastMinute: number;
   };
+  permissions: PermissionsStatus;
+  capabilities: { canCapture: boolean; canControl: boolean };
 }
 
 const POLL_INTERVAL_MS = 10_000;

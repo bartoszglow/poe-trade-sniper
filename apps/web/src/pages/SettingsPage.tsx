@@ -1,7 +1,15 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { KeyRound, LogIn, ShieldCheck, Volume2 } from 'lucide-react';
-import type { SessionPublicStatus } from '@poe-sniper/shared';
-import { Badge } from '../components/Badge';
+import {
+  PERMISSION_KINDS,
+  describeState,
+  type PermissionKind,
+  type PermissionSeverity,
+  type PermissionState,
+  type PermissionsStatus,
+  type SessionPublicStatus,
+} from '@poe-sniper/shared';
+import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
 import { Select } from '../components/Select';
@@ -12,6 +20,7 @@ import { useServerStatus } from '../hooks/useServerStatus';
 import { useLoginCapture } from '../hooks/useLoginCapture';
 import { setNetworkViewEnabled, useNetworkViewEnabled } from '../hooks/useNetworkView';
 import { LANGUAGES, useLanguage, useT, type Language } from '../i18n/i18n';
+import type { MessageKey } from '../i18n/messages';
 import { ApiError, apiSend } from '../lib/api';
 import {
   getHitSoundVolume,
@@ -63,6 +72,74 @@ function SessionStatusLine({ session }: { session: SessionPublicStatus | undefin
   );
 }
 
+const PERMISSION_LABEL_KEYS: Record<PermissionKind, { name: MessageKey; desc: MessageKey }> = {
+  screenRecording: {
+    name: 'settings.permissions.screenRecording',
+    desc: 'settings.permissions.screenRecordingDesc',
+  },
+  accessibility: {
+    name: 'settings.permissions.accessibility',
+    desc: 'settings.permissions.accessibilityDesc',
+  },
+};
+
+const PERMISSION_STATE_KEYS: Record<PermissionState, MessageKey> = {
+  granted: 'settings.permissions.granted',
+  denied: 'settings.permissions.denied',
+  'not-determined': 'settings.permissions.notDetermined',
+  restricted: 'settings.permissions.restricted',
+  unsupported: 'settings.permissions.unsupported',
+};
+
+const SEVERITY_TONES: Record<PermissionSeverity, BadgeTone> = {
+  ok: 'ok',
+  warn: 'info',
+  danger: 'danger',
+  muted: 'neutral',
+};
+
+/**
+ * macOS-only permission controls (Option A): each row MIRRORS live OS status and
+ * launches the grant/manage flow via the preload bridge — the app never writes
+ * the permission itself, so the toggle flips only on the next status poll.
+ */
+function PermissionsCard({ permissions }: { permissions: PermissionsStatus }) {
+  const t = useT();
+  return (
+    <SettingsCard title={t('settings.permissions.title')}>
+      <p className="text-sm text-ink-faint">{t('settings.permissions.intro')}</p>
+      <div className="mt-3 flex flex-col gap-3">
+        {PERMISSION_KINDS.map((kind) => {
+          const state = permissions[kind];
+          const { granted, severity } = describeState(state);
+          const unsupported = state === 'unsupported';
+          return (
+            <div key={kind} className="flex items-center gap-3">
+              <Switch
+                checked={granted}
+                disabled={unsupported}
+                label={t(PERMISSION_LABEL_KEYS[kind].name)}
+                onChange={() => {
+                  // Option A: never optimistic — kick off the OS flow; the toggle
+                  // flips only when the next /api/status poll sees the new state.
+                  if (granted) window.desktopPermissions?.openSettingsPane?.(kind);
+                  else window.desktopPermissions?.requestPermission?.(kind);
+                }}
+              />
+              <div className="min-w-0">
+                <div className="text-sm text-ink">{t(PERMISSION_LABEL_KEYS[kind].name)}</div>
+                <div className="text-xs text-ink-faint">{t(PERMISSION_LABEL_KEYS[kind].desc)}</div>
+              </div>
+              <div className="flex-1" />
+              <Badge tone={SEVERITY_TONES[severity]}>{t(PERMISSION_STATE_KEYS[state])}</Badge>
+            </div>
+          );
+        })}
+      </div>
+    </SettingsCard>
+  );
+}
+
 export function SettingsPage() {
   const t = useT();
   const [language, setLanguage] = useLanguage();
@@ -74,6 +151,11 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const networkViewEnabled = useNetworkViewEnabled();
+  // macOS permission controls are desktop-only and (decision #1=A) dev-gated by
+  // the network-view dev flag until the app ships signed.
+  const isMacDesktop =
+    window.systemInfo?.platform === 'darwin' &&
+    document.documentElement.dataset['shell'] === 'desktop';
   const [soundEnabled, setSoundEnabled] = useState(() => isHitSoundEnabled());
   const [volume, setVolume] = useState(() => getHitSoundVolume());
   const [notifyEnabled, setNotifyEnabledState] = useState(() => isNotifyEnabled());
@@ -300,6 +382,10 @@ export function SettingsPage() {
         </div>
         <p className="mt-2 text-xs text-ink-faint">{t('settings.audioUnlockNote')}</p>
       </SettingsCard>
+
+      {isMacDesktop && networkViewEnabled && status && (
+        <PermissionsCard permissions={status.permissions} />
+      )}
 
       <SettingsCard title={t('settings.developer')}>
         <div className="flex items-center gap-3">
