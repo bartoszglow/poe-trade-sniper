@@ -52,7 +52,7 @@ export function AppShell() {
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
   return (
-    <div className="grid h-screen grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden lg:grid-cols-[3rem_1fr_22rem]">
+    <div className="grid h-screen grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden lg:grid-cols-[3rem_1fr_33rem]">
       <header className="col-span-full">
         <AppBar
           serverHealthy={health.healthy}
