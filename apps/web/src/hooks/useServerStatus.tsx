@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { PermissionsStatus, SessionPublicStatus } from '@poe-sniper/shared';
 import { apiGet } from '../lib/api';
 
@@ -37,8 +45,23 @@ export interface ServerStatus {
 
 const POLL_INTERVAL_MS = 10_000;
 
-/** Polls /api/status for the status bar + Settings; SSE covers the rest. */
-export function useServerStatus(): { status: ServerStatus | null; refresh: () => void } {
+interface ServerStatusValue {
+  status: ServerStatus | null;
+  refresh: () => void;
+}
+
+const ServerStatusContext = createContext<ServerStatusValue>({
+  status: null,
+  refresh: () => {},
+});
+
+/**
+ * ONE `/api/status` poll for the whole app — the status bar, Searches, Hits and
+ * Settings all read it via `useServerStatus()` instead of each running its own
+ * 10s timer. `refresh()` updates every consumer at once (e.g. after a permission
+ * grant). SSE covers everything live; this is just the periodic snapshot.
+ */
+export function ServerStatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ServerStatus | null>(null);
 
   const refresh = useCallback(() => {
@@ -53,7 +76,13 @@ export function useServerStatus(): { status: ServerStatus | null; refresh: () =>
     return () => clearInterval(timer);
   }, [refresh]);
 
-  return { status, refresh };
+  const value = useMemo(() => ({ status, refresh }), [status, refresh]);
+  return <ServerStatusContext.Provider value={value}>{children}</ServerStatusContext.Provider>;
+}
+
+/** Read the shared server status (+ a `refresh()` that updates all consumers). */
+export function useServerStatus(): ServerStatusValue {
+  return useContext(ServerStatusContext);
 }
 
 /** "11/60" from the tightest bucket of the search policy, or null. */
