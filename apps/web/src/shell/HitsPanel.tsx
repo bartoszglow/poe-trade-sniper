@@ -17,7 +17,8 @@ const STALE_HIT_MS = 300_000;
 
 export function HitsPanel() {
   const t = useT();
-  const { connected, liveHits, travelStateByListingId, clearLiveHits } = useEventStream();
+  const { connected, liveHits, travelStateByListingId, buyStateByListingId, clearLiveHits } =
+    useEventStream();
   const { searches } = useSearches();
   // Clock snapshot in state: render stays pure, buttons age out on the tick.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -70,12 +71,17 @@ export function HitsPanel() {
           <p className="text-sm text-ink-faint">{t('hitsPanel.empty')}</p>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
+        <div
+          className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2"
+          aria-live="polite"
+          aria-atomic="false"
+        >
           {liveHits.map((listing) => (
             <HitCard
               key={listing.listingId}
               listing={listing}
               travelState={travelStateByListingId[listing.listingId]}
+              buyState={buyStateByListingId[listing.listingId]}
               tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
               stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
               nowMs={nowMs}

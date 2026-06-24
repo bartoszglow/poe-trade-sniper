@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Check,
   ListFilter,
@@ -22,7 +22,7 @@ import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useDetection } from '../hooks/useDetection';
 import { useFlipList } from '../hooks/useFlipList';
-import { useSearches } from '../hooks/useSearches';
+import { useSearches, type AddSearchPayload } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
@@ -84,16 +84,7 @@ function resolveBuyControl(args: {
   return { enabled: true, checked: args.autoBuy, note: null };
 }
 
-function AddSearchForm({
-  onAdd,
-}: {
-  onAdd: (payload: {
-    input: string;
-    label?: string;
-    league?: string;
-    autoTravel: boolean;
-  }) => Promise<void>;
-}) {
+function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promise<void> }) {
   const t = useT();
   const { leagues } = useLeagues();
   const [input, setInput] = useState('');
@@ -405,7 +396,17 @@ function SearchRow({
             tone="gold"
           />
           {t('searches.buyToggle')}
-          {buyControl.note && <span className="text-ink-faint">{t(buyControl.note)}</span>}
+          {buyControl.note &&
+            (buyControl.note === 'searches.buyNeedsPermission' ? (
+              <Link
+                to="/settings"
+                className="text-ink-faint underline underline-offset-2 hover:text-ink"
+              >
+                {t(buyControl.note)}
+              </Link>
+            ) : (
+              <span className="text-ink-faint">{t(buyControl.note)}</span>
+            ))}
         </span>
         {confirmingDelete ? (
           <Button variant="danger" onClick={() => void run(onRemove)}>

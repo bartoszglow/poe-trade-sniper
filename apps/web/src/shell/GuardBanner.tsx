@@ -18,7 +18,10 @@ export function GuardBanner({ reason, onReset }: GuardBannerProps) {
   const [resetting, setResetting] = useState(false);
 
   return (
-    <div className="flex items-center gap-3 border-b border-danger/40 bg-danger/15 px-4 py-2">
+    <div
+      role="alert"
+      className="flex items-center gap-3 border-b border-danger/40 bg-danger/15 px-4 py-2"
+    >
       <ShieldAlert className="h-4 w-4 shrink-0 text-danger" />
       <div className="min-w-0 text-sm">
         <span className="font-semibold text-danger">{t('guard.tripped')}</span>{' '}

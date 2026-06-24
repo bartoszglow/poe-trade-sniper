@@ -1,15 +1,27 @@
 import { RotateCcw, Zap } from 'lucide-react';
 import type { Listing } from '@poe-sniper/shared';
-import type { TravelState } from '../hooks/EventStreamProvider';
+import type { BuyState, TravelState } from '../hooks/EventStreamProvider';
 import { useT } from '../i18n/i18n';
+import type { MessageKey } from '../i18n/messages';
 import { Button } from './Button';
 import { PriceTag } from './PriceTag';
 import { RarityName } from './RarityName';
 import { formatRelativeMagnitude } from '../lib/relative-time';
 
+/** Buy automation phase → compact status line ('unsupported' is hidden). */
+const BUY_PHASE_DISPLAY: Partial<Record<BuyState['phase'], { key: MessageKey; tone: string }>> = {
+  started: { key: 'hitCard.buying', tone: 'text-gold' },
+  'window-found': { key: 'hitCard.buying', tone: 'text-gold' },
+  'item-located': { key: 'hitCard.buying', tone: 'text-gold' },
+  moved: { key: 'hitCard.buyReady', tone: 'text-ok' },
+  aborted: { key: 'hitCard.buyAborted', tone: 'text-ink-faint' },
+  failed: { key: 'hitCard.buyFailed', tone: 'text-danger' },
+};
+
 interface HitCardProps {
   listing: Listing;
   travelState: TravelState | undefined;
+  buyState: BuyState | undefined;
   /** Tokens die at ~300 s; the button greys out client-side at 240 s. */
   tokenFresh: boolean;
   /** Older than the freshness window — dimmed so the eye tracks recent hits. */
@@ -22,6 +34,7 @@ interface HitCardProps {
 export function HitCard({
   listing,
   travelState,
+  buyState,
   tokenFresh,
   stale = false,
   nowMs,
@@ -30,6 +43,7 @@ export function HitCard({
   const t = useT();
   const phase = travelState?.phase;
   const travelBusy = phase === 'queued' || phase === 'started';
+  const buyDisplay = buyState ? BUY_PHASE_DISPLAY[buyState.phase] : undefined;
 
   return (
     <div
@@ -96,6 +110,13 @@ export function HitCard({
           </div>
         )}
       </div>
+      {buyDisplay && (
+        <div className="mt-1 text-xs">
+          <span className={buyDisplay.tone} title={buyState?.detail ?? undefined}>
+            {t(buyDisplay.key)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

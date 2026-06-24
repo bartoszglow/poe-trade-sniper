@@ -385,9 +385,7 @@ export function SettingsPage() {
         <p className="mt-2 text-xs text-ink-faint">{t('settings.audioUnlockNote')}</p>
       </SettingsCard>
 
-      {isMacDesktop && networkViewEnabled && status && (
-        <PermissionsCard permissions={status.permissions} />
-      )}
+      {isMacDesktop && status && <PermissionsCard permissions={status.permissions} />}
 
       <SettingsCard title={t('settings.developer')}>
         <div className="flex items-center gap-3">

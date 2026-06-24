@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { NAV_ENTRIES } from './nav';
 import { AppBar } from './AppBar';
 import { useMemo, useState } from 'react';
@@ -14,6 +14,7 @@ import { useHealth } from '../hooks/useHealth';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
+import { useNetworkViewEnabled } from '../hooks/useNetworkView';
 
 export function AppShell() {
   const health = useHealth();
@@ -21,6 +22,7 @@ export function AppShell() {
   const { status, refresh } = useServerStatus();
   const { searches } = useSearches();
   const update = useUpdateCheck();
+  const networkViewEnabled = useNetworkViewEnabled();
 
   // Global detection posture for the app bar — derived from the live searches
   // list (refetched on every engine-status SSE event), so it follows ws→poll
@@ -69,9 +71,12 @@ export function AppShell() {
 
       <main className="min-h-0 overflow-y-auto bg-surface-0 px-5 py-4">
         <Routes>
-          {NAV_ENTRIES.map((entry) => (
+          {NAV_ENTRIES.filter((entry) => !entry.devOnly || networkViewEnabled).map((entry) => (
             <Route key={entry.id} path={entry.path} element={<entry.page />} />
           ))}
+          {/* Hidden dev routes (and any unknown path) redirect home — /network is
+              not reachable by URL when the dev view is off (WEB-5). */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
