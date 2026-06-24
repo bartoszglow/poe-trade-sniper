@@ -141,6 +141,16 @@ export const envSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9 ._-]+$/, 'letters, digits, space, . _ - only')
     .default('wine'),
+
+  // --- buy automation (Phase 2; Electron-only, gated) — no magic numbers inline ---
+  /** Capture-loop cadence while waiting for the trade window to appear. */
+  BUY_CAPTURE_POLL_MS: z.coerce.number().int().min(20).default(100),
+  /** Give up detecting the trade window after this long. */
+  BUY_CAPTURE_TIMEOUT_MS: z.coerce.number().int().min(500).default(5_000),
+  /** uiohook events within this window of a synthetic move are treated as ours, not the user's. */
+  BUY_SYNTHETIC_INPUT_GRACE_MS: z.coerce.number().int().min(0).default(120),
+  /** Wait after focusGameWindow before verifying focus actually landed (Wine can no-op). */
+  BUY_FOCUS_VERIFY_MS: z.coerce.number().int().min(0).default(250),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -1,5 +1,11 @@
 import { Module, type DynamicModule } from '@nestjs/common';
-import { PERMISSION_PROBE } from './platform.tokens.js';
+import {
+  CAPTURE_SOURCE,
+  INPUT_CONTROLLER,
+  PERMISSION_PROBE,
+  TRADE_VISION,
+  USER_INPUT_WATCHER,
+} from './platform.tokens.js';
 import type { DesktopPlatform } from './ports.js';
 
 /**
@@ -15,8 +21,20 @@ export class PlatformModule {
     return {
       module: PlatformModule,
       global: true,
-      providers: [{ provide: PERMISSION_PROBE, useValue: platform.permissionProbe }],
-      exports: [PERMISSION_PROBE],
+      providers: [
+        { provide: PERMISSION_PROBE, useValue: platform.permissionProbe },
+        { provide: CAPTURE_SOURCE, useValue: platform.captureSource },
+        { provide: TRADE_VISION, useValue: platform.tradeVision },
+        { provide: INPUT_CONTROLLER, useValue: platform.inputController },
+        { provide: USER_INPUT_WATCHER, useValue: platform.userInputWatcher },
+      ],
+      exports: [
+        PERMISSION_PROBE,
+        CAPTURE_SOURCE,
+        TRADE_VISION,
+        INPUT_CONTROLLER,
+        USER_INPUT_WATCHER,
+      ],
     };
   }
 }
