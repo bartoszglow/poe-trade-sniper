@@ -33,6 +33,10 @@ type BuyPhase = BuyAutomationEvent['phase'];
  *  matching travel success; this only caps listings that never travel). */
 const MANUAL_BUY_INTENT_CAP = 50;
 
+/** Focus confirm: poll the frontmost-pid focus check up to this many times
+ *  (BUY_FOCUS_VERIFY_MS apart) — covers Wine/fullscreen Space-switch lag. */
+const FOCUS_CONFIRM_ATTEMPTS = 8;
+
 /** Abortable delay — rejects if the signal fires first (so awaits unwind promptly). */
 function delay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -189,10 +193,11 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       stopWatching = this.userInput.onRealInput(() => controller.abort());
       this.emit('started', searchId, listingId, itemName, null);
 
-      // Focus + VERIFY — Wine `activate` can silently no-op.
+      // Focus, then CONFIRM it actually took — Wine `activate` can silently
+      // no-op, and bringing a (fullscreen) window forward can lag a Space switch,
+      // so poll the frontmost-pid check briefly rather than checking once.
       await untilAbort(this.capture.focusGameWindow(), controller.signal);
-      await delay(this.config.BUY_FOCUS_VERIFY_MS, controller.signal);
-      if (!(await untilAbort(this.capture.isGameWindowFocused(), controller.signal))) {
+      if (!(await this.confirmFocus(controller.signal))) {
         this.emit('failed', searchId, listingId, itemName, 'focus-failed');
         return;
       }
@@ -240,6 +245,19 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       controller.abort();
       this.running = false;
     }
+  }
+
+  /** Poll the focus check until it confirms or the attempts run out (aborts on signal). */
+  private async confirmFocus(signal: AbortSignal): Promise<boolean> {
+    for (let attempt = 0; attempt < FOCUS_CONFIRM_ATTEMPTS; attempt += 1) {
+      if (await untilAbort(this.capture.isGameWindowFocused(), signal)) return true;
+      try {
+        await delay(this.config.BUY_FOCUS_VERIFY_MS, signal);
+      } catch {
+        return false; // run-level abort (user / deadline)
+      }
+    }
+    return false;
   }
 
   private async detectTradeWindow(signal: AbortSignal): Promise<WindowRegion | null> {

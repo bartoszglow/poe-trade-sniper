@@ -129,7 +129,7 @@ describe('TravelService', () => {
     tokenless.service.onApplicationShutdown();
   });
 
-  it('focuses the game on auto-travel success, but not on manual travel', async () => {
+  it('focuses the game as travel starts — auto AND manual (snaps to the game on press)', async () => {
     const auto = createService({ autoTravel: true });
     auto.realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-x') });
     await flushQueue();
@@ -139,7 +139,7 @@ describe('TravelService', () => {
     const manual = createService({ autoTravel: false });
     manual.service.enqueue(manualRequest());
     await flushQueue();
-    expect(manual.gameFocus.focus).not.toHaveBeenCalled();
+    expect(manual.gameFocus.focus).toHaveBeenCalledTimes(1);
     manual.service.onApplicationShutdown();
   });
 

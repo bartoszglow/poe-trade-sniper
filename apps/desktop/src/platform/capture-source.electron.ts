@@ -11,9 +11,9 @@ const OSASCRIPT_TIMEOUT_MS = 5_000;
 
 /**
  * AppleScript: focus the foreground process owning a window whose title contains
- * `title`; prints "ok" on success, "not-found" otherwise. Matches the WINDOW,
- * not the process — under Wine the process is just "wine" and there are two
- * (Steam + the game), so a name match focuses the wrong one. `title` is
+ * `title`, and print that process's unix id (pid) — or "not-found". Matches the
+ * WINDOW, not the process: under Wine the process is just "wine" and there are
+ * two (Steam + the game), so a name match focuses the wrong one. `title` is
  * pre-sanitized to `[A-Za-z0-9 ._-]`, so inlining it can't break the string.
  */
 function focusByTitleScript(title: string): string {
@@ -23,7 +23,7 @@ function focusByTitleScript(title: string): string {
     '    repeat with win in (windows of proc)',
     `      if (name of win) contains "${title}" then`,
     '        set frontmost of proc to true',
-    '        return "ok"',
+    '        return (unix id of proc) as string',
     '      end if',
     '    end repeat',
     '  end repeat',
@@ -32,18 +32,14 @@ function focusByTitleScript(title: string): string {
   ].join('\n');
 }
 
-/** AppleScript: "true" if the frontmost process owns a window matching `title`. */
-function frontmostHasTitleScript(title: string): string {
-  return [
-    'tell application "System Events"',
-    '  set frontProc to first process whose frontmost is true',
-    '  repeat with win in (windows of frontProc)',
-    `    if (name of win) contains "${title}" then return "true"`,
-    '  end repeat',
-    '  return "false"',
-    'end tell',
-  ].join('\n');
-}
+/**
+ * AppleScript: the unix id (pid) of the frontmost process. Focus is verified by
+ * comparing this to the pid we just focused — NOT by re-reading a window title,
+ * because a fullscreen Wine window often stops exposing its title to `windows
+ * of`, which made a title-based verify false-fail right after focus.
+ */
+const FRONTMOST_PID_SCRIPT =
+  'tell application "System Events" to get unix id of (first process whose frontmost is true)';
 
 /**
  * Captures the primary screen via Electron `desktopCapturer` at LOGICAL
@@ -61,6 +57,9 @@ export function createElectronCaptureSource(
   probe: PermissionProbe,
   gameWindowTitle: string,
 ): CaptureSource {
+  // The pid we last brought to the foreground — focus is verified by comparing
+  // the frontmost pid to this (robust against a fullscreen window hiding its title).
+  let lastFocusedPid: string | null = null;
   return {
     async capture(): Promise<RawFrame> {
       requireGrant(probe, 'capture', ['screenRecording']);
@@ -85,20 +84,27 @@ export function createElectronCaptureSource(
           ['-e', focusByTitleScript(gameWindowTitle)],
           { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
         );
-        return stdout.trim() === 'ok';
+        const result = stdout.trim();
+        if (result === '' || result === 'not-found') {
+          lastFocusedPid = null;
+          return false;
+        }
+        lastFocusedPid = result;
+        return true;
       } catch {
+        lastFocusedPid = null;
         return false;
       }
     },
 
     async isGameWindowFocused(): Promise<boolean> {
+      if (lastFocusedPid === null) return false;
       try {
-        const { stdout } = await execFileAsync(
-          'osascript',
-          ['-e', frontmostHasTitleScript(gameWindowTitle)],
-          { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
-        );
-        return stdout.trim() === 'true';
+        const { stdout } = await execFileAsync('osascript', ['-e', FRONTMOST_PID_SCRIPT], {
+          timeout: OSASCRIPT_TIMEOUT_MS,
+          killSignal: 'SIGKILL',
+        });
+        return stdout.trim() === lastFocusedPid;
       } catch {
         return false;
       }

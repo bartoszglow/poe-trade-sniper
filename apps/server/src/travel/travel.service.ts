@@ -120,13 +120,15 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
         }
 
         this.publish('started', request, null);
+        // Pull the (backgrounded, low-FPS) game window to the foreground the
+        // moment travel begins — so it's at full FPS by the time the character
+        // lands, and a manual Travel/Buy snaps the operator straight to the game
+        // (auto + manual alike) instead of leaving them on the app.
+        this.gameFocus.focus();
         try {
           await this.tradeApi.travel(request.hideoutToken, request.search, randomUUID());
           this.rememberTraveled(request.listingId);
           this.publish('success', request, null);
-          // Auto-travel teleported the character — pull the (backgrounded, low-FPS)
-          // game window to the foreground so the operator can act at full FPS.
-          if (request.source === 'auto') this.gameFocus.focus();
         } catch (error) {
           this.publish('failed', request, errorMessage(error));
         }
