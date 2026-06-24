@@ -34,6 +34,18 @@ which activates (see `index.css`):
 
 Nothing else in the shell may assume a browser chrome exists.
 
+## Capabilities & permissions
+
+`useServerStatus()` carries `permissions` (per macOS TCC kind) and derived
+`capabilities` (`canCapture`/`canControl`) from `/api/status` — the single HTTP
+source (decision #10), no second channel. The Settings **PermissionsCard**
+(macOS-desktop shells only) is an **Option-A mirror**: it renders that status and
+never assumes a grant optimistically; grant/manage actions go over IPC
+(`window.desktopPermissions`) straight to the main process's real probe. The
+per-search **Buy** toggle is gated on `capabilities.canControl` (resolved by
+`lib/resolve-buy-control`). Both are real in `pnpm dev` via the parity bridges
+(architecture.md → Desktop platform ports).
+
 ## Nav registry (open/closed)
 
 `src/shell/nav.ts` is the single registry: `{ id, path, labelKey, icon, page }`.

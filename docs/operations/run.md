@@ -18,10 +18,21 @@ cp .env.example .env       # defaults are fine for dev
 pnpm dev                   # server (:3500) + web (:5180) in parallel
 pnpm --filter @poe-sniper/server dev   # server only
 pnpm --filter @poe-sniper/web dev      # web only (proxies /api → :3500)
+pnpm dev:desktop           # Electron: in-process server + REAL native adapters + Vite HMR
+pnpm abi:node              # restore the Node ABI after dev:desktop (for pnpm dev / verify)
 ```
 
 - Server API: `http://localhost:3500/api/health`
 - Web UI: `http://localhost:5180`
+
+**`dev:desktop`** runs the NestJS server _in-process_ in the Electron main with the
+real desktop platform (screen capture, synthetic input, macOS permissions), while
+the window loads Vite for renderer HMR — so the full desktop feature set (the
+permission card, the capability gate, the Buy capture→move pipeline) runs in dev
+exactly as in the packaged app. It rebuilds `better-sqlite3` for the Electron ABI,
+so it **replaces** the plain `pnpm dev` Node stack while active; run `pnpm abi:node`
+before returning to `pnpm dev` or `pnpm verify`. Server code is not hot-reloaded in
+this mode (the renderer still is).
 
 ## Verify & build
 

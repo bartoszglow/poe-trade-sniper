@@ -161,6 +161,8 @@ No critical (data-loss / RCE / credential-leak / total-outage) findings. The PoE
 
 ### DOC-7 — architecture docs silent on the Phase-1 platform-ports seam + permission card
 
+**Status:** ✅ RESOLVED (2026-06-24) — architecture.md "Desktop platform ports" + frontend.md "Capabilities & permissions" sections added.
+
 - **Area:** docs (shared)
 - **File:** `docs/architecture/architecture.md`, `docs/architecture/frontend.md`
 - **Issue:** neither doc mentions the `apps/server/src/platform/*` ports/adapters seam, the permission card, or capture, despite Plan §5 naming both as docs-to-touch and CLAUDE.md pointing every session at them as the source of truth. (Scope-narrowed: the canonical decision survives in D-18, so this is a stale-reference-doc gap, not lost knowledge; the Buy-toggle note is Phase-2, so only the ports seam + permission card are the present Phase-1 obligation.)
@@ -272,6 +274,8 @@ No critical (data-loss / RCE / credential-leak / total-outage) findings. The PoE
 - **Effort:** S
 
 ### PERF-8 — engine-status SSE bump triggers full `/api/searches` refetch
+
+**Status:** ✅ RESOLVED (2026-06-24, `ef7fcee`) — version-driven refetch debounced via a shared `useDebouncedValue`; dead `engineStateBySearchId` removed. (Took the debounce path, not the lazy-`filters` shape, to avoid making hitCount/lastHitAt stale.)
 
 - **Area:** web + server — `apps/web/src/hooks/useSearches.ts:48-50` + `apps/server/src/search/search-manager.ts:571-580,686-691`
 - **Issue:** every `engine-status`/`guard` event bumps `searchesVersion`, refetching the full search list (incl. the opaque `filters` JSON per row) twice per event (useSearches + useDetection); on a flaky GGG socket this is a refetch storm. Cost is wasted loopback round-trips only — `latestRequestId` already guards stale clobbering. (Note: `engineStateBySearchId` is written but never read, so the finder's "apply delta locally" fix is wrong — the badge reads `search.engine` from the refetched row.)

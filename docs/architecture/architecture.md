@@ -35,6 +35,27 @@ docs            this documentation
 - Config comes exclusively from the Zod-validated env schema
   (`config/env.ts`) — no magic numbers in code; tunables are config.
 
+## Desktop platform ports (server stays cross-platform)
+
+Native OS access (screen capture, synthetic input, macOS permissions) sits behind
+a `DesktopPlatform` aggregate of small ports in `platform/` — `PermissionProbe`,
+`CaptureSource`, `TradeVision`, `InputController`, `UserInputWatcher`. The server
+depends only on these interfaces; a **no-op default** keeps `apps/server`
+buildable and runnable with zero native deps (web, CLI, tests). The real adapters
+(`desktopCapturer`, `nut.js`, `uiohook`, `systemPreferences`) live **only in
+`apps/desktop`** and are injected once, before `app.listen()`, via
+`startServer({ platformFactory })` → global `PlatformModule.register(platform)` —
+DI holds the real ports from the first request, no post-boot swap. `/api/status`
+exposes `permissions` + derived `capabilities` (`canCapture`/`canControl`) as the
+single source of truth (rides the status poll — decision #10).
+
+**Dev↔prod parity** (every feature must be testable in `pnpm dev`, not only the
+packaged build): the plain dev stack runs the no-op platform, so the Electron main
+_pushes_ real macOS status to it (`POST /api/dev/permissions`, dev-only) to make
+the gate real; `pnpm dev:desktop` goes further and runs this server in-process in
+the Electron main with the real platform + Vite HMR, so capture/input execute for
+real in dev. See `docs/operations/run.md`.
+
 ## The engine-registry contract (open/closed core)
 
 Detection strategies implement `DetectionEngine` and are registered in an
