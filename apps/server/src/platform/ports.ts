@@ -86,6 +86,11 @@ export interface FrameAnalysis {
  */
 export interface TradeVision {
   analyze(frame: RawFrame): FrameAnalysis;
+  /**
+   * Locate the golden "Leave Hideout" button (bottom-right HUD) for the
+   * return-to-hideout step — its centre in frame pixels, or null if not visible.
+   */
+  locateLeaveHideout(frame: RawFrame): Point | null;
 }
 
 /**
@@ -93,6 +98,9 @@ export interface TradeVision {
  * and throws `PermissionDeniedError` when its grant is missing. There is NO
  * `click` by design until the verify-then-act click iteration (decision #8).
  */
+/** Keys the controller can press (extend as needed). */
+export type KeyName = 'escape';
+
 export interface InputController {
   /** Move to `to` in small jittered, awaited steps; abort promptly on `signal`. */
   moveHumanLike(to: Point, signal: AbortSignal): Promise<void>;
@@ -102,6 +110,14 @@ export interface InputController {
    * sets the absolute target it can't drift relative to where the cursor started.
    */
   placeCursor(to: Point): Promise<void>;
+  /** Press + release a key (e.g. Escape to close the trade window). */
+  pressKey(key: KeyName): Promise<void>;
+  /**
+   * Place the cursor at `to` and LEFT-click. Used ONLY for safe navigation (the
+   * "Leave Hideout" button on the return-to-hideout sequence) — the buy itself is
+   * still placement-only (decision #8).
+   */
+  click(to: Point): Promise<void>;
 }
 
 /**

@@ -24,6 +24,15 @@ function isDarkUi(blue: number, green: number, red: number): boolean {
   return red + green + blue < 60;
 }
 
+/** The golden/tan "Leave Hideout" button text + ornate border (high red+green, low
+ *  blue). Used only in the bottom-right HUD region for the return-to-hideout step. */
+function isGold(blue: number, green: number, red: number): boolean {
+  return red > 150 && green > 110 && blue < 115 && red > blue + 50 && green > blue + 25;
+}
+const LEAVE_REGION_X = 0.55; // search the bottom-right HUD quadrant only
+const LEAVE_REGION_Y = 0.74;
+const MIN_LEAVE_GOLD = 30; // gold samples to count as the button (vs stray gold)
+
 const SAMPLE_STRIDE = 2; // sample every 2nd px (speed)
 const CELL = 12; // coarse violet grid cell (px) — bridges the thin/pulsing outline
 const MIN_CELL_HITS = 2; // violet samples in a cell to mark it "on"
@@ -140,6 +149,38 @@ export function createRawPixelTradeVision(): TradeVision {
         );
       }
       return { shopOpen, item };
+    },
+
+    locateLeaveHideout(frame: RawFrame): Point | null {
+      const { width, height, pixels } = frame;
+      if (width === 0 || height === 0) return null;
+      // Only the bottom-right HUD quadrant — avoids the golden quest text (upper
+      // right) and the gold-count (bottom centre).
+      const x0 = Math.floor(width * LEAVE_REGION_X);
+      const y0 = Math.floor(height * LEAVE_REGION_Y);
+      let count = 0;
+      let minX = width;
+      let minY = height;
+      let maxX = 0;
+      let maxY = 0;
+      for (let y = y0; y < height; y += SAMPLE_STRIDE) {
+        for (let x = x0; x < width; x += SAMPLE_STRIDE) {
+          const index = (y * width + x) * 4;
+          if (isGold(pixels[index] ?? 0, pixels[index + 1] ?? 0, pixels[index + 2] ?? 0)) {
+            count += 1;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      const center =
+        count >= MIN_LEAVE_GOLD ? { x: (minX + maxX) >> 1, y: (minY + maxY) >> 1 } : null;
+      if (VISION_DEBUG) {
+        console.warn('[vision] leaveHideout', JSON.stringify({ count, center }));
+      }
+      return center;
     },
   };
 }

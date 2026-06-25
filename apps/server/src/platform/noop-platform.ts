@@ -25,11 +25,14 @@ const noopCaptureSource: CaptureSource = {
 
 const noopTradeVision: TradeVision = {
   analyze: () => ({ shopOpen: false, item: null }),
+  locateLeaveHideout: () => null,
 };
 
 const noopInputController: InputController = {
   moveHumanLike: () => Promise.resolve(),
   placeCursor: () => Promise.resolve(),
+  pressKey: () => Promise.resolve(),
+  click: () => Promise.resolve(),
 };
 
 const noopUserInputWatcher: UserInputWatcher = {

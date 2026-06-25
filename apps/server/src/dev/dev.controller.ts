@@ -108,4 +108,15 @@ export class DevController {
       screen,
     };
   }
+
+  /** DEV: focus + capture + locate the golden "Leave Hideout" button (NO ESC, NO
+   *  click) — to validate that detection before wiring it into the buy return. */
+  @Post('leave-hideout-probe')
+  async leaveHideoutProbe(): Promise<unknown> {
+    await this.capture.focusGameWindow();
+    const frame = await this.capture.capture();
+    const button = this.vision.locateLeaveHideout(frame);
+    const screen = button ? this.capture.frameToScreen(button) : null;
+    return { frame: { w: frame.width, h: frame.height }, button, screen };
+  }
 }

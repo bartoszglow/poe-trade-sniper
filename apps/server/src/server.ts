@@ -21,6 +21,7 @@ export type {
   TradeVision,
   FrameAnalysis,
   InputController,
+  KeyName,
   UserInputWatcher,
   RawFrame,
   WindowRegion,

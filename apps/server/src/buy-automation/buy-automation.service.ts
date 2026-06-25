@@ -8,6 +8,7 @@ import {
 import type { BuyAutomationEvent, DomainEvent } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
+import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import {
   CAPTURE_SOURCE,
@@ -18,6 +19,7 @@ import {
 import type {
   CaptureSource,
   InputController,
+  Point,
   RawFrame,
   TradeVision,
   UserInputWatcher,
@@ -112,6 +114,7 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     @Inject(TRADE_VISION) private readonly vision: TradeVision,
     @Inject(INPUT_CONTROLLER) private readonly input: InputController,
     @Inject(USER_INPUT_WATCHER) private readonly userInput: UserInputWatcher,
+    @Inject(BuySessionLock) private readonly buyLock: BuySessionLock,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -166,6 +169,9 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       return;
     }
     this.running = true;
+    // Hold the buy session for the WHOLE run (incl. return-to-hideout) so no other
+    // search travels/buys until we're done — released in `finally`.
+    this.buyLock.begin();
     const controller = new AbortController();
     // Hard wall-clock deadline over the WHOLE pipeline. With `untilAbort` on
     // every port await, a hung osascript/getSources can never strand the run —
@@ -208,17 +214,17 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       const outcome = await this.acquireAndPlace(searchId, listingId, itemName, controller.signal);
       if (outcome === 'aborted') {
         this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
-        return;
+        return; // operator intervened — don't auto-return
       }
-      if (outcome === 'no-shop') {
-        this.emit('failed', searchId, listingId, itemName, 'trade-window-not-found');
-        return;
-      }
-      if (outcome === 'item-sold') {
+      if (outcome === 'moved') {
+        this.emit('moved', searchId, listingId, itemName, null);
+      } else if (outcome === 'item-sold') {
         this.emit('failed', searchId, listingId, itemName, 'item-sold');
-        return;
+      } else {
+        this.emit('failed', searchId, listingId, itemName, 'trade-window-not-found');
       }
-      this.emit('moved', searchId, listingId, itemName, null);
+      // We traveled to the seller's hideout — close the shop and return to OURS.
+      await this.returnToHideout(controller.signal);
     } catch (error) {
       if (controller.signal.aborted) {
         this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
@@ -230,7 +236,48 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       stopWatching?.();
       controller.abort();
       this.running = false;
+      this.buyLock.end(); // release the session — other searches may travel/buy again
     }
+  }
+
+  /**
+   * After the buy (or item-sold / no-shop), bring the character home: wait
+   * BUY_RETURN_DELAY_MS → press Escape (close the shop) → find + left-click the
+   * golden "Leave Hideout" button → wait BUY_HIDEOUT_WAIT_MS so we're sure we're
+   * back before the session releases. Best-effort + abortable: a real user input or
+   * the run deadline stops it quietly (the session still clears in `finally`).
+   */
+  private async returnToHideout(signal: AbortSignal): Promise<void> {
+    try {
+      await delay(this.config.BUY_RETURN_DELAY_MS, signal);
+      await this.input.pressKey('escape');
+      const button = await this.acquireLeaveHideout(signal);
+      if (button) {
+        await this.input.click(this.capture.frameToScreen(button));
+      } else {
+        this.logger.warn('return-to-hideout: leave-hideout button not found');
+      }
+      await delay(this.config.BUY_HIDEOUT_WAIT_MS, signal);
+    } catch {
+      // run-level abort/deadline during the return — stop quietly
+    }
+  }
+
+  /** Capture↔analyse pipeline for the "Leave Hideout" button after closing the
+   *  shop, up to BUY_SHOP_TIMEOUT_MS. Returns its frame-pixel centre, or null. */
+  private async acquireLeaveHideout(signal: AbortSignal): Promise<Point | null> {
+    const startedAt = Date.now();
+    let inFlight = this.safeCapture(signal);
+    while (!signal.aborted && Date.now() - startedAt < this.config.BUY_SHOP_TIMEOUT_MS) {
+      const frame = await inFlight;
+      inFlight = this.safeCapture(signal);
+      if (!frame) return null;
+      if (frame.width > 0) {
+        const button = this.vision.locateLeaveHideout(frame);
+        if (button) return button;
+      }
+    }
+    return null;
   }
 
   /** Poll the focus check until it confirms or the attempts run out (aborts on signal). */

@@ -34,7 +34,9 @@ describe('loadConfig', () => {
     expect(config.BUY_FOCUS_VERIFY_MS).toBe(250);
     expect(config.BUY_SHOP_TIMEOUT_MS).toBe(15_000);
     expect(config.BUY_ITEM_GRACE_MS).toBe(2_500);
-    expect(config.BUY_RUN_TIMEOUT_MS).toBe(25_000);
+    expect(config.BUY_RETURN_DELAY_MS).toBe(5_000);
+    expect(config.BUY_HIDEOUT_WAIT_MS).toBe(10_000);
+    expect(config.BUY_RUN_TIMEOUT_MS).toBe(50_000);
   });
 
   it('enforces the buy-automation tunable min bounds', () => {

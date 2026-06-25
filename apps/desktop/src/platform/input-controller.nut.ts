@@ -1,7 +1,9 @@
-import { mouse, Point as NutPoint } from '@nut-tree-fork/nut-js';
-import type { InputController, PermissionProbe, Point } from '@poe-sniper/server';
+import { Key, keyboard, mouse, Point as NutPoint } from '@nut-tree-fork/nut-js';
+import type { InputController, KeyName, PermissionProbe, Point } from '@poe-sniper/server';
 import { requireGrant } from './require-grant.js';
 import { markSyntheticMove } from './synthetic-input-marker.js';
+
+const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape };
 
 const MOVE_STEPS = 24;
 /** Instant placement re-asserts the target this many times (a single setPosition
@@ -78,6 +80,27 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
           await new Promise((resolve) => setTimeout(resolve, PLACE_RETRY_MS));
         }
       }
+    },
+
+    async pressKey(key: KeyName): Promise<void> {
+      requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
+      const nutKey = KEY_MAP[key] ?? Key.Escape;
+      await keyboard.pressKey(nutKey);
+      await keyboard.releaseKey(nutKey);
+    },
+
+    async click(to: Point): Promise<void> {
+      requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
+      // Place the cursor (re-asserted, like placeCursor) THEN left-click — the
+      // cursor must actually land before the click registers on the button.
+      const target = new NutPoint(Math.round(to.x), Math.round(to.y));
+      for (let attempt = 0; attempt < PLACE_ATTEMPTS; attempt += 1) {
+        markSyntheticMove();
+        await mouse.setPosition(target);
+        await new Promise((resolve) => setTimeout(resolve, PLACE_RETRY_MS));
+      }
+      markSyntheticMove();
+      await mouse.leftClick();
     },
   };
 }

@@ -162,9 +162,16 @@ export const envSchema = z.object({
   /** Once the shop is open, keep checking for the item this long before concluding
    *  it sold (items can take ~1s to render in). */
   BUY_ITEM_GRACE_MS: z.coerce.number().int().min(0).default(2_500),
-  /** Hard wall-clock cap on a whole buy run — guarantees the single-flight lock
-   *  resets even if a desktop port call (osascript/screencapture) hangs. */
-  BUY_RUN_TIMEOUT_MS: z.coerce.number().int().min(100).default(25_000),
+  /** After the buy outcome, wait this long before starting the return-to-hideout
+   *  (close shop + leave). */
+  BUY_RETURN_DELAY_MS: z.coerce.number().int().min(0).default(5_000),
+  /** After clicking "Leave Hideout", wait this long to be sure the character is
+   *  back home before the buy session releases. */
+  BUY_HIDEOUT_WAIT_MS: z.coerce.number().int().min(0).default(10_000),
+  /** Hard wall-clock cap on a whole buy run (incl. the return-to-hideout sequence)
+   *  — guarantees the single-flight lock + buy-session lock reset even if a desktop
+   *  port call (osascript/screencapture) hangs. */
+  BUY_RUN_TIMEOUT_MS: z.coerce.number().int().min(100).default(50_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

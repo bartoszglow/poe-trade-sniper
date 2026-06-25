@@ -9,6 +9,7 @@ import {
 import type { DomainEvent, TravelEvent } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
+import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { SearchManager } from '../search/search-manager.js';
 import { TradeApiClient, type TradeSearchRef } from '../trade-api/trade-api.client.js';
@@ -61,6 +62,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(SearchManager) private readonly searchManager: SearchManager,
     @Inject(RealtimeBus) private readonly realtimeBus: RealtimeBus,
     @Inject(GameFocusService) private readonly gameFocus: GameFocusService,
+    @Inject(BuySessionLock) private readonly buyLock: BuySessionLock,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -77,8 +79,14 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     return { queueLength: this.queue.length, lastTravel: this.lastTravel };
   }
 
-  /** Enqueue a travel; returns the queue position (0 = next). */
+  /** Enqueue a travel; returns the queue position (0 = next), or -1 if suspended
+   *  because a buy sequence is in progress (live hits still show, but we don't
+   *  travel/buy until the current buy — incl. return-to-hideout — finishes). */
   enqueue(request: TravelRequest): { position: number } {
+    if (this.buyLock.isActive) {
+      this.logger.log(`travel suspended — buy in progress (listing ${request.listingId})`);
+      return { position: -1 };
+    }
     const queued: QueuedTravel = { ...request, enqueuedAtMs: Date.now() };
     this.queue.push(queued);
     this.publish('queued', queued, null);

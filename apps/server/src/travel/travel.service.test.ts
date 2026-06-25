@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Listing, TravelEvent } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
+import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import type { SearchManager } from '../search/search-manager.js';
 import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
@@ -58,15 +59,17 @@ function createService(options: { autoTravel?: boolean; travelDelayMs?: number }
   } as unknown as SearchManager;
 
   const gameFocus = { focus: vi.fn() };
+  const buyLock = new BuySessionLock();
   const service = new TravelService(
     config,
     tradeApi,
     searchManager,
     realtimeBus,
     gameFocus as unknown as GameFocusService,
+    buyLock,
   );
   service.onApplicationBootstrap();
-  return { service, tradeApi, realtimeBus, travelEvents, travelCalls, gameFocus };
+  return { service, tradeApi, realtimeBus, travelEvents, travelCalls, gameFocus, buyLock };
 }
 
 async function flushQueue(): Promise<void> {
@@ -192,6 +195,7 @@ describe('TravelService', () => {
       { isAutoTravelEnabled: () => true, getSearchRef: () => SEARCH } as unknown as SearchManager,
       realtimeBus,
       { focus: vi.fn() } as unknown as GameFocusService,
+      new BuySessionLock(),
     );
     service.onApplicationBootstrap();
 
@@ -239,6 +243,7 @@ describe('TravelService', () => {
       { isAutoTravelEnabled: () => false, getSearchRef: () => SEARCH } as unknown as SearchManager,
       realtimeBus,
       { focus: vi.fn() } as unknown as GameFocusService,
+      new BuySessionLock(),
     );
 
     vi.useFakeTimers({ toFake: ['Date'] });

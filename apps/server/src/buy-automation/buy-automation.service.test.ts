@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BuyAutomationEvent, TravelEvent } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
+import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import type {
   CaptureSource,
@@ -88,11 +89,14 @@ function createHarness(options: HarnessOptions = {}) {
   // `region` present → shop open; `point` present → item located.
   const vision = {
     analyze: vi.fn(() => ({ shopOpen: region !== null, item: point })),
+    locateLeaveHideout: vi.fn(() => POINT),
   } as unknown as TradeVision;
 
   const moveHumanLike = vi.fn(options.moveImpl ?? (() => Promise.resolve()));
   const placeCursor = vi.fn(() => Promise.resolve());
-  const input = { moveHumanLike, placeCursor } as unknown as InputController;
+  const pressKey = vi.fn(() => Promise.resolve());
+  const click = vi.fn(() => Promise.resolve());
+  const input = { moveHumanLike, placeCursor, pressKey, click } as unknown as InputController;
 
   let inputCallback: (() => void) | null = null;
   const userInput: UserInputWatcher = {
@@ -110,8 +114,11 @@ function createHarness(options: HarnessOptions = {}) {
     BUY_CAPTURE_TIMEOUT_MS: '500',
     BUY_SHOP_TIMEOUT_MS: '500',
     BUY_ITEM_GRACE_MS: '150',
+    BUY_RETURN_DELAY_MS: '10',
+    BUY_HIDEOUT_WAIT_MS: '10',
     BUY_RUN_TIMEOUT_MS: '2000',
   });
+  const buyLock = new BuySessionLock();
   const service = new BuyAutomationService(
     config,
     bus,
@@ -121,6 +128,7 @@ function createHarness(options: HarnessOptions = {}) {
     vision,
     input,
     userInput,
+    buyLock,
   );
   service.onApplicationBootstrap();
 
@@ -130,6 +138,9 @@ function createHarness(options: HarnessOptions = {}) {
     buyEvents,
     moveHumanLike,
     placeCursor,
+    pressKey,
+    click,
+    buyLock,
     phases: () => buyEvents.map((event) => event.phase),
     triggerUserInput: () => inputCallback?.(),
   };
