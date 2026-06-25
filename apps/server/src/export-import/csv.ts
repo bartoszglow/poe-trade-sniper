@@ -1,10 +1,25 @@
-/** RFC-4180 cell: quote when it contains a comma, quote or newline; double inner quotes. */
+/**
+ * Serialize one cell. RFC-4180 quoting (comma/quote/newline → quoted, inner quotes
+ * doubled) PLUS spreadsheet-formula-injection neutralization: a TEXT cell starting with
+ * `= + - @` (or a tab/CR) is executed as a formula by Excel/Sheets/Numbers, and our
+ * hits/activity exports carry untrusted seller/item/mod text from GGG — so we prefix such
+ * text cells with a guard apostrophe. Numeric/boolean cells are left untouched (a negative
+ * number must stay numeric).
+ */
 function escapeCell(value: unknown): string {
   let text: string;
+  let isText = false;
   if (value === null || value === undefined) text = '';
-  else if (typeof value === 'string') text = value;
-  else if (typeof value === 'number' || typeof value === 'boolean') text = String(value);
-  else text = JSON.stringify(value) ?? '';
+  else if (typeof value === 'string') {
+    text = value;
+    isText = true;
+  } else if (typeof value === 'number' || typeof value === 'boolean') {
+    text = String(value);
+  } else {
+    text = JSON.stringify(value) ?? '';
+    isText = true;
+  }
+  if (isText && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return /["\n\r,]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

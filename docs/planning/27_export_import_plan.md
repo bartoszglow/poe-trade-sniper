@@ -28,8 +28,11 @@ filter just won't match; acceptable. Fully offline — no session required.
 
 ## Architecture
 
-- **shared:** `SearchExportEnvelope { version, exportedAt, searches: SearchExportEntry[] }`
-  (+ `SEARCH_EXPORT_VERSION`). Types only; the import Zod schema lives server-side.
+- **shared:** `SearchExportEnvelope { kind: 'poe-sniper-searches', version, exportedAt,
+searches: ManagedSearch[] }` (+ `SEARCH_EXPORT_VERSION`). The `kind` discriminator lets a
+  wrong-file import fail cleanly; entries are `ManagedSearch` (no separate entry type).
+  Types only; the import Zod schema (closed enums for realm/purchaseMode, object filters,
+  version check) lives server-side.
 - **server** `src/export-import/`:
   - `ExportController` — `GET /api/export/searches` (JSON attachment),
     `/api/export/hits`, `/api/export/activity` (CSV attachments). `@Res()` +
@@ -56,4 +59,11 @@ filter just won't match; acceptable. Fully offline — no session required.
 
 ## Status
 
-- 2026-06-25: planned + approved. Implementation starting.
+- 2026-06-25: planned + approved + **IMPLEMENTED** (`4826ffa`). Server `export-import/`
+  module (`GET /api/export/{searches,hits,activity}` + `POST /api/import/searches`),
+  `SearchManager.exportSearches/importSearches`, shared envelope, web "Backup / data"
+  Settings card + EN/PL i18n. Tests: csv, import validation (incl. strict reject of a
+  smuggled session), export shape + credential-exclusion, round-trip. verify green
+  (server 169, web 13, desktop 6). Live smoke: all 3 exports 200 + correct
+  Content-Disposition; import empty → `{0,0,[]}`; tampered (extra `session`) → **400**.
+- Adversarial review (security/correctness/consistency) run post-merge.

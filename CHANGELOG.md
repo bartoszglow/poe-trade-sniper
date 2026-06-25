@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Searches view shows a clear "log in to start sniping" prompt with a button
   to Settings when there is no valid Path of Exile session, instead of an
   add-search form that could not work yet.
+- **Database export / import** (Settings → "Backup / data"): export your configured
+  searches as a restorable JSON file and the hits + activity logs as CSV (opens in
+  Excel), and import searches back (skip or replace). Credential-free by design — the
+  encrypted session is never exported; the import is strictly validated (and CSV cells
+  are guarded against spreadsheet formula injection).
 
 ### Fixed
 

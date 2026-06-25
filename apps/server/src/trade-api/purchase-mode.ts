@@ -26,7 +26,11 @@ export function applyPurchaseMode(
 ): PurchaseModeApplication {
   if (mode === null) return { query, applied: true };
   const statusOption = PURCHASE_MODE_TO_STATUS_OPTION[mode];
-  if (statusOption === null) return { query, applied: false };
+  // null = a known-but-unverified mapping; undefined = an unrecognized mode (e.g. a
+  // tampered import slipping past validation). Both pass the query's own status through
+  // untouched rather than emitting `status: { option: undefined }` (which serializes to an
+  // empty status and silently wipes a securable-only filter).
+  if (statusOption === null || statusOption === undefined) return { query, applied: false };
   return {
     query: { ...(query as Record<string, unknown>), status: { option: statusOption } },
     applied: true,

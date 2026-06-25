@@ -18,4 +18,14 @@ describe('toCsv', () => {
   it('only emits the named columns, in order', () => {
     expect(toCsv([{ b: 2, a: 1, c: 3 }], ['a', 'b'])).toBe('a,b\r\n1,2');
   });
+
+  it('neutralizes spreadsheet formula triggers in text cells (CSV injection)', () => {
+    expect(toCsv([{ a: '@evil' }], ['a'])).toBe("a\r\n'@evil");
+    expect(toCsv([{ a: '=HYPERLINK("x")' }], ['a'])).toBe('a\r\n"\'=HYPERLINK(""x"")"');
+    expect(toCsv([{ a: '+1' }, { a: '-1' }], ['a'])).toBe("a\r\n'+1\r\n'-1");
+  });
+
+  it('does not guard numeric cells (a negative number stays numeric)', () => {
+    expect(toCsv([{ a: -1 }], ['a'])).toBe('a\r\n-1');
+  });
 });

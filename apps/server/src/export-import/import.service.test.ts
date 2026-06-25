@@ -48,4 +48,29 @@ describe('ImportService', () => {
     const { service } = makeService();
     expect(() => service.importSearches('not json', 'skip')).toThrow(BadRequestException);
   });
+
+  it('rejects an off-contract purchaseMode (would silently corrupt the live query)', () => {
+    const { service } = makeService();
+    const body = { ...validEnvelope, searches: [{ ...validEntry, purchaseMode: 'garbage' }] };
+    expect(() => service.importSearches(body, 'skip')).toThrow(BadRequestException);
+  });
+
+  it('rejects a non-poe2 realm', () => {
+    const { service } = makeService();
+    const body = { ...validEnvelope, searches: [{ ...validEntry, realm: 'pc' }] };
+    expect(() => service.importSearches(body, 'skip')).toThrow(BadRequestException);
+  });
+
+  it('rejects non-object filters', () => {
+    const { service } = makeService();
+    const body = { ...validEnvelope, searches: [{ ...validEntry, filters: 'opaque-string' }] };
+    expect(() => service.importSearches(body, 'skip')).toThrow(BadRequestException);
+  });
+
+  it('rejects a newer export version than this app supports', () => {
+    const { service } = makeService();
+    expect(() => service.importSearches({ ...validEnvelope, version: 999 }, 'skip')).toThrow(
+      BadRequestException,
+    );
+  });
 });
