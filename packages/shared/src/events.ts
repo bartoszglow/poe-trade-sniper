@@ -7,6 +7,7 @@ import type { Listing, EngineKind, EngineStatus, ManagedSearch } from './index.j
  */
 export type DomainEvent =
   | HitEvent
+  | HitUpdatedEvent
   | SearchesChangedEvent
   | EngineStatusEvent
   | TravelEvent
@@ -28,6 +29,18 @@ export interface GuardEvent {
 
 export interface HitEvent {
   type: 'hit';
+  listing: Listing;
+}
+
+/**
+ * The SAME offer as an existing live hit, re-served by GGG under a new listing id
+ * (esp. after a travel re-query). The feed folds it onto the existing entity — newest
+ * id, moved to the top — but auto-travel/auto-buy IGNORE it: only `hit` triggers
+ * actions, so a re-serve can never re-travel or re-buy. Grouping is owned by the
+ * LiveOfferRegistry, not by the action services.
+ */
+export interface HitUpdatedEvent {
+  type: 'hit-updated';
   listing: Listing;
 }
 

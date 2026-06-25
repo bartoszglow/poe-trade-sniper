@@ -85,10 +85,11 @@ function assertNever(event: never): never {
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
     case 'hit':
-      // Collapse by offer identity (item+seller+price), not listingId: GGG re-serves the
-      // same offer under fresh ids (esp. after a travel re-query), which a listingId key
-      // shows as a duplicate. The differing ids fold into one entity (newest used for
-      // travel/buy); the newest replaces + moves to the top. See lib/live-hits.
+    case 'hit-updated':
+      // Both fold into one entity by offer identity (lib/live-hits): a `hit` is a new
+      // offer, a `hit-updated` is the same offer re-served by GGG under a fresh id. Either
+      // way the newest listing replaces + moves to the top and the differing ids merge;
+      // auto-travel/buy never see `hit-updated`, so a re-serve can't re-trigger them.
       return {
         ...state,
         liveHits: collapseHit(state.liveHits, event.listing, LIVE_HITS_CAP),

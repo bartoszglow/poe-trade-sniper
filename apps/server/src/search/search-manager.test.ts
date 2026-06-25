@@ -15,6 +15,7 @@ import { PermissionDeniedError } from '../permissions/permission-denied.error.js
 import type { PermissionGateService } from '../permissions/permission-gate.service.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 import type { EngineFactory } from './engine-registry.js';
+import { LiveOfferRegistry } from './live-offer-registry.js';
 import { SearchManager } from './search-manager.js';
 
 const ARMED_GUARD = { tripped: false } as unknown as OutboundGuard;
@@ -79,6 +80,7 @@ function createManager(
     realtimeBus,
     options.guard ?? ARMED_GUARD,
     options.gate ?? ALLOW_GATE,
+    new LiveOfferRegistry(config),
   );
   return { manager, database, tradeApi, events, executeSearch, wsEngines };
 }
@@ -336,6 +338,7 @@ describe('SearchManager', () => {
         new RealtimeBus(),
         ARMED_GUARD,
         ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -431,6 +434,7 @@ describe('SearchManager', () => {
         new RealtimeBus(),
         ARMED_GUARD,
         ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -578,6 +582,38 @@ describe('SearchManager', () => {
     }
   });
 
+  it('a re-served offer under a NEW id is hit-updated, not a second hit (#3)', async () => {
+    const { manager, database, events, wsEngines } = createManager();
+    try {
+      await manager.add('AbCdEf123', {});
+      wsEngines[0]?.callbacks?.onStatus('active', 'connected');
+      const offer = {
+        searchId: 'AbCdEf123',
+        itemName: 'Storm Veil',
+        price: { amount: 5, currency: 'divine' },
+        seller: 'seller#1',
+        hideoutToken: 'jwt',
+        item: null,
+        detectedAt: '2026-06-12T10:00:00.000Z',
+      };
+      // Same offer, fresh GGG result-hash id (models the ws/poll re-serve after a travel
+      // re-query). The feed updates, but it must NOT count as a new hit — so auto-travel/buy
+      // (which only act on `hit`) never re-fire, and only the first offer is stored.
+      wsEngines[0]?.callbacks?.onListings([{ ...offer, listingId: 'id-1' }]);
+      wsEngines[0]?.callbacks?.onListings([{ ...offer, listingId: 'id-2' }]);
+
+      expect(events.filter((type) => type === 'hit')).toHaveLength(1);
+      expect(events.filter((type) => type === 'hit-updated')).toHaveLength(1);
+      const hitRows = database.$client.prepare('SELECT listing_id FROM hits').all() as Array<{
+        listing_id: string;
+      }>;
+      expect(hitRows).toEqual([{ listing_id: 'id-1' }]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('editSearch re-points to a new search id, keeping hits + settings (#1)', async () => {
     const { manager, database, wsEngines } = createManager();
     try {
@@ -652,6 +688,7 @@ describe('SearchManager', () => {
         new RealtimeBus(),
         ARMED_GUARD,
         ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
       );
       reloaded.onApplicationBootstrap(); // bootstrap prunes
       try {
@@ -694,6 +731,7 @@ describe('SearchManager', () => {
         new RealtimeBus(),
         ARMED_GUARD,
         ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
       );
       reborn.onApplicationBootstrap();
       try {

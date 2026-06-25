@@ -28,6 +28,24 @@ describe('offerKey', () => {
       offerKey(makeListing({ price: { amount: 2, currency: 'regal' } })),
     );
   });
+
+  it('differs when the item roll differs (precise identity — different mods)', () => {
+    const base = {
+      rarity: 'rare',
+      baseType: 'Hunting Spear',
+      itemLevel: 80,
+      corrupted: false,
+      properties: [],
+      requirements: [],
+      implicitMods: [],
+      explicitMods: ['+10 to Strength'],
+      runeMods: [],
+      craftedMods: [],
+    };
+    expect(offerKey(makeListing({ item: base }))).not.toBe(
+      offerKey(makeListing({ item: { ...base, explicitMods: ['+25 to Strength'] } })),
+    );
+  });
 });
 
 describe('collapseHit', () => {

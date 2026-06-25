@@ -6,6 +6,7 @@ import { PermissionsModule } from '../permissions/permissions.module.js';
 import { SessionService } from '../session/session.service.js';
 import { TradeApiClient } from '../trade-api/trade-api.client.js';
 import { buildEngineRegistry, ENGINE_REGISTRY } from './engine-registry.js';
+import { LiveOfferRegistry } from './live-offer-registry.js';
 import { SearchManager } from './search-manager.js';
 
 @Module({
@@ -22,6 +23,7 @@ import { SearchManager } from './search-manager.js';
         networkLog: NetworkLog,
       ) => buildEngineRegistry(config, tradeApi, sessionService, guard, networkLog),
     },
+    LiveOfferRegistry,
     SearchManager,
   ],
   exports: [SearchManager],
