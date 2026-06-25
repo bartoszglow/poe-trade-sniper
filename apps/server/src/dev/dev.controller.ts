@@ -121,7 +121,9 @@ export class DevController {
     await new Promise((resolve) => setTimeout(resolve, 700)); // chat input ready
     await this.input.typeText('/hideout');
     await new Promise((resolve) => setTimeout(resolve, 400)); // settle before send
+    // Capture WITH the chat still open so the typed text is visible (self-verify).
+    const frame = await this.capture.capture();
     await this.input.pressKey('enter'); // send
-    return { ok: true, sent: '/hideout' };
+    return { ok: true, sent: '/hideout', frame: { w: frame.width, h: frame.height } };
   }
 }

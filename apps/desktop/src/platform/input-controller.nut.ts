@@ -10,9 +10,41 @@ const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape, enter: Key.Return };
 // Deterministic, not-too-fast key timing. A near-instant press+release was unreliable:
 // Esc landed ~3/4 of the time and Enter never opened chat. We set a small base delay
 // AND hold each key down explicitly so the game registers it.
-keyboard.config.autoDelayMs = 24;
+keyboard.config.autoDelayMs = 40; // spacing between key actions
 const KEY_HOLD_MS = 60; // hold a key down this long before releasing
-const KEY_CHAR_DELAY_MS = 40; // gap between typed chars (the chat input drops faster bursts)
+
+// keyboard.type(string) mis-typed every character as "a" on this Wine/macOS setup, so
+// we type via the Key ENUM (the same path Esc/Enter use, which works). Explicit map (no
+// dynamic Key[...] lookup, so it survives a const enum). Covers what `/hideout` needs.
+const CHAR_TO_KEY: Partial<Record<string, Key>> = {
+  '/': Key.Slash,
+  a: Key.A,
+  b: Key.B,
+  c: Key.C,
+  d: Key.D,
+  e: Key.E,
+  f: Key.F,
+  g: Key.G,
+  h: Key.H,
+  i: Key.I,
+  j: Key.J,
+  k: Key.K,
+  l: Key.L,
+  m: Key.M,
+  n: Key.N,
+  o: Key.O,
+  p: Key.P,
+  q: Key.Q,
+  r: Key.R,
+  s: Key.S,
+  t: Key.T,
+  u: Key.U,
+  v: Key.V,
+  w: Key.W,
+  x: Key.X,
+  y: Key.Y,
+  z: Key.Z,
+};
 
 const MOVE_STEPS = 24;
 /** Instant placement re-asserts the target this many times (a single setPosition
@@ -106,13 +138,18 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
 
     async typeText(text: string): Promise<void> {
       requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
-      // One char at a time with a small gap — typing the whole string at once was too
-      // fast for the chat input. Mark synthetic before each so the keydowns are graced
-      // (the watcher fires on any un-graced keydown).
-      for (const char of text) {
+      // Press each char via the Key enum (keyboard.type mis-typed everything as "a").
+      // Hold each key like pressKey; mark synthetic around each so the keydown burst
+      // stays inside the key-grace window and doesn't self-abort the run.
+      for (const char of text.toLowerCase()) {
+        const nutKey = CHAR_TO_KEY[char];
+        if (nutKey === undefined) continue;
         markSyntheticKey();
-        await keyboard.type(char);
-        await new Promise((resolve) => setTimeout(resolve, KEY_CHAR_DELAY_MS));
+        await keyboard.pressKey(nutKey);
+        await new Promise((resolve) => setTimeout(resolve, KEY_HOLD_MS));
+        markSyntheticKey();
+        await keyboard.releaseKey(nutKey);
+        await new Promise((resolve) => setTimeout(resolve, KEY_HOLD_MS));
       }
     },
   };

@@ -16,6 +16,10 @@ const DEFAULT_SYNTHETIC_GRACE_MS = 120;
 const parsedGrace = Number(process.env['BUY_SYNTHETIC_INPUT_GRACE_MS']);
 const SYNTHETIC_GRACE_MS =
   Number.isFinite(parsedGrace) && parsedGrace > 0 ? parsedGrace : DEFAULT_SYNTHETIC_GRACE_MS;
+// Keydowns get a MUCH wider grace than mouse moves: our synthetic key bursts (held
+// Esc/Enter + typing "/hideout" one nut.js call) span several hundred ms, and during
+// the return the operator isn't typing — so a generous window won't mask real input.
+const KEY_GRACE_MS = 1_500;
 
 /**
  * Global input watcher (uiohook-napi). Clicks / wheel abort immediately
@@ -35,7 +39,7 @@ export function createUiohookUserInputWatcher(): UserInputWatcher {
     if (!isWithinSyntheticGrace(SYNTHETIC_GRACE_MS)) fire();
   };
   const onKey = (): void => {
-    if (!isWithinSyntheticKeyGrace(SYNTHETIC_GRACE_MS)) fire();
+    if (!isWithinSyntheticKeyGrace(KEY_GRACE_MS)) fire();
   };
 
   return {
