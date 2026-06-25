@@ -18,11 +18,9 @@ import {
 import type {
   CaptureSource,
   InputController,
-  Point,
   RawFrame,
   TradeVision,
   UserInputWatcher,
-  WindowRegion,
 } from '../platform/ports.js';
 import { PermissionDeniedError } from '../permissions/permission-denied.error.js';
 import { PermissionGateService } from '../permissions/permission-gate.service.js';
@@ -203,38 +201,23 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
         return;
       }
 
-      // Capture loop until the trade window is detected (or give-up / abort).
-      const region = await this.detectTradeWindow(controller.signal);
-      if (controller.signal.aborted) {
+      // Capture↔analyse pipeline: wait for the shop to OPEN (gated on the merchant
+      // UI — the teleport loading screen varies by the seller's hideout, so we must
+      // not gate on the loading art), then for the item, then place the cursor.
+      // Emits window-found / item-located internally.
+      const outcome = await this.acquireAndPlace(searchId, listingId, itemName, controller.signal);
+      if (outcome === 'aborted') {
         this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
         return;
       }
-      if (!region) {
+      if (outcome === 'no-shop') {
         this.emit('failed', searchId, listingId, itemName, 'trade-window-not-found');
         return;
       }
-      this.emit('window-found', searchId, listingId, itemName, null);
-
-      // Verify-then-act: re-detect on ONE fresh frame to get the precise point and
-      // confirm the selection is still there before moving (one detection, not the
-      // old redundant double-locate).
-      const confirmed = await this.locate(region, itemName, controller.signal);
-      if (!confirmed) {
-        this.emit('failed', searchId, listingId, itemName, 'item-vanished-before-move');
+      if (outcome === 'item-sold') {
+        this.emit('failed', searchId, listingId, itemName, 'item-sold');
         return;
       }
-      this.emit('item-located', searchId, listingId, itemName, null);
-
-      // Don't place if the operator grabbed the mouse during detect/locate.
-      if (controller.signal.aborted) {
-        this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
-        return;
-      }
-      // Map the violet point (cropped window-frame pixels) → screen and place the
-      // cursor there INSTANTLY — one absolute move, no easing/centering (no click,
-      // decision #8). placeCursor can't drift relative to the starting position.
-      const target = this.capture.frameToScreen(confirmed);
-      await this.input.placeCursor(target);
       this.emit('moved', searchId, listingId, itemName, null);
     } catch (error) {
       if (controller.signal.aborted) {
@@ -264,54 +247,59 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
   }
 
   /**
-   * Capture frames until `analyze` returns non-null or the give-up timeout fires
-   * (a NORMAL clean-null outcome, distinct from the run-level abort that
-   * `untilAbort` turns into a throw). Shared by detection AND the verify-locate,
-   * so neither is fooled by the selection frame's PULSE — a single dim frame no
-   * longer reads as "no window" / "item vanished".
+   * The capture↔analyse PIPELINE. Kicks off the NEXT screenshot immediately, then
+   * analyses the current frame while that capture is in flight — so throughput is
+   * max(captureTime, analyseTime), not the sum, and it self-paces to the machine
+   * (no fixed delay). State machine:
+   *  - wait for the shop to open (merchant-UI signal) → emit window-found;
+   *  - once open, place the cursor as soon as the item appears → emit item-located;
+   *  - if the shop is open but no item for BUY_ITEM_GRACE_MS (it can take ~1s to
+   *    render) → 'item-sold'; if the shop never opens within BUY_SHOP_TIMEOUT_MS →
+   *    'no-shop'. A run-level abort/deadline → 'aborted'.
    */
-  private async captureUntil<T>(
-    signal: AbortSignal,
-    timeoutMs: number,
-    analyze: (frame: RawFrame) => Promise<T | null>,
-  ): Promise<T | null> {
-    let timedOut = false;
-    const giveUp = setTimeout(() => {
-      timedOut = true;
-    }, timeoutMs);
-    try {
-      while (!signal.aborted && !timedOut) {
-        const frame = await untilAbort(this.capture.capture(), signal);
-        const result = await analyze(frame);
-        if (result) return result;
-        try {
-          await delay(this.config.BUY_CAPTURE_POLL_MS, signal);
-        } catch {
-          break; // run-level abort (user / deadline)
-        }
-      }
-      return null;
-    } finally {
-      clearTimeout(giveUp);
-    }
-  }
-
-  private detectTradeWindow(signal: AbortSignal): Promise<WindowRegion | null> {
-    return this.captureUntil(signal, this.config.BUY_CAPTURE_TIMEOUT_MS, (frame) =>
-      this.vision.detectTradeWindow(frame),
-    );
-  }
-
-  private locate(
-    region: WindowRegion,
+  private async acquireAndPlace(
+    searchId: string,
+    listingId: string | null,
     itemName: string | null,
     signal: AbortSignal,
-  ): Promise<Point | null> {
-    // Retry across frames (not single-shot): the frame PULSES, so a lone dim
-    // verify frame must not be mistaken for the item vanishing.
-    return this.captureUntil(signal, this.config.BUY_CAPTURE_TIMEOUT_MS, (frame) =>
-      this.vision.locateItem(frame, region, itemName),
-    );
+  ): Promise<'moved' | 'no-shop' | 'item-sold' | 'aborted'> {
+    const startedAt = Date.now();
+    let shopOpenAt: number | null = null;
+    let inFlight = this.safeCapture(signal); // start the first capture
+    while (!signal.aborted) {
+      const frame = await inFlight;
+      inFlight = this.safeCapture(signal); // START the next capture, THEN analyse this one
+      if (!frame) return 'aborted';
+      if (frame.width > 0) {
+        const { shopOpen, item } = this.vision.analyze(frame);
+        if (shopOpen && shopOpenAt === null) {
+          shopOpenAt = Date.now();
+          this.emit('window-found', searchId, listingId, itemName, null);
+        }
+        if (shopOpen && item) {
+          if (signal.aborted) return 'aborted';
+          this.emit('item-located', searchId, listingId, itemName, null);
+          await this.input.placeCursor(this.capture.frameToScreen(item));
+          return 'moved';
+        }
+      }
+      if (shopOpenAt !== null) {
+        if (Date.now() - shopOpenAt > this.config.BUY_ITEM_GRACE_MS) return 'item-sold';
+      } else if (Date.now() - startedAt > this.config.BUY_SHOP_TIMEOUT_MS) {
+        return 'no-shop';
+      }
+    }
+    return 'aborted';
+  }
+
+  /** A capture that resolves to null on abort/error (never rejects), so the
+   *  pipeline's in-flight capture can't leak an unhandled rejection on return. */
+  private async safeCapture(signal: AbortSignal): Promise<RawFrame | null> {
+    try {
+      return await untilAbort(this.capture.capture(), signal);
+    } catch {
+      return null;
+    }
   }
 
   private emitAbortOutcome(

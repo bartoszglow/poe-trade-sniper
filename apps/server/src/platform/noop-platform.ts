@@ -24,8 +24,7 @@ const noopCaptureSource: CaptureSource = {
 };
 
 const noopTradeVision: TradeVision = {
-  detectTradeWindow: () => Promise.resolve(null),
-  locateItem: () => Promise.resolve(null),
+  analyze: () => ({ shopOpen: false, item: null }),
 };
 
 const noopInputController: InputController = {

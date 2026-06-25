@@ -1,13 +1,16 @@
 import { execFile } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { desktopCapturer, nativeImage, screen } from 'electron';
+import { nativeImage } from 'electron';
 import type { CaptureSource, PermissionProbe, Point, RawFrame } from '@poe-sniper/server';
 import { requireGrant } from './require-grant.js';
 
 const execFileAsync = promisify(execFile);
 const EMPTY_FRAME: RawFrame = { width: 0, height: 0, pixels: new Uint8Array(0) };
+/** Reused temp path for the per-capture screenshot. */
+const captureShotPath = join(tmpdir(), 'poe-sniper-capture.png');
 
 /** DEV ONLY: when set, capture() writes the first frames of each buy as PNGs here
  *  (full display + cropped window) + logs pixel stats, so the actual capture can
@@ -175,31 +178,15 @@ function focusByPidScript(pid: string, title: string, settleMs: number): string 
 const FRONTMOST_PID_SCRIPT =
   'tell application "System Events" to get unix id of (first process whose frontmost is true)';
 
-/** Copy a sub-rectangle of a BGRA frame into its own tight buffer. */
-function cropFrame(frame: RawFrame, cx: number, cy: number, cw: number, ch: number): RawFrame {
-  const x0 = Math.max(0, Math.round(cx));
-  const y0 = Math.max(0, Math.round(cy));
-  const width = Math.min(Math.round(cw), frame.width - x0);
-  const height = Math.min(Math.round(ch), frame.height - y0);
-  if (width <= 0 || height <= 0) return EMPTY_FRAME;
-  const pixels = new Uint8Array(width * height * 4);
-  for (let row = 0; row < height; row += 1) {
-    const srcStart = ((y0 + row) * frame.width + x0) * 4;
-    pixels.set(frame.pixels.subarray(srcStart, srcStart + width * 4), row * width * 4);
-  }
-  return { width, height, pixels };
-}
-
 /**
  * Captures the game window and owns the one capture↔screen mapping. To stay fast
  * and correct on a WINDOWED, MULTI-MONITOR, HiDPI macOS setup:
  *  - `focusGameWindow` focuses AND reads the window's bounds in ONE title-matched
  *    osascript (no frontmost race → never Steam's window), caching the geometry.
- *  - `capture` grabs the display the window is on, then CROPS to the window rect,
- *    so the violet search is scoped to the game window (no whole-screen pollution)
- *    and frame pixels are window-relative.
- *  - `frameToScreen` maps a window-relative point back to a global screen point
- *    via the window's logical bounds (handles HiDPI + monitor offsets).
+ *  - `capture` takes a FRESH `screencapture -R` of the window rect (no stale
+ *    desktopCapturer cache), so frame pixels are the window content at physical res.
+ *  - `frameToScreen` maps a window-pixel point back to a global screen point via
+ *    the window's logical bounds + the physical→logical scale (HiDPI + monitor offsets).
  * Self-gates Screen Recording. `gameWindowTitle` is pre-sanitized to `[A-Za-z0-9 ._-]`.
  */
 export function createElectronCaptureSource(
@@ -209,21 +196,14 @@ export function createElectronCaptureSource(
 ): CaptureSource {
   let lastFocusedPid: string | null = null;
   // Locked atomically on focus. windowX/Y/W/H are the window in global LOGICAL
-  // points; the rest (display + scale + crop in frame px) is filled by capture().
+  // points; scaleX/Y (physical px per logical pt) is filled by capture().
   let geometry: {
-    displayId: string;
-    thumbWidth: number;
-    thumbHeight: number;
-    displayOriginX: number;
-    displayOriginY: number;
     windowX: number;
     windowY: number;
     windowW: number;
     windowH: number;
     scaleX: number;
     scaleY: number;
-    cropW: number;
-    cropH: number;
   } | null = null;
   // After the first successful focus we remember the game's pid and re-focus it
   // DIRECTLY next time (no per-window scan — that scan is the ~3s cost). A restart
@@ -274,34 +254,21 @@ export function createElectronCaptureSource(
   function applyFocus(result: FocusResult): boolean {
     lastFocusedPid = result.pid;
     cachedPid = /^\d+$/.test(result.pid) ? result.pid : null;
-    const center = {
-      x: Math.round(result.x + result.w / 2),
-      y: Math.round(result.y + result.h / 2),
-    };
-    const display = screen.getDisplayNearestPoint(center);
+    // scaleX/Y default to 1; capture() refines them from the screenshot's
+    // physical size vs the window's logical size.
     geometry = {
-      displayId: String(display.id),
-      thumbWidth: display.size.width,
-      thumbHeight: display.size.height,
-      displayOriginX: display.bounds.x,
-      displayOriginY: display.bounds.y,
       windowX: result.x,
       windowY: result.y,
       windowW: result.w,
       windowH: result.h,
       scaleX: 1,
       scaleY: 1,
-      cropW: result.w,
-      cropH: result.h,
     };
     console.warn(
       '[capture] locked',
       JSON.stringify({
         pid: result.pid,
         window: { x: result.x, y: result.y, w: result.w, h: result.h },
-        displayId: display.id,
-        displayBounds: display.bounds,
-        displaySize: display.size,
       }),
     );
     return true;
@@ -312,59 +279,57 @@ export function createElectronCaptureSource(
       requireGrant(probe, 'capture', ['screenRecording']);
       const geo = geometry;
       if (!geo) return EMPTY_FRAME; // focus (which locks geometry) must run first
-      const tGetSources = Date.now();
-      const sources = await desktopCapturer.getSources({
-        types: ['screen'],
-        thumbnailSize: { width: geo.thumbWidth, height: geo.thumbHeight },
-      });
-      const getSourcesMs = Date.now() - tGetSources;
-      const source = sources.find((candidate) => candidate.display_id === geo.displayId);
-      if (!source || source.thumbnail.isEmpty()) return EMPTY_FRAME;
-      const size = source.thumbnail.getSize();
-      // Frame pixels per logical point (1 when the thumbnail came back logical,
-      // ~2 on physical HiDPI). Window rect within the display → crop in frame px.
-      geo.scaleX = size.width === 0 ? 1 : size.width / geo.thumbWidth;
-      geo.scaleY = size.height === 0 ? 1 : size.height / geo.thumbHeight;
-      const cropX = (geo.windowX - geo.displayOriginX) * geo.scaleX;
-      const cropY = (geo.windowY - geo.displayOriginY) * geo.scaleY;
-      geo.cropW = geo.windowW * geo.scaleX;
-      geo.cropH = geo.windowH * geo.scaleY;
-      const full: RawFrame = {
-        width: size.width,
-        height: size.height,
-        pixels: source.thumbnail.toBitmap(),
-      };
-      const cropped = cropFrame(full, cropX, cropY, geo.cropW, geo.cropH);
+      // FRESH screenshot of the window region via macOS `screencapture`.
+      // desktopCapturer.getSources returned a STALE/cached frame on every capture
+      // AFTER the first (only a cold focus-scan busted it), so warm buys re-detected
+      // the previous buy's frame and the cursor landed on a frozen spot. `-R x,y,w,h`
+      // takes global top-left points; `-x` is silent; without `-C` the cursor is
+      // excluded (so it can't be mistaken for a violet pixel).
+      try {
+        await execFileAsync(
+          'screencapture',
+          [
+            '-x',
+            '-R',
+            `${geo.windowX},${geo.windowY},${geo.windowW},${geo.windowH}`,
+            '-t',
+            'png',
+            captureShotPath,
+          ],
+          { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
+        );
+      } catch (error) {
+        console.warn(
+          '[capture] screencapture failed:',
+          error instanceof Error ? error.message : error,
+        );
+        return EMPTY_FRAME;
+      }
+      const image = nativeImage.createFromPath(captureShotPath);
+      if (image.isEmpty()) return EMPTY_FRAME;
+      const size = image.getSize();
+      // The shot IS the window at PHYSICAL resolution → frame px per logical pt.
+      geo.scaleX = geo.windowW === 0 ? 1 : size.width / geo.windowW;
+      geo.scaleY = geo.windowH === 0 ? 1 : size.height / geo.windowH;
+      const frame: RawFrame = { width: size.width, height: size.height, pixels: image.toBitmap() };
       if (DEBUG_DUMP_DIR && dumpSeq < DEBUG_DUMP_FRAMES) {
-        const tDump = Date.now();
-        dumpPng(`cap-full-${dumpSeq}`, full);
-        dumpPng(`cap-crop-${dumpSeq}`, cropped);
-        const purple = analyzePurple(cropped);
+        dumpPng(`cap-${dumpSeq}`, frame);
+        const purple = analyzePurple(frame);
         dumpPng(`cap-mask-${dumpSeq}`, purple.mask);
         console.warn(
           '[capture] dump',
           JSON.stringify({
             seq: dumpSeq,
-            getSourcesMs,
-            dumpMs: Date.now() - tDump,
-            crop: {
-              x: Math.round(cropX),
-              y: Math.round(cropY),
-              w: cropped.width,
-              h: cropped.height,
-            },
-            cropStats: frameStats(cropped),
+            w: frame.width,
+            h: frame.height,
+            scaleX: geo.scaleX,
+            cropStats: frameStats(frame),
             purple: { count: purple.count, avg: purple.avg, bbox: purple.bbox },
           }),
         );
         dumpSeq += 1;
-      } else if (DEBUG_DUMP_DIR) {
-        console.warn(
-          '[capture] timing',
-          JSON.stringify({ getSourcesMs, w: cropped.width, h: cropped.height }),
-        );
       }
-      return cropped;
+      return frame;
     },
 
     async focusGameWindow(): Promise<boolean> {

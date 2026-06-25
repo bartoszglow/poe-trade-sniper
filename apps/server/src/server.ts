@@ -19,6 +19,7 @@ export type {
   PermissionProbe,
   CaptureSource,
   TradeVision,
+  FrameAnalysis,
   InputController,
   UserInputWatcher,
   RawFrame,

@@ -26,9 +26,14 @@ export class GameFocusService {
     // name match focuses the wrong one. GAME_WINDOW_TITLE is charset-validated
     // (no quotes), so inlining it into the AppleScript cannot break the string.
     const title = this.config.GAME_WINDOW_TITLE;
+    // Scan ONLY the Wine processes (the game runs under Wine): iterating every
+    // GUI process's `background only` attribute intermittently throws System
+    // Events -1719 ("Invalid index") and is far slower — which also contended
+    // with the buy's own focus a moment later. `name contains "wine"` sidesteps
+    // both. GAME_WINDOW_TITLE is charset-validated, so inlining it is safe.
     const script = [
       'tell application "System Events"',
-      '  repeat with proc in (every process whose background only is false)',
+      '  repeat with proc in (every process whose name contains "wine")',
       '    repeat with win in (windows of proc)',
       `      if (name of win) contains "${title}" then`,
       '        set frontmost of proc to true',

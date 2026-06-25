@@ -1,65 +1,49 @@
-import type { Point, RawFrame, TradeVision, WindowRegion } from '@poe-sniper/server';
+import type { FrameAnalysis, Point, RawFrame, TradeVision } from '@poe-sniper/server';
+
+/** DEV-only: log each analysis (gated, since it runs in a tight pipeline). */
+const VISION_DEBUG = process.env['BUY_DEBUG_DUMP_DIR'] != null;
 
 /**
- * Locates the SELECTED trade item by its pulsing violet selection frame, via a
- * raw-pixel colour threshold + a coarse-grid connected-components pass — no
- * OpenCV / worker thread.
- *
- * Why not a global violet bounding box (the original approach): PoE's UI has
- * violet scattered everywhere (gem icons, item glows, grid tint), so min/max
- * over ALL violet pixels stretches across the whole window and the centre lands
- * nowhere near the item (measured: a 1413×772 bbox on a 1455×960 window). The
- * selection frame is instead a DENSE, connected rectangle that stands out from
- * the sparse noise — so we grid the frame into cells, keep cells with enough
- * violet, connect them (8-way, which bridges the thin/pulsing outline and small
- * gaps), discard isolated specks, and take the largest non-runaway cluster.
- *
- * Threshold tuned to the measured selection-frame colour (~r133 g97 b154, a
- * blue-leaning violet): both red & blue clearly above green, blue not dim. The
- * blue floor rejects the dim-blue grid cells; the green gap rejects bright/white
- * UI. The frame PULSES, so the threshold stays loose enough to catch dim phases
- * and the buy loop re-captures until a frame is found. (O-10 — tuned on-Mac.)
+ * The SELECTED item's pulsing violet frame — both red & blue clearly above green,
+ * blue not dim. Tuned to the measured selection violet (~r133 g97 b154).
  */
 function isViolet(blue: number, green: number, red: number): boolean {
   return blue > 105 && red > 85 && green + 15 < red && green + 15 < blue;
 }
 
-/** DEV-only: log each detection (gated, since detection runs in a tight loop). */
-const VISION_DEBUG = process.env['BUY_DEBUG_DUMP_DIR'] != null;
-const SAMPLE_STRIDE = 2; // sample every 2nd px when building the grid (speed)
-const CELL = 12; // coarse grid cell size (px) — bridges the thin/broken outline
+/**
+ * "Shop is open" signal: NEAR-BLACK coverage. The trade window is full of empty,
+ * near-black grid cells + dark UI panels (merchant grid + the player inventory),
+ * so a large fraction of the window is near-black whenever it's open — REGARDLESS
+ * of the seller's hideout or the (varying) teleport loading art. Measured: shop
+ * ~43%, hideout ~25%, loading screen ~30%. (Green failed — foliage in the hideout
+ * matches the merchant's green. If dark proves fragile, upgrade to matching the
+ * "MERCHANT" banner. TODO(verify) across sellers/full grids — O-10.)
+ */
+function isDarkUi(blue: number, green: number, red: number): boolean {
+  return red + green + blue < 60;
+}
+
+const SAMPLE_STRIDE = 2; // sample every 2nd px (speed)
+const CELL = 12; // coarse violet grid cell (px) — bridges the thin/pulsing outline
 const MIN_CELL_HITS = 2; // violet samples in a cell to mark it "on"
 const MIN_CLUSTER_HITS = 18; // total violet samples in the winning cluster
 const MAX_BBOX_COVERAGE = 0.85; // reject a cluster spanning ~the whole window (noise)
 const TOP_HUD_FRACTION = 0.08; // ignore the top skill/buff HUD strip (steady gem glow)
+const MIN_SHOP_DARK_FRACTION = 0.37; // near-black coverage gate (shop ~43% vs ~25-30% elsewhere)
 
-/**
- * Find the selected-item selection frame and return its pixel bounding box, or
- * null when no dense violet cluster is present (no item selected / trade closed).
- */
-function detectSelectionFrame(frame: RawFrame): WindowRegion | null {
-  const { width, height, pixels } = frame;
-  if (width === 0 || height === 0) return null;
-
-  const cols = Math.ceil(width / CELL);
-  const rows = Math.ceil(height / CELL);
-  const cellHits = new Int32Array(cols * rows);
-  for (let y = 0; y < height; y += SAMPLE_STRIDE) {
-    const gridY = (y / CELL) | 0;
-    for (let x = 0; x < width; x += SAMPLE_STRIDE) {
-      const index = (y * width + x) * 4;
-      if (isViolet(pixels[index] ?? 0, pixels[index + 1] ?? 0, pixels[index + 2] ?? 0)) {
-        const cell = gridY * cols + ((x / CELL) | 0);
-        cellHits[cell] = (cellHits[cell] ?? 0) + 1;
-      }
-    }
-  }
-
-  // Largest 8-connected cluster of "on" cells (iterative flood fill).
+/** Largest non-runaway violet cluster below the HUD → its centre (frame px), via
+ *  coarse-grid 8-connected components. Null when no real cluster is present. */
+function violetClusterCenter(
+  cellHits: Int32Array,
+  cols: number,
+  rows: number,
+  width: number,
+  height: number,
+): Point | null {
   const visited = new Uint8Array(cols * rows);
   const stack: number[] = [];
-  let best: { hits: number; minX: number; minY: number; maxX: number; maxY: number } | null = null;
-  let clusters = 0;
+  let best: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
   for (let start = 0; start < cellHits.length; start += 1) {
     if (visited[start] || (cellHits[start] ?? 0) < MIN_CELL_HITS) continue;
     stack.length = 0;
@@ -95,60 +79,67 @@ function detectSelectionFrame(frame: RawFrame): WindowRegion | null {
     if (hits < MIN_CLUSTER_HITS) continue;
     const bboxArea = (maxX - minX + 1) * (maxY - minY + 1);
     if (bboxArea / (cols * rows) > MAX_BBOX_COVERAGE) continue; // runaway noise
-    // Skip the top skill/buff HUD strip — a steady gem there is the same size as
-    // a 1×1 item frame, so size can't tell them apart; position can.
-    if (((minY + maxY) / 2) * CELL < height * TOP_HUD_FRACTION) continue;
-    clusters += 1;
+    if (((minY + maxY) / 2) * CELL < height * TOP_HUD_FRACTION) continue; // skill/buff HUD
     const bestArea = best ? (best.maxX - best.minX + 1) * (best.maxY - best.minY + 1) : -1;
-    if (!best || bboxArea > bestArea) best = { hits, minX, minY, maxX, maxY };
+    if (!best || bboxArea > bestArea) best = { minX, minY, maxX, maxY };
   }
-
   if (!best) return null;
   const x = best.minX * CELL;
   const y = best.minY * CELL;
-  const region = {
-    x,
-    y,
-    width: Math.min(width, (best.maxX + 1) * CELL) - x,
-    height: Math.min(height, (best.maxY + 1) * CELL) - y,
-  };
-  if (VISION_DEBUG) {
-    console.warn(
-      '[vision] frame',
-      JSON.stringify({
-        frame: { w: width, h: height },
-        clusters,
-        hits: best.hits,
-        region,
-        center: { x: region.x + ((region.width / 2) | 0), y: region.y + ((region.height / 2) | 0) },
-      }),
-    );
-  }
-  return region;
+  const w = Math.min(width, (best.maxX + 1) * CELL) - x;
+  const h = Math.min(height, (best.maxY + 1) * CELL) - y;
+  return { x: Math.round(x + w / 2), y: Math.round(y + h / 2) };
 }
 
+/**
+ * Raw-pixel trade vision — ONE strided traversal per frame computes both the
+ * merchant-green "shop open" signal and the violet selection-frame grid (no
+ * OpenCV / worker / OCR). The item is only located once the shop is open, so the
+ * pulsing portal glows on the (hideout-dependent) loading screen — which look
+ * violet but have no merchant green — can never be mistaken for an item.
+ */
 export function createRawPixelTradeVision(): TradeVision {
   return {
-    detectTradeWindow(frame: RawFrame): Promise<WindowRegion | null> {
-      return Promise.resolve(detectSelectionFrame(frame));
-    },
+    analyze(frame: RawFrame): FrameAnalysis {
+      const { width, height, pixels } = frame;
+      if (width === 0 || height === 0) return { shopOpen: false, item: null };
 
-    /**
-     * Re-detects the selection frame on the FRESH frame (verify-then-act): if the
-     * selection vanished, returns null and the move is skipped. The passed
-     * `region`/`target` are advisory — the fresh detection is authoritative.
-     */
-    locateItem(
-      frame: RawFrame,
-      _region: WindowRegion,
-      _target: string | null,
-    ): Promise<Point | null> {
-      const bounds = detectSelectionFrame(frame);
-      if (!bounds) return Promise.resolve(null);
-      return Promise.resolve({
-        x: Math.round(bounds.x + bounds.width / 2),
-        y: Math.round(bounds.y + bounds.height / 2),
-      });
+      const cols = Math.ceil(width / CELL);
+      const rows = Math.ceil(height / CELL);
+      const cellHits = new Int32Array(cols * rows);
+      let darkHits = 0;
+      let samples = 0;
+      for (let y = 0; y < height; y += SAMPLE_STRIDE) {
+        const gridY = (y / CELL) | 0;
+        for (let x = 0; x < width; x += SAMPLE_STRIDE) {
+          samples += 1;
+          const index = (y * width + x) * 4;
+          const blue = pixels[index] ?? 0;
+          const green = pixels[index + 1] ?? 0;
+          const red = pixels[index + 2] ?? 0;
+          if (isDarkUi(blue, green, red)) darkHits += 1;
+          if (isViolet(blue, green, red)) {
+            const cell = gridY * cols + ((x / CELL) | 0);
+            cellHits[cell] = (cellHits[cell] ?? 0) + 1;
+          }
+        }
+      }
+
+      const darkFraction = samples > 0 ? darkHits / samples : 0;
+      const shopOpen = darkFraction >= MIN_SHOP_DARK_FRACTION;
+      const item = shopOpen ? violetClusterCenter(cellHits, cols, rows, width, height) : null;
+      if (VISION_DEBUG) {
+        console.warn(
+          '[vision] analyze',
+          JSON.stringify({
+            frame: { w: width, h: height },
+            darkFraction: +darkFraction.toFixed(3),
+            shopOpen,
+            item,
+          }),
+        );
+      }
+      return { shopOpen, item };
     },
   };
 }

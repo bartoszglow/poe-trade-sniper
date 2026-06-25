@@ -156,9 +156,15 @@ export const envSchema = z.object({
   BUY_SYNTHETIC_INPUT_GRACE_MS: z.coerce.number().int().min(0).default(120),
   /** Wait after focusGameWindow before verifying focus actually landed (Wine can no-op). */
   BUY_FOCUS_VERIFY_MS: z.coerce.number().int().min(0).default(250),
+  /** Wait this long for the trade window (merchant UI) to appear after travel —
+   *  covers the teleport loading screen, which varies by the seller's hideout. */
+  BUY_SHOP_TIMEOUT_MS: z.coerce.number().int().min(500).default(15_000),
+  /** Once the shop is open, keep checking for the item this long before concluding
+   *  it sold (items can take ~1s to render in). */
+  BUY_ITEM_GRACE_MS: z.coerce.number().int().min(0).default(2_500),
   /** Hard wall-clock cap on a whole buy run — guarantees the single-flight lock
-   *  resets even if a desktop port call (osascript/getSources) hangs. */
-  BUY_RUN_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
+   *  resets even if a desktop port call (osascript/screencapture) hangs. */
+  BUY_RUN_TIMEOUT_MS: z.coerce.number().int().min(100).default(25_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

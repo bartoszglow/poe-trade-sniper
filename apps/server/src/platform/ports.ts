@@ -67,15 +67,25 @@ export interface CaptureSource {
   frameToScreen(point: Point): Point;
 }
 
+/** One frame's verdict: whether the trade/merchant window is on screen, and the
+ *  selected item's violet-frame centre (in frame pixels) if present. */
+export interface FrameAnalysis {
+  /** The merchant/trade UI is open (a hideout/loading-independent signal), so the
+   *  cursor move may proceed once an item is found. */
+  shopOpen: boolean;
+  /** Centre of the selected item's violet frame (frame-pixel coords), or null. */
+  item: Point | null;
+}
+
 /**
- * Computer-vision over a captured frame: find the trade/merchant window, then
- * the selected item inside it. Pure analysis — no OS permission of its own (it
- * only reads frames the `CaptureSource` produced). `locateItem` returns a
- * screen-space `Point` (the adapter maps frame→screen internally).
+ * Computer-vision over a captured frame. Pure, synchronous analysis (no OS
+ * permission, no I/O — it only reads a frame the `CaptureSource` produced), so a
+ * caller can run it back-to-back in a capture/analyse pipeline. `analyze` does ONE
+ * pixel traversal that decides shop-open AND locates the item, so capture stays
+ * the only real cost.
  */
 export interface TradeVision {
-  detectTradeWindow(frame: RawFrame): Promise<WindowRegion | null>;
-  locateItem(frame: RawFrame, region: WindowRegion, target: string | null): Promise<Point | null>;
+  analyze(frame: RawFrame): FrameAnalysis;
 }
 
 /**

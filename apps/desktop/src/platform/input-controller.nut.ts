@@ -4,6 +4,10 @@ import { requireGrant } from './require-grant.js';
 import { markSyntheticMove } from './synthetic-input-marker.js';
 
 const MOVE_STEPS = 24;
+/** Instant placement re-asserts the target this many times (a single setPosition
+ *  can be dropped under main-thread load), spaced by PLACE_RETRY_MS. */
+const PLACE_ATTEMPTS = 3;
+const PLACE_RETRY_MS = 40;
 
 /** Eased acceleration/deceleration — a straight constant-speed glide reads robotic. */
 function easeInOut(t: number): number {
@@ -60,10 +64,20 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
 
     async placeCursor(to: Point): Promise<void> {
       requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
-      // Instant absolute placement — one setPosition, NO getPosition / easing, so
-      // it lands exactly on `to` regardless of where the cursor started.
-      markSyntheticMove();
-      await mouse.setPosition(new NutPoint(Math.round(to.x), Math.round(to.y)));
+      // Absolute placement, RE-ASSERTED a few times: under the in-process
+      // dev:desktop main-thread load (and the System Events contention around
+      // focus) a single setPosition is sometimes dropped, leaving the cursor
+      // where it was. Re-setting the same absolute target is idempotent and cheap,
+      // and makes the placement reliable. `getPosition` reads one step stale here,
+      // so we don't gate on it — we just re-assert.
+      const target = new NutPoint(Math.round(to.x), Math.round(to.y));
+      for (let attempt = 0; attempt < PLACE_ATTEMPTS; attempt += 1) {
+        markSyntheticMove();
+        await mouse.setPosition(target);
+        if (attempt < PLACE_ATTEMPTS - 1) {
+          await new Promise((resolve) => setTimeout(resolve, PLACE_RETRY_MS));
+        }
+      }
     },
   };
 }

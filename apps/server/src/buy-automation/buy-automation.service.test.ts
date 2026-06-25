@@ -85,9 +85,9 @@ function createHarness(options: HarnessOptions = {}) {
 
   const region = options.region === undefined ? REGION : options.region;
   const point = options.point === undefined ? POINT : options.point;
+  // `region` present → shop open; `point` present → item located.
   const vision = {
-    detectTradeWindow: vi.fn(() => Promise.resolve(region)),
-    locateItem: vi.fn(() => Promise.resolve(point)),
+    analyze: vi.fn(() => ({ shopOpen: region !== null, item: point })),
   } as unknown as TradeVision;
 
   const moveHumanLike = vi.fn(options.moveImpl ?? (() => Promise.resolve()));
@@ -108,6 +108,8 @@ function createHarness(options: HarnessOptions = {}) {
     BUY_FOCUS_VERIFY_MS: '0',
     BUY_CAPTURE_POLL_MS: '20',
     BUY_CAPTURE_TIMEOUT_MS: '500',
+    BUY_SHOP_TIMEOUT_MS: '500',
+    BUY_ITEM_GRACE_MS: '150',
     BUY_RUN_TIMEOUT_MS: '2000',
   });
   const service = new BuyAutomationService(

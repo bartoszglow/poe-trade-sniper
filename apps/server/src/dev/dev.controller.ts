@@ -1,7 +1,18 @@
 import { BadRequestException, Body, Controller, Inject, Post } from '@nestjs/common';
 import { z } from 'zod';
-import { CAPTURE_SOURCE, PERMISSION_PROBE, TRADE_VISION } from '../platform/platform.tokens.js';
-import type { CaptureSource, PermissionProbe, RawFrame, TradeVision } from '../platform/ports.js';
+import {
+  CAPTURE_SOURCE,
+  INPUT_CONTROLLER,
+  PERMISSION_PROBE,
+  TRADE_VISION,
+} from '../platform/platform.tokens.js';
+import type {
+  CaptureSource,
+  InputController,
+  PermissionProbe,
+  RawFrame,
+  TradeVision,
+} from '../platform/ports.js';
 import { PushedPermissionProbe } from '../platform/pushed-permission-probe.js';
 
 const permissionStateSchema = z.enum([
@@ -30,6 +41,7 @@ export class DevController {
     @Inject(PERMISSION_PROBE) private readonly probe: PermissionProbe,
     @Inject(CAPTURE_SOURCE) private readonly capture: CaptureSource,
     @Inject(TRADE_VISION) private readonly vision: TradeVision,
+    @Inject(INPUT_CONTROLLER) private readonly input: InputController,
   ) {}
 
   @Post('permissions')
@@ -50,6 +62,16 @@ export class DevController {
    * item. Returns the geometry so the capture↔detection can be debugged live
    * without teleporting the character or hitting GGG.
    */
+  /** DEV: bare cursor move — NO focus, NO capture — to isolate nut.js in the
+   *  dev:desktop process from the focus/capture sequence. */
+  @Post('move-test')
+  async moveTest(): Promise<unknown> {
+    await this.input.placeCursor({ x: 400, y: 300 });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await this.input.placeCursor({ x: 1000, y: 700 });
+    return { ok: true };
+  }
+
   @Post('capture-probe')
   async captureProbe(): Promise<unknown> {
     const now = () => Date.now();
@@ -67,22 +89,22 @@ export class DevController {
       captureMs.push(now() - mark);
     }
     mark = now();
-    const region = frame ? await this.vision.detectTradeWindow(frame) : null;
-    const detectMs = now() - mark;
+    const analysis = frame ? this.vision.analyze(frame) : { shopOpen: false, item: null };
+    const analyzeMs = now() - mark;
+    const screen = analysis.item ? this.capture.frameToScreen(analysis.item) : null;
     mark = now();
-    const point = frame && region ? await this.vision.locateItem(frame, region, null) : null;
-    const locateMs = now() - mark;
-    const screen = point ? this.capture.frameToScreen(point) : null;
+    if (screen) await this.input.placeCursor(screen); // DEV: actually move, to test the full chain
+    const placeMs = now() - mark;
     return {
       focusIssued,
       focusConfirmed,
       focusMs,
       confirmMs,
       captureMs,
-      detectMs,
-      locateMs,
-      region,
-      point,
+      analyzeMs,
+      placeMs,
+      shopOpen: analysis.shopOpen,
+      item: analysis.item,
       screen,
     };
   }
