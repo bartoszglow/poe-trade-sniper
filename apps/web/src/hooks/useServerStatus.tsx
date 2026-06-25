@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { PermissionsStatus, SessionPublicStatus } from '@poe-sniper/shared';
+import type { AppSettings, PermissionsStatus, SessionPublicStatus } from '@poe-sniper/shared';
 import { apiGet } from '../lib/api';
 
 interface RateLimitRule {
@@ -41,6 +41,7 @@ export interface ServerStatus {
   };
   permissions: PermissionsStatus;
   capabilities: { canCapture: boolean; canControl: boolean };
+  settings: AppSettings;
 }
 
 const POLL_INTERVAL_MS = 10_000;

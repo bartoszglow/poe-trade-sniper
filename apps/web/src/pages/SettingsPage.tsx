@@ -385,6 +385,24 @@ export function SettingsPage() {
         <p className="mt-2 text-xs text-ink-faint">{t('settings.audioUnlockNote')}</p>
       </SettingsCard>
 
+      <SettingsCard title={t('settings.cursor')}>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            ariaLabel={t('settings.cursor')}
+            value={status?.settings.cursorMode ?? 'instant'}
+            onChange={(mode) => {
+              void apiSend('PATCH', '/api/settings', { cursorMode: mode }).then(refresh);
+            }}
+            options={[
+              { value: 'instant', label: t('settings.cursorInstant') },
+              { value: 'smooth', label: t('settings.cursorSmooth') },
+            ]}
+            className="w-56"
+          />
+          <span className="text-xs text-ink-faint">{t('settings.cursorHint')}</span>
+        </div>
+      </SettingsCard>
+
       {isMacDesktop && status && <PermissionsCard permissions={status.permissions} />}
 
       <SettingsCard title={t('settings.developer')}>

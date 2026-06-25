@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { BuyAutomationEvent, TravelEvent } from '@poe-sniper/shared';
+import type { BuyAutomationEvent, CursorMode, TravelEvent } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
+import type { AppSettingsService } from '../settings/app-settings.service.js';
 import type {
   CaptureSource,
   InputController,
@@ -51,6 +52,7 @@ interface HarnessOptions {
   point?: Point | null;
   captureHangs?: boolean;
   moveImpl?: (to: Point, signal: AbortSignal) => Promise<void>;
+  cursorMode?: CursorMode;
 }
 
 function createHarness(options: HarnessOptions = {}) {
@@ -119,6 +121,9 @@ function createHarness(options: HarnessOptions = {}) {
     BUY_RUN_TIMEOUT_MS: '2000',
   });
   const buyLock = new BuySessionLock();
+  const settings = {
+    get: () => ({ cursorMode: options.cursorMode ?? 'instant' }),
+  } as unknown as AppSettingsService;
   const service = new BuyAutomationService(
     config,
     bus,
@@ -129,6 +134,7 @@ function createHarness(options: HarnessOptions = {}) {
     input,
     userInput,
     buyLock,
+    settings,
   );
   service.onApplicationBootstrap();
 
@@ -154,6 +160,19 @@ describe('BuyAutomationService', () => {
       await waitFor(() => harness.phases().includes('moved'));
       expect(harness.phases()).toEqual(['started', 'window-found', 'item-located', 'moved']);
       expect(harness.placeCursor).toHaveBeenCalledOnce();
+      expect(harness.moveHumanLike).not.toHaveBeenCalled(); // instant is the default
+    } finally {
+      harness.service.onApplicationShutdown();
+    }
+  });
+
+  it('uses the smooth glide (moveHumanLike) when cursorMode is "smooth"', async () => {
+    const harness = createHarness({ cursorMode: 'smooth' });
+    try {
+      harness.bus.publish(travelSuccess());
+      await waitFor(() => harness.phases().includes('moved'));
+      expect(harness.moveHumanLike).toHaveBeenCalledOnce();
+      expect(harness.placeCursor).not.toHaveBeenCalled();
     } finally {
       harness.service.onApplicationShutdown();
     }

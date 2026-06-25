@@ -14,6 +14,7 @@ import { PlatformModule } from './platform/platform.module.js';
 import type { DesktopPlatform } from './platform/ports.js';
 import { RateLimitModule } from './ratelimit/ratelimit.module.js';
 import { SessionModule } from './session/session.module.js';
+import { SettingsModule } from './settings/settings.module.js';
 import { TradeApiModule } from './trade-api/trade-api.module.js';
 import { TravelModule } from './travel/travel.module.js';
 import { UpdateModule } from './update/update.module.js';
@@ -48,6 +49,7 @@ export class AppModule {
         ...(config.APP_ENV === 'development' ? [DevModule] : []),
         DbModule,
         EventsModule,
+        SettingsModule,
         NetworkModule,
         GuardModule,
         SessionModule,

@@ -4,3 +4,4 @@ export * from './session.js';
 export * from './events.js';
 export * from './update.js';
 export * from './permissions.js';
+export * from './settings.js';

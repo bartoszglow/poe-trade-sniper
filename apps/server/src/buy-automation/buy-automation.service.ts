@@ -27,6 +27,7 @@ import type {
 import { PermissionDeniedError } from '../permissions/permission-denied.error.js';
 import { PermissionGateService } from '../permissions/permission-gate.service.js';
 import { SearchManager } from '../search/search-manager.js';
+import { AppSettingsService } from '../settings/app-settings.service.js';
 
 type BuyPhase = BuyAutomationEvent['phase'];
 
@@ -115,6 +116,7 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     @Inject(INPUT_CONTROLLER) private readonly input: InputController,
     @Inject(USER_INPUT_WATCHER) private readonly userInput: UserInputWatcher,
     @Inject(BuySessionLock) private readonly buyLock: BuySessionLock,
+    @Inject(AppSettingsService) private readonly settings: AppSettingsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -326,7 +328,14 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
         if (shopOpen && item) {
           if (signal.aborted) return 'aborted';
           this.emit('item-located', searchId, listingId, itemName, null);
-          await this.input.placeCursor(this.capture.frameToScreen(item));
+          const target = this.capture.frameToScreen(item);
+          // Cursor mode is user-selectable: 'smooth' glides human-like, 'instant'
+          // (default) jumps straight there.
+          if (this.settings.get().cursorMode === 'smooth') {
+            await this.input.moveHumanLike(target, signal);
+          } else {
+            await this.input.placeCursor(target);
+          }
           return 'moved';
         }
       }
