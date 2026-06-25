@@ -165,12 +165,9 @@ export const envSchema = z.object({
   /** After the buy outcome, wait this long before starting the return-to-hideout
    *  (close shop + leave). */
   BUY_RETURN_DELAY_MS: z.coerce.number().int().min(0).default(5_000),
-  /** After pressing Escape (close shop), wait this long for the hideout HUD to
-   *  render before clicking "Leave Hideout". */
+  /** After pressing Escape (close shop), wait this long for it to close before
+   *  opening chat to type the `/hideout` command. */
   BUY_LEAVE_SETTLE_MS: z.coerce.number().int().min(0).default(1_000),
-  /** After the settle, poll up to this long for the "Leave Hideout" button to be
-   *  located (its gold to verify) before giving up. */
-  BUY_LEAVE_TIMEOUT_MS: z.coerce.number().int().min(0).default(5_000),
   /** After clicking "Leave Hideout", wait this long to be sure the character is
    *  back home before the buy session releases. */
   BUY_HIDEOUT_WAIT_MS: z.coerce.number().int().min(0).default(10_000),

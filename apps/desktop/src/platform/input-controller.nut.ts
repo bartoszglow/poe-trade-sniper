@@ -1,9 +1,9 @@
 import { Key, keyboard, mouse, Point as NutPoint } from '@nut-tree-fork/nut-js';
 import type { InputController, KeyName, PermissionProbe, Point } from '@poe-sniper/server';
 import { requireGrant } from './require-grant.js';
-import { markSyntheticMove } from './synthetic-input-marker.js';
+import { markSyntheticKey, markSyntheticMove } from './synthetic-input-marker.js';
 
-const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape };
+const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape, enter: Key.Enter };
 
 const MOVE_STEPS = 24;
 /** Instant placement re-asserts the target this many times (a single setPosition
@@ -85,22 +85,20 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
     async pressKey(key: KeyName): Promise<void> {
       requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
       const nutKey = KEY_MAP[key] ?? Key.Escape;
+      markSyntheticKey();
       await keyboard.pressKey(nutKey);
       await keyboard.releaseKey(nutKey);
     },
 
-    async click(to: Point): Promise<void> {
+    async typeText(text: string): Promise<void> {
       requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
-      // Place the cursor (re-asserted, like placeCursor) THEN left-click — the
-      // cursor must actually land before the click registers on the button.
-      const target = new NutPoint(Math.round(to.x), Math.round(to.y));
-      for (let attempt = 0; attempt < PLACE_ATTEMPTS; attempt += 1) {
-        markSyntheticMove();
-        await mouse.setPosition(target);
-        await new Promise((resolve) => setTimeout(resolve, PLACE_RETRY_MS));
+      // Mark a synthetic key BEFORE each char: typing the whole string at once
+      // would let later keydowns fall outside the grace window and self-abort the
+      // run (the watcher fires on any un-graced keydown).
+      for (const char of text) {
+        markSyntheticKey();
+        await keyboard.type(char);
       }
-      markSyntheticMove();
-      await mouse.leftClick();
     },
   };
 }

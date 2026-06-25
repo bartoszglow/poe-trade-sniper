@@ -91,14 +91,13 @@ function createHarness(options: HarnessOptions = {}) {
   // `region` present → shop open; `point` present → item located.
   const vision = {
     analyze: vi.fn(() => ({ shopOpen: region !== null, item: point })),
-    locateLeaveHideout: vi.fn(() => POINT),
   } as unknown as TradeVision;
 
   const moveHumanLike = vi.fn(options.moveImpl ?? (() => Promise.resolve()));
   const placeCursor = vi.fn(() => Promise.resolve());
   const pressKey = vi.fn(() => Promise.resolve());
-  const click = vi.fn(() => Promise.resolve());
-  const input = { moveHumanLike, placeCursor, pressKey, click } as unknown as InputController;
+  const typeText = vi.fn(() => Promise.resolve());
+  const input = { moveHumanLike, placeCursor, pressKey, typeText } as unknown as InputController;
 
   let inputCallback: (() => void) | null = null;
   const userInput: UserInputWatcher = {
@@ -117,6 +116,7 @@ function createHarness(options: HarnessOptions = {}) {
     BUY_SHOP_TIMEOUT_MS: '500',
     BUY_ITEM_GRACE_MS: '150',
     BUY_RETURN_DELAY_MS: '10',
+    BUY_LEAVE_SETTLE_MS: '10',
     BUY_HIDEOUT_WAIT_MS: '10',
     BUY_RUN_TIMEOUT_MS: '2000',
   });
@@ -145,7 +145,7 @@ function createHarness(options: HarnessOptions = {}) {
     moveHumanLike,
     placeCursor,
     pressKey,
-    click,
+    typeText,
     buyLock,
     phases: () => buyEvents.map((event) => event.phase),
     triggerUserInput: () => inputCallback?.(),
@@ -173,6 +173,19 @@ describe('BuyAutomationService', () => {
       await waitFor(() => harness.phases().includes('moved'));
       expect(harness.moveHumanLike).toHaveBeenCalledOnce();
       expect(harness.placeCursor).not.toHaveBeenCalled();
+    } finally {
+      harness.service.onApplicationShutdown();
+    }
+  });
+
+  it('returns to hideout after a buy by typing the /hideout chat command', async () => {
+    const harness = createHarness();
+    try {
+      harness.bus.publish(travelSuccess());
+      await waitFor(() => harness.typeText.mock.calls.length > 0);
+      expect(harness.pressKey).toHaveBeenCalledWith('escape');
+      expect(harness.pressKey).toHaveBeenCalledWith('enter');
+      expect(harness.typeText).toHaveBeenCalledWith('/hideout');
     } finally {
       harness.service.onApplicationShutdown();
     }

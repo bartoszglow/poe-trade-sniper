@@ -24,38 +24,9 @@ function isDarkUi(blue: number, green: number, red: number): boolean {
   return red + green + blue < 60;
 }
 
-// "Leave Hideout" button — TWO heuristics (Bartosz's idea: location + a second check).
-//
-//  (1) LOCATION (anchor). Pure colour/template detection is unreliable: the quest
-//      tracker is the SAME gold on a dark world, and the button's own gold is dim — so
-//      gold can't be separated globally. Instead we anchor geometrically: PoE pins the
-//      bottom HUD (incl. this button) to the bottom-right of the game viewport, sized
-//      by viewport HEIGHT (the whole HUD scales with height). For the non-letterboxed
-//      ratios that cover virtually all players (16:9 / 16:10 / 4:3 — viewport == window)
-//      the button centre is a fixed height-scaled offset from the corner. Measured
-//      on-device (2182x1594 → 1730,1330) and VERIFIED across ar 1.26 / 1.37 / 1.9:
-//        dx = (W-cx)/H = 452/1594 = 0.284 ;  dy = (H-cy)/H = 264/1594 = 0.166
-//
-//  (2) GOLD VERIFICATION. Confirm the button's gold actually sits at the anchor: a
-//      TIGHT box there is clean of the quest tracker (which hugs the far-right edge,
-//      above). Present → trust the anchor. Absent → portrait / fullscreen-letterbox /
-//      odd window where the viewport is above the window bottom → report not-found
-//      (the caller skips, rather than clicking a wrong spot). We verify but do NOT snap
-//      to a gold centroid: nearby gold (orb rim, gold-count, skill bar) drags it off by
-//      100+px, and the anchor is already accurate. TODO(verify) letterbox + fullscreen
-//      viewport detection — O-12.
-const LEAVE_DX_OVER_HEIGHT = 0.284; // anchor is this * height LEFT of the right edge
-const LEAVE_DY_OVER_HEIGHT = 0.166; // …and this * height ABOVE the bottom edge
-const LEAVE_VERIFY_HALF_W = 0.07; // gold-check box half-width (fraction of width)
-const LEAVE_VERIFY_UP = 0.05; // box extends this fraction of height ABOVE the anchor
-const LEAVE_VERIFY_DOWN = 0.025; // …and this fraction BELOW (less — avoids the skill bar)
-const MIN_LEAVE_GOLD = 12; // min gold samples in the box to confirm the button is there
-
-/** The button's golden/tan text — loose, because it can be dim. Only ever evaluated
- *  inside the small anchor box, which is free of the quest tracker. */
-function isLeaveGold(blue: number, green: number, red: number): boolean {
-  return red > 140 && green > 105 && blue < 150 && red > blue + 30 && green > blue + 12;
-}
+// (Return-to-hideout no longer uses vision: it types the `/hideout` chat command,
+//  which needs no button detection — so the old "Leave Hideout" anchor/gold code is
+//  gone. Vision is now only the shop-open + item-selection detection below.)
 
 const SAMPLE_STRIDE = 2; // sample every 2nd px (speed)
 const CELL = 12; // coarse violet grid cell (px) — bridges the thin/pulsing outline
@@ -173,36 +144,6 @@ export function createRawPixelTradeVision(): TradeVision {
         );
       }
       return { shopOpen, item };
-    },
-
-    locateLeaveHideout(frame: RawFrame): Point | null {
-      const { width, height, pixels } = frame;
-      if (width === 0 || height === 0) return null;
-      // (1) Location anchor.
-      const anchorX = Math.round(width - LEAVE_DX_OVER_HEIGHT * height);
-      const anchorY = Math.round(height - LEAVE_DY_OVER_HEIGHT * height);
-      // (2) Verify the button's gold is actually at the anchor (box clean of quest text).
-      const x0 = Math.max(0, Math.round(anchorX - width * LEAVE_VERIFY_HALF_W));
-      const x1 = Math.min(width, Math.round(anchorX + width * LEAVE_VERIFY_HALF_W));
-      const y0 = Math.max(0, Math.round(anchorY - height * LEAVE_VERIFY_UP));
-      const y1 = Math.min(height, Math.round(anchorY + height * LEAVE_VERIFY_DOWN));
-      let gold = 0;
-      for (let y = y0; y < y1; y += SAMPLE_STRIDE) {
-        for (let x = x0; x < x1; x += SAMPLE_STRIDE) {
-          const index = (y * width + x) * 4;
-          if (isLeaveGold(pixels[index] ?? 0, pixels[index + 1] ?? 0, pixels[index + 2] ?? 0)) {
-            gold += 1;
-          }
-        }
-      }
-      const verified = gold >= MIN_LEAVE_GOLD;
-      if (VISION_DEBUG) {
-        console.warn(
-          '[vision] leaveHideout',
-          JSON.stringify({ anchor: { x: anchorX, y: anchorY }, gold, verified }),
-        );
-      }
-      return verified ? { x: anchorX, y: anchorY } : null;
     },
   };
 }

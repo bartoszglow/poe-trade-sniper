@@ -19,7 +19,6 @@ import {
 import type {
   CaptureSource,
   InputController,
-  Point,
   RawFrame,
   TradeVision,
   UserInputWatcher,
@@ -252,37 +251,18 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
   private async returnToHideout(signal: AbortSignal): Promise<void> {
     try {
       await delay(this.config.BUY_RETURN_DELAY_MS, signal);
+      // Close the shop, then type the `/hideout` chat command to travel home. No
+      // button detection / click — so it's robust to window size, letterboxing and
+      // fullscreen, and needs no screen coordinates at all.
       await this.input.pressKey('escape');
-      // Let the shop close + the hideout HUD render before clicking the button.
-      await delay(this.config.BUY_LEAVE_SETTLE_MS, signal);
-      const button = await this.acquireLeaveHideout(signal);
-      if (button) {
-        await this.input.click(this.capture.frameToScreen(button));
-      } else {
-        this.logger.warn('return-to-hideout: leave-hideout button not found');
-      }
-      await delay(this.config.BUY_HIDEOUT_WAIT_MS, signal);
+      await delay(this.config.BUY_LEAVE_SETTLE_MS, signal); // let the shop close
+      await this.input.pressKey('enter'); // open chat
+      await this.input.typeText('/hideout');
+      await this.input.pressKey('enter'); // send
+      await delay(this.config.BUY_HIDEOUT_WAIT_MS, signal); // be sure we're home
     } catch {
       // run-level abort/deadline during the return — stop quietly
     }
-  }
-
-  /** Capture a frame and compute the "Leave Hideout" button centre (a fixed
-   *  bottom-right anchor — see locateLeaveHideout). Loops only to wait for the
-   *  first real frame; returns its frame-pixel centre, or null if none arrives. */
-  private async acquireLeaveHideout(signal: AbortSignal): Promise<Point | null> {
-    const startedAt = Date.now();
-    let inFlight = this.safeCapture(signal);
-    while (!signal.aborted && Date.now() - startedAt < this.config.BUY_LEAVE_TIMEOUT_MS) {
-      const frame = await inFlight;
-      inFlight = this.safeCapture(signal);
-      if (!frame) return null;
-      if (frame.width > 0) {
-        const button = this.vision.locateLeaveHideout(frame);
-        if (button) return button;
-      }
-    }
-    return null;
   }
 
   /** Poll the focus check until it confirms or the attempts run out (aborts on signal). */
