@@ -253,6 +253,8 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     try {
       await delay(this.config.BUY_RETURN_DELAY_MS, signal);
       await this.input.pressKey('escape');
+      // Let the shop close + the hideout HUD render before clicking the button.
+      await delay(this.config.BUY_LEAVE_SETTLE_MS, signal);
       const button = await this.acquireLeaveHideout(signal);
       if (button) {
         await this.input.click(this.capture.frameToScreen(button));
@@ -265,12 +267,13 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     }
   }
 
-  /** Capture↔analyse pipeline for the "Leave Hideout" button after closing the
-   *  shop, up to BUY_SHOP_TIMEOUT_MS. Returns its frame-pixel centre, or null. */
+  /** Capture a frame and compute the "Leave Hideout" button centre (a fixed
+   *  bottom-right anchor — see locateLeaveHideout). Loops only to wait for the
+   *  first real frame; returns its frame-pixel centre, or null if none arrives. */
   private async acquireLeaveHideout(signal: AbortSignal): Promise<Point | null> {
     const startedAt = Date.now();
     let inFlight = this.safeCapture(signal);
-    while (!signal.aborted && Date.now() - startedAt < this.config.BUY_SHOP_TIMEOUT_MS) {
+    while (!signal.aborted && Date.now() - startedAt < this.config.BUY_LEAVE_TIMEOUT_MS) {
       const frame = await inFlight;
       inFlight = this.safeCapture(signal);
       if (!frame) return null;

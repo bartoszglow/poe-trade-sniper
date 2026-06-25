@@ -35,6 +35,8 @@ describe('loadConfig', () => {
     expect(config.BUY_SHOP_TIMEOUT_MS).toBe(15_000);
     expect(config.BUY_ITEM_GRACE_MS).toBe(2_500);
     expect(config.BUY_RETURN_DELAY_MS).toBe(5_000);
+    expect(config.BUY_LEAVE_SETTLE_MS).toBe(1_000);
+    expect(config.BUY_LEAVE_TIMEOUT_MS).toBe(5_000);
     expect(config.BUY_HIDEOUT_WAIT_MS).toBe(10_000);
     expect(config.BUY_RUN_TIMEOUT_MS).toBe(50_000);
   });
