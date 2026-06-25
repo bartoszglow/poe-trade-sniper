@@ -116,10 +116,12 @@ export class DevController {
   async returnHideoutProbe(): Promise<unknown> {
     await this.capture.focusGameWindow();
     await this.input.pressKey('escape');
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await this.input.pressKey('enter');
+    await new Promise((resolve) => setTimeout(resolve, 1_000)); // shop closes
+    await this.input.pressKey('enter'); // open chat
+    await new Promise((resolve) => setTimeout(resolve, 700)); // chat input ready
     await this.input.typeText('/hideout');
-    await this.input.pressKey('enter');
+    await new Promise((resolve) => setTimeout(resolve, 400)); // settle before send
+    await this.input.pressKey('enter'); // send
     return { ok: true, sent: '/hideout' };
   }
 }

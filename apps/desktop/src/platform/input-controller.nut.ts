@@ -7,6 +7,12 @@ import { markSyntheticKey, markSyntheticMove } from './synthetic-input-marker.js
 // on the MAIN Return key (Key.Return = 83). Mapping 'enter' to the wrong one was why the
 // /hideout sequence silently did nothing after Esc.
 const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape, enter: Key.Return };
+// Deterministic, not-too-fast key timing. A near-instant press+release was unreliable:
+// Esc landed ~3/4 of the time and Enter never opened chat. We set a small base delay
+// AND hold each key down explicitly so the game registers it.
+keyboard.config.autoDelayMs = 24;
+const KEY_HOLD_MS = 60; // hold a key down this long before releasing
+const KEY_CHAR_DELAY_MS = 40; // gap between typed chars (the chat input drops faster bursts)
 
 const MOVE_STEPS = 24;
 /** Instant placement re-asserts the target this many times (a single setPosition
@@ -88,19 +94,25 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
     async pressKey(key: KeyName): Promise<void> {
       requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
       const nutKey = KEY_MAP[key] ?? Key.Escape;
+      // HOLD the key: press → wait → release. A near-instant tap was unreliable.
+      // Mark synthetic before BOTH events so the keydown (and any late delivery)
+      // stays inside the abort-watcher's grace.
       markSyntheticKey();
       await keyboard.pressKey(nutKey);
+      await new Promise((resolve) => setTimeout(resolve, KEY_HOLD_MS));
+      markSyntheticKey();
       await keyboard.releaseKey(nutKey);
     },
 
     async typeText(text: string): Promise<void> {
       requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
-      // Mark a synthetic key BEFORE each char: typing the whole string at once
-      // would let later keydowns fall outside the grace window and self-abort the
-      // run (the watcher fires on any un-graced keydown).
+      // One char at a time with a small gap — typing the whole string at once was too
+      // fast for the chat input. Mark synthetic before each so the keydowns are graced
+      // (the watcher fires on any un-graced keydown).
       for (const char of text) {
         markSyntheticKey();
         await keyboard.type(char);
+        await new Promise((resolve) => setTimeout(resolve, KEY_CHAR_DELAY_MS));
       }
     },
   };

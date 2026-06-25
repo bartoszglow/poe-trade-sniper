@@ -257,9 +257,13 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       this.logger.log('return: Esc (close shop)');
       await this.input.pressKey('escape');
       await delay(this.config.BUY_LEAVE_SETTLE_MS, signal); // let the shop close
-      this.logger.log('return: Enter → "/hideout" → Enter');
+      this.logger.log('return: Enter (open chat)');
       await this.input.pressKey('enter'); // open chat
+      await delay(this.config.BUY_CHAT_OPEN_MS, signal); // wait for the chat input
+      this.logger.log('return: type "/hideout"');
       await this.input.typeText('/hideout');
+      await delay(this.config.BUY_CHAT_SEND_MS, signal); // settle before sending
+      this.logger.log('return: Enter (send)');
       await this.input.pressKey('enter'); // send
       await delay(this.config.BUY_HIDEOUT_WAIT_MS, signal); // be sure we're home
       this.logger.log('return: done (home)');

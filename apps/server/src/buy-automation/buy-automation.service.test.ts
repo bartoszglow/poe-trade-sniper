@@ -117,6 +117,8 @@ function createHarness(options: HarnessOptions = {}) {
     BUY_ITEM_GRACE_MS: '150',
     BUY_RETURN_DELAY_MS: '10',
     BUY_LEAVE_SETTLE_MS: '10',
+    BUY_CHAT_OPEN_MS: '10',
+    BUY_CHAT_SEND_MS: '10',
     BUY_HIDEOUT_WAIT_MS: '10',
     BUY_RUN_TIMEOUT_MS: '2000',
   });
