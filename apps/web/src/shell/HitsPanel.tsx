@@ -33,6 +33,15 @@ export function HitsPanel() {
     return () => clearInterval(timer);
   }, []);
 
+  // Clearing swaps the card list for the empty state; bump a tick used as a React
+  // `key` so that swap remounts fresh and repaints over any leftover card pixels —
+  // an intermittent Electron compositing ghost otherwise lingered after clearing.
+  const [clearTick, setClearTick] = useState(0);
+  function handleClear(): void {
+    clearLiveHits();
+    setClearTick((tick) => tick + 1);
+  }
+
   function travel(listing: Listing): void {
     const search = searches.find((candidate) => candidate.id === listing.searchId);
     if (!search || !listing.hideoutToken) return;
@@ -77,7 +86,7 @@ export function HitsPanel() {
         {liveHits.length > 0 && (
           <button
             type="button"
-            onClick={clearLiveHits}
+            onClick={handleClear}
             title={t('hitsPanel.clear')}
             aria-label={t('hitsPanel.clear')}
             className="rounded p-1 text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
@@ -89,32 +98,39 @@ export function HitsPanel() {
           {connected ? t('common.live') : t('common.offline')}
         </Badge>
       </div>
-      {liveHits.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-6 text-center">
-          <p className="text-sm text-ink-faint">{t('hitsPanel.empty')}</p>
-        </div>
-      ) : (
-        <div
-          className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2"
-          aria-live="polite"
-          aria-atomic="false"
-        >
-          {liveHits.map((listing) => (
-            <HitCard
-              key={listing.listingId}
-              listing={listing}
-              travelState={travelStateByListingId[listing.listingId]}
-              buyState={buyStateByListingId[listing.listingId]}
-              tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
-              stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
-              nowMs={nowMs}
-              canBuy={canBuy}
-              onTravel={() => travel(listing)}
-              onBuy={() => buy(listing)}
-            />
-          ))}
-        </div>
-      )}
+      {/* Stable scroll container — never unmounted on clear (swapping the whole
+          overflow container out was what left the ghost). Only the inner content swaps. */}
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        aria-live="polite"
+        aria-atomic="false"
+      >
+        {liveHits.length === 0 ? (
+          <div
+            key={`empty-${clearTick}`}
+            className="flex flex-1 items-center justify-center px-6 text-center"
+          >
+            <p className="text-sm text-ink-faint">{t('hitsPanel.empty')}</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 p-2">
+            {liveHits.map((listing) => (
+              <HitCard
+                key={listing.listingId}
+                listing={listing}
+                travelState={travelStateByListingId[listing.listingId]}
+                buyState={buyStateByListingId[listing.listingId]}
+                tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
+                stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
+                nowMs={nowMs}
+                canBuy={canBuy}
+                onTravel={() => travel(listing)}
+                onBuy={() => buy(listing)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

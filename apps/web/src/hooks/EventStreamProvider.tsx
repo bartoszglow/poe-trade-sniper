@@ -47,6 +47,8 @@ export interface EventStreamState {
   buyStateByListingId: Record<string, BuyState>;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
   searchesVersion: number;
+  /** Bumped on travel/buy events — the Activity page refetches off it. */
+  activityVersion: number;
   /** Live guard state; null until the first guard event (poll fills the gap). */
   guard: GuardState | null;
   /** Newest-first GGG network entries since page load (dev view). */
@@ -59,6 +61,7 @@ const INITIAL_STATE: EventStreamState = {
   travelStateByListingId: {},
   buyStateByListingId: {},
   searchesVersion: 0,
+  activityVersion: 0,
   guard: null,
   networkEvents: [],
 };
@@ -82,9 +85,15 @@ function assertNever(event: never): never {
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
     case 'hit':
+      // Dedupe by listingId: a re-detected listing REPLACES its existing card and
+      // moves to the top, instead of stacking a duplicate. (Duplicate listingIds
+      // also collide as React keys — that was corrupting the feed render.)
       return {
         ...state,
-        liveHits: [event.listing, ...state.liveHits].slice(0, LIVE_HITS_CAP),
+        liveHits: [
+          event.listing,
+          ...state.liveHits.filter((hit) => hit.listingId !== event.listing.listingId),
+        ].slice(0, LIVE_HITS_CAP),
       };
     case 'engine-status':
     case 'searches-changed':
@@ -95,6 +104,7 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
       if (event.listingId === null) return state;
       return {
         ...state,
+        activityVersion: state.activityVersion + 1,
         travelStateByListingId: {
           ...state.travelStateByListingId,
           [event.listingId]: { phase: event.phase, detail: event.detail },
@@ -104,6 +114,7 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
       if (event.listingId === null) return state;
       return {
         ...state,
+        activityVersion: state.activityVersion + 1,
         buyStateByListingId: {
           ...state.buyStateByListingId,
           [event.listingId]: { phase: event.phase, detail: event.detail },
