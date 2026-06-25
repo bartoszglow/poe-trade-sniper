@@ -38,7 +38,7 @@ describe('loadConfig', () => {
     expect(config.BUY_LEAVE_SETTLE_MS).toBe(1_000);
     expect(config.BUY_CHAT_OPEN_MS).toBe(700);
     expect(config.BUY_CHAT_SEND_MS).toBe(400);
-    expect(config.BUY_HIDEOUT_WAIT_MS).toBe(10_000);
+    expect(config.BUY_HIDEOUT_WAIT_MS).toBe(4_000);
     expect(config.BUY_RUN_TIMEOUT_MS).toBe(50_000);
   });
 

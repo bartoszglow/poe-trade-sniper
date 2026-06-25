@@ -224,6 +224,12 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       } else {
         this.emit('failed', searchId, listingId, itemName, 'trade-window-not-found');
       }
+      // The cursor is placed (or the item was gone). The return is keyboard-only (Esc +
+      // `/hideout`) plus a teleport, and the operator is EXPECTED to be active now —
+      // grabbing the item, then moving around once home. Stop watching for "user input"
+      // so their activity can no longer abort the return; only the run deadline bounds it.
+      stopWatching?.();
+      stopWatching = null;
       // We traveled to the seller's hideout — close the shop and return to OURS.
       await this.returnToHideout(searchId, listingId, itemName, controller.signal);
     } catch (error) {
@@ -244,10 +250,10 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
   /**
    * After the buy (or item-sold / no-shop), bring the character home: wait
    * BUY_RETURN_DELAY_MS → Esc (close shop) → type the `/hideout` chat command → wait
-   * BUY_HIDEOUT_WAIT_MS so we're sure we're back before the session releases. Emits
-   * returning / returned / return-failed for the activity timeline. Best-effort +
-   * abortable: a real user input or the run deadline stops it (session clears in
-   * `finally`).
+   * BUY_HIDEOUT_WAIT_MS for the teleport, then emit `returned`. The caller stops the
+   * user-input watcher before calling this, so the operator's own activity (grabbing the
+   * item, moving around once home) can NOT abort it — only the run deadline (`signal`)
+   * still bounds it. Emits returning / returned / return-failed for the activity timeline.
    */
   private async returnToHideout(
     searchId: string | null,

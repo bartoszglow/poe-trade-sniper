@@ -173,9 +173,10 @@ export const envSchema = z.object({
   BUY_CHAT_OPEN_MS: z.coerce.number().int().min(0).default(700),
   /** After typing the command, wait this long before pressing Enter to send it. */
   BUY_CHAT_SEND_MS: z.coerce.number().int().min(0).default(400),
-  /** After clicking "Leave Hideout", wait this long to be sure the character is
-   *  back home before the buy session releases. */
-  BUY_HIDEOUT_WAIT_MS: z.coerce.number().int().min(0).default(10_000),
+  /** After sending `/hideout`, wait this long for the teleport to land before emitting
+   *  `returned` + releasing the buy session. Sized to the teleport (~a few seconds), not
+   *  a long cooldown — the operator is already home and waiting. */
+  BUY_HIDEOUT_WAIT_MS: z.coerce.number().int().min(0).default(4_000),
   /** Hard wall-clock cap on a whole buy run (incl. the return-to-hideout sequence)
    *  — guarantees the single-flight lock + buy-session lock reset even if a desktop
    *  port call (osascript/screencapture) hangs. */
