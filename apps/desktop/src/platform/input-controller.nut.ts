@@ -3,7 +3,10 @@ import type { InputController, KeyName, PermissionProbe, Point } from '@poe-snip
 import { requireGrant } from './require-grant.js';
 import { markSyntheticKey, markSyntheticMove } from './synthetic-input-marker.js';
 
-const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape, enter: Key.Enter };
+// NOTE: Key.Enter (103) is the NUMPAD enter, which PoE chat ignores — chat opens/sends
+// on the MAIN Return key (Key.Return = 83). Mapping 'enter' to the wrong one was why the
+// /hideout sequence silently did nothing after Esc.
+const KEY_MAP: Record<KeyName, Key> = { escape: Key.Escape, enter: Key.Return };
 
 const MOVE_STEPS = 24;
 /** Instant placement re-asserts the target this many times (a single setPosition

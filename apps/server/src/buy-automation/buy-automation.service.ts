@@ -254,14 +254,19 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       // Close the shop, then type the `/hideout` chat command to travel home. No
       // button detection / click — so it's robust to window size, letterboxing and
       // fullscreen, and needs no screen coordinates at all.
+      this.logger.log('return: Esc (close shop)');
       await this.input.pressKey('escape');
       await delay(this.config.BUY_LEAVE_SETTLE_MS, signal); // let the shop close
+      this.logger.log('return: Enter → "/hideout" → Enter');
       await this.input.pressKey('enter'); // open chat
       await this.input.typeText('/hideout');
       await this.input.pressKey('enter'); // send
       await delay(this.config.BUY_HIDEOUT_WAIT_MS, signal); // be sure we're home
-    } catch {
-      // run-level abort/deadline during the return — stop quietly
+      this.logger.log('return: done (home)');
+    } catch (error) {
+      this.logger.warn(
+        `return: stopped — ${signal.aborted ? 'aborted (user input / deadline)' : errorMessage(error)}`,
+      );
     }
   }
 
