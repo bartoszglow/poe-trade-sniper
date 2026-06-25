@@ -1,8 +1,9 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { KeyRound, LogIn, ShieldCheck, Volume2 } from 'lucide-react';
+import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { Download, KeyRound, LogIn, ShieldCheck, Upload, Volume2 } from 'lucide-react';
 import {
   PERMISSION_KINDS,
   describeState,
+  type ImportResult,
   type PermissionKind,
   type PermissionSeverity,
   type PermissionState,
@@ -22,6 +23,7 @@ import { setNetworkViewEnabled, useNetworkViewEnabled } from '../hooks/useNetwor
 import { LANGUAGES, useLanguage, useT, type Language } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { ApiError, apiSend } from '../lib/api';
+import { downloadFile, readJsonFile } from '../lib/data-transfer';
 import {
   getHitSoundVolume,
   isHitSoundEnabled,
@@ -150,6 +152,11 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [dataMessage, setDataMessage] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(
+    null,
+  );
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const networkViewEnabled = useNetworkViewEnabled();
   // macOS permission controls are desktop-only. Decision #1=A defers signing;
   // every current build is unsigned/dev, so we simply show on macOS desktop —
@@ -200,6 +207,44 @@ export function SettingsPage() {
       setBusy(false);
       refresh();
     }
+  }
+
+  function importSearches(changeEvent: ChangeEvent<HTMLInputElement>): void {
+    const file = changeEvent.target.files?.[0];
+    changeEvent.target.value = ''; // allow re-picking the same file
+    if (!file) return;
+    setImporting(true);
+    setDataMessage(null);
+    void (async () => {
+      try {
+        let envelope: unknown;
+        try {
+          envelope = await readJsonFile(file);
+        } catch {
+          throw new Error(t('settings.importBadFile'));
+        }
+        const result = await apiSend<ImportResult>('POST', '/api/import/searches', envelope);
+        const summary = t('settings.importDone', {
+          imported: result.imported,
+          skipped: result.skipped,
+        });
+        setDataMessage({
+          tone: 'ok',
+          text:
+            result.errors.length > 0
+              ? `${summary} · ${result.errors.length} ${t('settings.importErrors')}`
+              : summary,
+        });
+      } catch (error) {
+        const text =
+          error instanceof ApiError || error instanceof Error
+            ? error.message
+            : t('common.requestFailed');
+        setDataMessage({ tone: 'danger', text });
+      } finally {
+        setImporting(false);
+      }
+    })();
   }
 
   function pasteCookies(formEvent: FormEvent): void {
@@ -400,6 +445,53 @@ export function SettingsPage() {
             className="w-56"
           />
           <span className="text-xs text-ink-faint">{t('settings.cursorHint')}</span>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title={t('settings.data')}>
+        <p className="text-sm text-ink-faint">{t('settings.dataDesc')}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => downloadFile('/api/export/searches', 'poe-sniper-searches.json')}
+          >
+            <Download className="h-4 w-4" />
+            {t('settings.exportSearches')}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => downloadFile('/api/export/hits', 'poe-sniper-hits.csv')}
+          >
+            <Download className="h-4 w-4" />
+            {t('settings.exportHits')}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => downloadFile('/api/export/activity', 'poe-sniper-activity.csv')}
+          >
+            <Download className="h-4 w-4" />
+            {t('settings.exportActivity')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={importing}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload className="h-4 w-4" />
+            {t('settings.importSearches')}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={importSearches}
+          />
+          {dataMessage && (
+            <span className={`text-sm ${dataMessage.tone === 'ok' ? 'text-ok' : 'text-danger'}`}>
+              {dataMessage.text}
+            </span>
+          )}
         </div>
       </SettingsCard>
 

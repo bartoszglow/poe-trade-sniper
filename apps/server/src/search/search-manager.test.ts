@@ -614,6 +614,35 @@ describe('SearchManager', () => {
     }
   });
 
+  it('exports searches and re-imports them (round-trip, skip-existing) (#27)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf123', { label: 'My search' });
+      const exported = manager.exportSearches();
+      const [first] = exported;
+      if (!first) throw new Error('expected one exported search');
+      expect(first.id).toBe('AbCdEf123');
+
+      // Re-importing the same export skips the already-present search.
+      expect(manager.importSearches(exported, 'skip')).toEqual({
+        imported: 0,
+        skipped: 1,
+        errors: [],
+      });
+
+      // A different id is restored straight from the export shape (no resolveQuery).
+      const result = manager.importSearches(
+        [{ ...first, id: 'NewSearch1', label: 'Restored' }],
+        'skip',
+      );
+      expect(result.imported).toBe(1);
+      expect(manager.list().find((entry) => entry.id === 'NewSearch1')?.label).toBe('Restored');
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('editSearch re-points to a new search id, keeping hits + settings (#1)', async () => {
     const { manager, database, wsEngines } = createManager();
     try {

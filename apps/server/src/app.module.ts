@@ -8,6 +8,7 @@ import { loadConfig } from './config/env.js';
 import { DbModule } from './db/db.module.js';
 import { DevModule } from './dev/dev.module.js';
 import { EventsModule } from './events/events.module.js';
+import { ExportImportModule } from './export-import/export-import.module.js';
 import { GuardModule } from './guard/guard.module.js';
 import { NetworkModule } from './network/network.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
@@ -61,6 +62,7 @@ export class AppModule {
         PermissionsModule,
         BuyAutomationModule,
         ActivityModule,
+        ExportImportModule,
         ApiModule,
       ],
     };

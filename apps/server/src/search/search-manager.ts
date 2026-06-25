@@ -14,6 +14,8 @@ import type {
   EngineKind,
   EngineStatus,
   Hit,
+  ImportConflictMode,
+  ImportResult,
   Listing,
   ManagedSearch,
   PurchaseMode,
@@ -351,6 +353,77 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.watchers.delete(searchId);
     this.database.delete(searches).where(eq(searches.id, searchId)).run();
     this.publishSearchesChanged();
+  }
+
+  /** All configured searches as a round-trippable list (live rows; hold no credentials). */
+  exportSearches(): ManagedSearch[] {
+    return [...this.watchers.values()].map((watcher) => ({ ...watcher.row }));
+  }
+
+  /**
+   * Restore searches from an export. Each entry is inserted with its stored `filters`
+   * AS-IS — no `resolveQuery()` (we keep no raw input and want import to work offline);
+   * the watcher is re-created and started. Auto-travel/buy that fail the safety gate are
+   * coerced OFF rather than failing the whole entry. On id conflict: `skip` keeps the
+   * existing search, `replace` removes then re-inserts it. Never accepts credentials —
+   * the entry shape has none.
+   */
+  importSearches(entries: ManagedSearch[], mode: ImportConflictMode): ImportResult {
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    for (const entry of entries) {
+      try {
+        if (this.watchers.has(entry.id)) {
+          if (mode === 'skip') {
+            skipped += 1;
+            continue;
+          }
+          this.remove(entry.id);
+        }
+        let autoTravel = entry.autoTravel;
+        let autoBuy = entry.autoBuy;
+        try {
+          this.assertAutoTravelAllowed(autoTravel, entry.filters, entry.purchaseMode);
+        } catch {
+          autoTravel = false;
+        }
+        if (!autoTravel) autoBuy = false; // autoBuy requires autoTravel
+        try {
+          this.assertAutoBuyAllowed(autoBuy);
+        } catch {
+          autoBuy = false;
+        }
+        const row: ManagedSearch = {
+          id: entry.id,
+          realm: entry.realm,
+          league: entry.league,
+          label: entry.label,
+          autoTravel,
+          autoBuy,
+          enabled: entry.enabled,
+          purchaseMode: entry.purchaseMode,
+          filters: entry.filters,
+          addedAt: entry.addedAt,
+        };
+        this.database
+          .insert(searches)
+          .values({ ...row, filters: row.filters })
+          .run();
+        const watcher = this.createWatcher(row);
+        this.watchers.set(row.id, watcher);
+        if (this.detectionPaused) {
+          this.publishEngineStatus(watcher, 'paused', 'globally paused');
+        } else if (row.enabled) {
+          this.startWatcher(watcher);
+        }
+        imported += 1;
+      } catch (error) {
+        errors.push(`${entry.id}: ${errorMessage(error)}`);
+      }
+    }
+    if (imported > 0) this.publishSearchesChanged();
+    return { imported, skipped, errors };
   }
 
   listHits(query: HitQuery): Hit[] {
