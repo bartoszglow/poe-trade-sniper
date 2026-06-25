@@ -9,8 +9,8 @@ import { requireGrant } from './require-grant.js';
 
 const execFileAsync = promisify(execFile);
 const EMPTY_FRAME: RawFrame = { width: 0, height: 0, pixels: new Uint8Array(0) };
-/** Reused temp path for the per-capture screenshot. */
-const captureShotPath = join(tmpdir(), 'poe-sniper-capture.png');
+/** Reused temp path for the per-capture screenshot (JPEG — fast to encode). */
+const captureShotPath = join(tmpdir(), 'poe-sniper-capture.jpg');
 
 /** DEV ONLY: when set, capture() writes the first frames of each buy as PNGs here
  *  (full display + cropped window) + logs pixel stats, so the actual capture can
@@ -292,8 +292,11 @@ export function createElectronCaptureSource(
             '-x',
             '-R',
             `${geo.windowX},${geo.windowY},${geo.windowW},${geo.windowH}`,
+            // JPEG, not PNG: at this window's Retina resolution PNG encoding is the
+            // dominant cost (~480ms vs ~160ms for JPEG); the lossy artifacts don't
+            // affect the wide CV thresholds (dark coverage / bright violet).
             '-t',
-            'png',
+            'jpg',
             captureShotPath,
           ],
           { timeout: OSASCRIPT_TIMEOUT_MS, killSignal: 'SIGKILL' },
