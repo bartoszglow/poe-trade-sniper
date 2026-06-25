@@ -225,7 +225,7 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
         this.emit('failed', searchId, listingId, itemName, 'trade-window-not-found');
       }
       // We traveled to the seller's hideout — close the shop and return to OURS.
-      await this.returnToHideout(controller.signal);
+      await this.returnToHideout(searchId, listingId, itemName, controller.signal);
     } catch (error) {
       if (controller.signal.aborted) {
         this.emitAbortOutcome(timedOut, searchId, listingId, itemName);
@@ -243,12 +243,19 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
 
   /**
    * After the buy (or item-sold / no-shop), bring the character home: wait
-   * BUY_RETURN_DELAY_MS → press Escape (close the shop) → find + left-click the
-   * golden "Leave Hideout" button → wait BUY_HIDEOUT_WAIT_MS so we're sure we're
-   * back before the session releases. Best-effort + abortable: a real user input or
-   * the run deadline stops it quietly (the session still clears in `finally`).
+   * BUY_RETURN_DELAY_MS → Esc (close shop) → type the `/hideout` chat command → wait
+   * BUY_HIDEOUT_WAIT_MS so we're sure we're back before the session releases. Emits
+   * returning / returned / return-failed for the activity timeline. Best-effort +
+   * abortable: a real user input or the run deadline stops it (session clears in
+   * `finally`).
    */
-  private async returnToHideout(signal: AbortSignal): Promise<void> {
+  private async returnToHideout(
+    searchId: string | null,
+    listingId: string | null,
+    itemName: string | null,
+    signal: AbortSignal,
+  ): Promise<void> {
+    this.emit('returning', searchId, listingId, itemName, null);
     try {
       await delay(this.config.BUY_RETURN_DELAY_MS, signal);
       // Close the shop, then type the `/hideout` chat command to travel home. No
@@ -267,10 +274,11 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
       await this.input.pressKey('enter'); // send
       await delay(this.config.BUY_HIDEOUT_WAIT_MS, signal); // be sure we're home
       this.logger.log('return: done (home)');
+      this.emit('returned', searchId, listingId, itemName, null);
     } catch (error) {
-      this.logger.warn(
-        `return: stopped — ${signal.aborted ? 'aborted (user input / deadline)' : errorMessage(error)}`,
-      );
+      const reason = signal.aborted ? 'aborted (user input / deadline)' : errorMessage(error);
+      this.logger.warn(`return: stopped — ${reason}`);
+      this.emit('return-failed', searchId, listingId, itemName, reason);
     }
   }
 

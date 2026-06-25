@@ -68,6 +68,10 @@ export interface BuyAutomationEvent {
     | 'window-found'
     | 'item-located'
     | 'moved'
+    // Return-to-hideout (after the buy outcome): typing the `/hideout` chat command.
+    | 'returning'
+    | 'returned'
+    | 'return-failed'
     | 'aborted'
     | 'failed'
     | 'unsupported';

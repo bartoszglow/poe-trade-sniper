@@ -159,8 +159,15 @@ describe('BuyAutomationService', () => {
     const harness = createHarness();
     try {
       harness.bus.publish(travelSuccess());
-      await waitFor(() => harness.phases().includes('moved'));
-      expect(harness.phases()).toEqual(['started', 'window-found', 'item-located', 'moved']);
+      await waitFor(() => harness.phases().includes('returned'));
+      expect(harness.phases()).toEqual([
+        'started',
+        'window-found',
+        'item-located',
+        'moved',
+        'returning',
+        'returned',
+      ]);
       expect(harness.placeCursor).toHaveBeenCalledOnce();
       expect(harness.moveHumanLike).not.toHaveBeenCalled(); // instant is the default
     } finally {

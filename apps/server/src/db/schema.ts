@@ -44,6 +44,38 @@ export const hits = sqliteTable(
 );
 
 /**
+ * Activity log — one travel→buy→return sequence the app performed (the operator
+ * "Activity" timeline). The item is SNAPSHOTTED here (not a hits FK) so the record
+ * survives hit-pruning and search deletion. Never stores the session/hideout token.
+ */
+export const activity = sqliteTable(
+  'activity',
+  {
+    /** Activity id (uuid). */
+    id: text('id').primaryKey(),
+    searchId: text('search_id'),
+    listingId: text('listing_id'),
+    /** 'manual' | 'auto'. */
+    source: text('source').notNull(),
+    itemName: text('item_name').notNull(),
+    /** ListingPrice JSON or null. */
+    price: text('price', { mode: 'json' }),
+    seller: text('seller'),
+    /** Normalized ItemDetail JSON snapshot or null. */
+    item: text('item', { mode: 'json' }),
+    startedAt: text('started_at').notNull(),
+    finishedAt: text('finished_at'),
+    /** ActivityOutcome. */
+    outcome: text('outcome').notNull(),
+    /** true/false once the return ran, else null. */
+    returnedHome: integer('returned_home', { mode: 'boolean' }),
+    /** ActivityStep[] JSON. */
+    steps: text('steps', { mode: 'json' }).notNull(),
+  },
+  (table) => [index('activity_started_at').on(table.startedAt)],
+);
+
+/**
  * Single-table key/value state: session blob, settings.
  * SECURITY: the session value is a credential — never log it, never expose it
  * through the API.

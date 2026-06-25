@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react';
-import { Activity, Crosshair, History, Settings } from 'lucide-react';
+import { Activity, Crosshair, History, ScrollText, Settings } from 'lucide-react';
 import type { MessageKey } from '../i18n/messages';
 import { SearchesPage } from '../pages/SearchesPage';
 import { HitsPage } from '../pages/HitsPage';
+import { ActivityPage } from '../pages/ActivityPage';
 import { NetworkPage } from '../pages/NetworkPage';
 import { SettingsPage } from '../pages/SettingsPage';
 
@@ -25,6 +26,13 @@ export interface NavEntry {
 export const NAV_ENTRIES: NavEntry[] = [
   { id: 'searches', path: '/', labelKey: 'nav.searches', icon: Crosshair, page: SearchesPage },
   { id: 'hits', path: '/hits', labelKey: 'nav.hits', icon: History, page: HitsPage },
+  {
+    id: 'activity',
+    path: '/activity',
+    labelKey: 'nav.activity',
+    icon: ScrollText,
+    page: ActivityPage,
+  },
   {
     id: 'network',
     path: '/network',
