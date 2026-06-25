@@ -10,12 +10,12 @@ import {
 import type {
   BuyAutomationEvent,
   DomainEvent,
-  Listing,
   NetworkLogEntry,
   TravelEvent,
 } from '@poe-sniper/shared';
 import { translateStatic } from '../i18n/i18n';
 import { isHitSoundEnabled, playHitSound } from '../lib/hit-sound';
+import { collapseHit, type LiveHit } from '../lib/live-hits';
 import { isNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
 /** Bounded-growth cap for the live feed kept in memory. */
@@ -41,8 +41,8 @@ export interface GuardState {
 export interface EventStreamState {
   /** SSE connection state — drives the "live" dot. */
   connected: boolean;
-  /** Newest-first live hits (session-local, capped). */
-  liveHits: Listing[];
+  /** Newest-first live hits (session-local, capped) — collapsed by offer identity. */
+  liveHits: LiveHit[];
   travelStateByListingId: Record<string, TravelState>;
   buyStateByListingId: Record<string, BuyState>;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
@@ -85,15 +85,13 @@ function assertNever(event: never): never {
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
     case 'hit':
-      // Dedupe by listingId: a re-detected listing REPLACES its existing card and
-      // moves to the top, instead of stacking a duplicate. (Duplicate listingIds
-      // also collide as React keys — that was corrupting the feed render.)
+      // Collapse by offer identity (item+seller+price), not listingId: GGG re-serves the
+      // same offer under fresh ids (esp. after a travel re-query), which a listingId key
+      // shows as a duplicate. The differing ids fold into one entity (newest used for
+      // travel/buy); the newest replaces + moves to the top. See lib/live-hits.
       return {
         ...state,
-        liveHits: [
-          event.listing,
-          ...state.liveHits.filter((hit) => hit.listingId !== event.listing.listingId),
-        ].slice(0, LIVE_HITS_CAP),
+        liveHits: collapseHit(state.liveHits, event.listing, LIVE_HITS_CAP),
       };
     case 'engine-status':
     case 'searches-changed':

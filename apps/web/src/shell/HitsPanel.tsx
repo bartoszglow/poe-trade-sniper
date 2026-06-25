@@ -4,6 +4,7 @@ import type { Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { HitCard } from '../components/HitCard';
 import { useEventStream } from '../hooks/EventStreamProvider';
+import { resolveByListingId } from '../lib/live-hits';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT } from '../i18n/i18n';
@@ -118,8 +119,8 @@ export function HitsPanel() {
               <HitCard
                 key={listing.listingId}
                 listing={listing}
-                travelState={travelStateByListingId[listing.listingId]}
-                buyState={buyStateByListingId[listing.listingId]}
+                travelState={resolveByListingId(travelStateByListingId, listing.listingIds)}
+                buyState={resolveByListingId(buyStateByListingId, listing.listingIds)}
                 tokenFresh={nowMs - new Date(listing.detectedAt).getTime() < TOKEN_FRESH_MS}
                 stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
                 nowMs={nowMs}
