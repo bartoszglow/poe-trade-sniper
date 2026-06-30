@@ -130,7 +130,18 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   ) {}
 
   onApplicationBootstrap(): void {
-    for (const row of this.database.select().from(searches).all()) {
+    // Rehydrate in the user's drag order: position ASC (nulls last), then addedAt. The
+    // Map insertion order IS the list order AND the round-robin poll rotation, so this
+    // restores both across restarts.
+    const rows = this.database
+      .select()
+      .from(searches)
+      .orderBy(
+        asc(sql`coalesce(${searches.position}, ${Number.MAX_SAFE_INTEGER})`),
+        asc(searches.addedAt),
+      )
+      .all();
+    for (const row of rows) {
       this.watchers.set(row.id, this.createWatcher(this.rowToManagedSearch(row)));
     }
     // Restore hit count + last-hit from the hits table in ONE grouped query (not
@@ -353,6 +364,33 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.watchers.delete(searchId);
     this.database.delete(searches).where(eq(searches.id, searchId)).run();
     this.publishSearchesChanged();
+  }
+
+  /**
+   * Apply a user-defined order (drag-and-drop). Persists `position = index` per id, then
+   * rebuilds the watchers Map in that order — which is BOTH the displayed list order AND
+   * the round-robin poll rotation (top searches poll a tick earlier). Race-tolerant: ids
+   * that no longer exist are skipped, and any search not mentioned (e.g. added since the
+   * client fetched) is appended in its current order so nothing is dropped. Never touches
+   * the buy lock / travel queue.
+   */
+  reorder(orderedIds: string[]): SearchRuntimeInfo[] {
+    const current = new Map(this.watchers);
+    const requested = [...new Set(orderedIds)].filter((id) => current.has(id));
+    const leftovers = [...current.keys()].filter((id) => !requested.includes(id));
+    const finalOrder = [...requested, ...leftovers];
+    this.database.transaction((tx) => {
+      finalOrder.forEach((id, index) => {
+        tx.update(searches).set({ position: index }).where(eq(searches.id, id)).run();
+      });
+    });
+    this.watchers.clear();
+    for (const id of finalOrder) {
+      const watcher = current.get(id);
+      if (watcher) this.watchers.set(id, watcher);
+    }
+    this.publishSearchesChanged();
+    return this.list();
   }
 
   /** All configured searches as a round-trippable list (live rows; hold no credentials). */

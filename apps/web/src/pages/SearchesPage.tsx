@@ -1,6 +1,32 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ListFilter, LogIn, Pencil, Plus, Settings as SettingsIcon, Trash2 } from 'lucide-react';
+import {
+  GripVertical,
+  ListFilter,
+  LogIn,
+  Pencil,
+  Plus,
+  Settings as SettingsIcon,
+  Trash2,
+} from 'lucide-react';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { EngineStatus, SearchPreview, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
@@ -13,7 +39,7 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useDetection } from '../hooks/useDetection';
-import { useFlipList } from '../hooks/useFlipList';
+import { useEventStream } from '../hooks/EventStreamProvider';
 import { useSearches, type AddSearchPayload } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
@@ -21,13 +47,9 @@ import type { MessageKey } from '../i18n/messages';
 import { resolveBuyControl, type BuyControl } from '../lib/resolve-buy-control';
 import { ApiError, apiSend } from '../lib/api';
 
-/**
- * Display order: inactive searches sink to the bottom; within each group
- * auto-travel searches rise to the top. Stable — ties keep insertion order.
- */
-function searchSortRank(search: SearchRuntimeInfo): number {
-  return (search.enabled ? 0 : 2) + (search.autoTravel ? 0 : 1);
-}
+/** A search row glows for ~this long after one of its hits lands in the live feed. */
+const HIGHLIGHT_MS = 60_000;
+const HIGHLIGHT_TICK_MS = 5_000;
 
 const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   pending: 'neutral',
@@ -217,11 +239,13 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
 function SearchRow({
   search,
   buyControl,
+  highlighted,
   onUpdate,
   onRemove,
 }: {
   search: SearchRuntimeInfo;
   buyControl: BuyControl;
+  highlighted: boolean;
   onUpdate: (payload: {
     autoTravel?: boolean;
     autoBuy?: boolean;
@@ -239,6 +263,9 @@ function SearchRow({
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState(search.label);
   const [draftInput, setDraftInput] = useState(search.id);
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
+    id: search.id,
+  });
 
   function startEditing(): void {
     setDraftLabel(search.label);
@@ -267,7 +294,17 @@ function SearchRow({
   }
 
   return (
-    <li data-flip-id={search.id} className="rounded-lg border border-edge bg-surface-1 px-4 py-3">
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`rounded-lg border px-4 py-3 transition-colors ${
+        isDragging
+          ? 'z-10 border-gold/70 opacity-80'
+          : highlighted
+            ? 'border-gold/60 bg-gold/5'
+            : 'border-edge bg-surface-1'
+      }`}
+    >
       <Modal open={editing} label={t('searches.editSearch')} onClose={() => setEditing(false)}>
         <div className="border-b border-edge px-4 py-2.5">
           <h2 className="text-sm font-semibold text-ink">{t('searches.editSearch')}</h2>
@@ -300,6 +337,16 @@ function SearchRow({
         </div>
       </Modal>
       <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          aria-label={t('searches.reorder')}
+          title={t('searches.reorder')}
+          className="shrink-0 cursor-grab touch-none text-ink-faint transition-colors hover:text-ink active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-ink">{search.label}</span>
@@ -433,16 +480,50 @@ function LoginRequired() {
 export function SearchesPage() {
   const t = useT();
   const { status } = useServerStatus();
-  const { searches, loaded, add, update, remove } = useSearches();
+  const { searches, loaded, add, update, remove, reorder } = useSearches();
   const { paused, setDetectionPaused } = useDetection();
-  // FLIP animation: rows glide to their new slot on a re-sort instead of jumping.
-  const listParent = useFlipList<HTMLUListElement>();
-  const orderedSearches = [...searches].sort((left, right) => {
-    const byRank = searchSortRank(left) - searchSortRank(right);
-    if (byRank !== 0) return byRank;
-    // Same group → newest first (addedAt is ISO-8601, so lexicographic = chrono).
-    return right.addedAt.localeCompare(left.addedAt);
-  });
+  const { lastHitAtBySearchId } = useEventStream();
+
+  // Local copy so a drag reorders instantly (optimistic); it re-syncs from the server on
+  // every searches change (add/remove/reorder refetch) — done DURING render (React's
+  // adjust-state-on-prop-change pattern), not in an effect. The server order IS the
+  // user's order now, so there's no client-side re-sort.
+  const [items, setItems] = useState<SearchRuntimeInfo[]>(searches);
+  const [syncedSearches, setSyncedSearches] = useState(searches);
+  if (searches !== syncedSearches) {
+    setSyncedSearches(searches);
+    setItems(searches);
+  }
+
+  // Re-render periodically so the ~60s "just found" row highlight ages out.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), HIGHLIGHT_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  const isHighlighted = (searchId: string): boolean => {
+    const at = lastHitAtBySearchId[searchId];
+    return at !== undefined && nowMs - new Date(at).getTime() < HIGHLIGHT_MS;
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(event: DragEndEvent): void {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((entry) => entry.id === active.id);
+    const newIndex = items.findIndex((entry) => entry.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const next = arrayMove(items, oldIndex, newIndex);
+    setItems(next); // optimistic — the searches refetch reconciles
+    void reorder(next.map((entry) => entry.id)).catch(() => {
+      // On failure the refetch restores the server order.
+    });
+  }
 
   // Buy control resolved once for the whole list (SearchRow stays presentational).
   const isDesktop = document.documentElement.dataset['shell'] === 'desktop';
@@ -473,22 +554,34 @@ export function SearchesPage() {
           {loaded && searches.length === 0 && (
             <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
           )}
-          <ul ref={listParent} className="flex flex-col gap-2">
-            {orderedSearches.map((search) => (
-              <SearchRow
-                key={search.id}
-                search={search}
-                buyControl={resolveBuyControl({
-                  isDesktop,
-                  isMac,
-                  canControl,
-                  autoBuy: search.autoBuy,
-                })}
-                onUpdate={(payload) => update(search.id, payload)}
-                onRemove={() => remove(search.id)}
-              />
-            ))}
-          </ul>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={items.map((entry) => entry.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className="flex flex-col gap-2">
+                {items.map((search) => (
+                  <SearchRow
+                    key={search.id}
+                    search={search}
+                    highlighted={isHighlighted(search.id)}
+                    buyControl={resolveBuyControl({
+                      isDesktop,
+                      isMac,
+                      canControl,
+                      autoBuy: search.autoBuy,
+                    })}
+                    onUpdate={(payload) => update(search.id, payload)}
+                    onRemove={() => remove(search.id)}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
         </>
       )}
     </section>

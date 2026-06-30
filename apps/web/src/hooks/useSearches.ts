@@ -82,5 +82,13 @@ export function useSearches() {
     [refresh],
   );
 
-  return { searches, loaded, add, update, remove };
+  const reorder = useCallback(
+    async (order: string[]) => {
+      await apiSend<SearchRuntimeInfo[]>('POST', '/api/searches/reorder', { order });
+      refresh();
+    },
+    [refresh],
+  );
+
+  return { searches, loaded, add, update, remove, reorder };
 }

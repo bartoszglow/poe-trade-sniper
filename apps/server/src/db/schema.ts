@@ -17,6 +17,9 @@ export const searches = sqliteTable('searches', {
   /** Raw trade query JSON — opaque payload owned by the trade-api adapter. */
   filters: text('filters', { mode: 'json' }).notNull(),
   addedAt: text('added_at').notNull(),
+  /** User-defined display + poll-rotation order (drag-and-drop). Null = unordered;
+   *  sorted last by addedAt. Drives both the list order and the round-robin rotation. */
+  position: integer('position'),
 });
 
 /** Detection history — enables later analytics ("what I bought / saved"). */

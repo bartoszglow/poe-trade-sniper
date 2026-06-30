@@ -113,6 +113,13 @@ export class SearchesController {
     });
   }
 
+  /** Apply a user-defined drag-and-drop order (full list of ids, top first). */
+  @Post('searches/reorder')
+  reorder(@Body() body: unknown): SearchRuntimeInfo[] {
+    const { order } = parseOrBadRequest(z.object({ order: z.array(z.string().min(1)) }), body);
+    return this.searchManager.reorder(order);
+  }
+
   /** Resolve without persisting — powers the add-form criteria preview. */
   @Post('searches/preview')
   async preview(@Body() body: unknown): Promise<SearchPreview> {

@@ -643,6 +643,71 @@ describe('SearchManager', () => {
     }
   });
 
+  it('reorders searches and persists the order across a reload (#29)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', { label: 'A' });
+      await manager.add('AbCdEf002', { label: 'B' });
+      await manager.add('AbCdEf003', { label: 'C' });
+      expect(manager.list().map((entry) => entry.id)).toEqual([
+        'AbCdEf001',
+        'AbCdEf002',
+        'AbCdEf003',
+      ]);
+
+      manager.reorder(['AbCdEf003', 'AbCdEf001', 'AbCdEf002']);
+      expect(manager.list().map((entry) => entry.id)).toEqual([
+        'AbCdEf003',
+        'AbCdEf001',
+        'AbCdEf002',
+      ]);
+      manager.onApplicationShutdown();
+
+      // Persisted: a fresh manager on the same DB rehydrates in the saved order.
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        { resolveQuery: vi.fn() } as unknown as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+        ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        expect(reloaded.list().map((entry) => entry.id)).toEqual([
+          'AbCdEf003',
+          'AbCdEf001',
+          'AbCdEf002',
+        ]);
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      database.$client.close();
+    }
+  });
+
+  it('reorder is race-tolerant — unknown ids skipped, unmentioned appended (#29)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      await manager.add('AbCdEf003', {});
+      // Mentions a ghost id (skipped) and omits AbCdEf002 (appended in current order).
+      manager.reorder(['AbCdEf003', 'ghost-id', 'AbCdEf001']);
+      expect(manager.list().map((entry) => entry.id)).toEqual([
+        'AbCdEf003',
+        'AbCdEf001',
+        'AbCdEf002',
+      ]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('editSearch re-points to a new search id, keeping hits + settings (#1)', async () => {
     const { manager, database, wsEngines } = createManager();
     try {

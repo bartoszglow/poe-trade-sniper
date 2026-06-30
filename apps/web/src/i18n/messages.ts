@@ -146,6 +146,7 @@ export const EN = {
 
   // Searches page
   'searches.title': 'Searches',
+  'searches.reorder': 'Drag to reorder',
   'searches.fieldInput': 'Search id or URL',
   'searches.fieldInputHint':
     'paste from the trade site — it defines the query, league and purchase type',
@@ -448,6 +449,7 @@ export const PL: Record<MessageKey, string> = {
 
   // Searches page
   'searches.title': 'Wyszukiwania',
+  'searches.reorder': 'Przeciągnij, aby zmienić kolejność',
   'searches.fieldInput': 'Id lub URL wyszukiwania',
   'searches.fieldInputHint': 'wklej ze strony trade — definiuje zapytanie, ligę i tryb zakupu',
   'searches.fieldInputPlaceholder': 'AbCdEf123 lub https://…/trade2/search/…',

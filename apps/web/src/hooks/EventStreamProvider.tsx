@@ -43,6 +43,9 @@ export interface EventStreamState {
   connected: boolean;
   /** Newest-first live hits (session-local, capped) — collapsed by offer identity. */
   liveHits: LiveHit[];
+  /** searchId → ISO time of its most recent NEW hit. Drives the ~60s row highlight on
+   *  the Searches view (a re-served `hit-updated` does NOT refresh it). */
+  lastHitAtBySearchId: Record<string, string>;
   travelStateByListingId: Record<string, TravelState>;
   buyStateByListingId: Record<string, BuyState>;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
@@ -58,6 +61,7 @@ export interface EventStreamState {
 const INITIAL_STATE: EventStreamState = {
   connected: false,
   liveHits: [],
+  lastHitAtBySearchId: {},
   travelStateByListingId: {},
   buyStateByListingId: {},
   searchesVersion: 0,
@@ -85,11 +89,19 @@ function assertNever(event: never): never {
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
     case 'hit':
+      // A NEW offer: fold into the feed AND stamp the search's last-hit time (the ~60s
+      // row highlight on the Searches view keys off this).
+      return {
+        ...state,
+        liveHits: collapseHit(state.liveHits, event.listing, LIVE_HITS_CAP),
+        lastHitAtBySearchId: {
+          ...state.lastHitAtBySearchId,
+          [event.listing.searchId]: event.listing.detectedAt,
+        },
+      };
     case 'hit-updated':
-      // Both fold into one entity by offer identity (lib/live-hits): a `hit` is a new
-      // offer, a `hit-updated` is the same offer re-served by GGG under a fresh id. Either
-      // way the newest listing replaces + moves to the top and the differing ids merge;
-      // auto-travel/buy never see `hit-updated`, so a re-serve can't re-trigger them.
+      // The same offer re-served by GGG under a fresh id — fold it (move to top), but it
+      // is NOT a new finding, so it doesn't refresh the highlight.
       return {
         ...state,
         liveHits: collapseHit(state.liveHits, event.listing, LIVE_HITS_CAP),
