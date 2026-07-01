@@ -212,6 +212,20 @@ export const EN = {
     'Connect your Path of Exile session before you can add searches and detect listings.',
   'searches.loginRequiredCta': 'Go to Settings',
 
+  // Rooms — named groups of searches (#33)
+  'rooms.new': 'New room',
+  'rooms.defaultName': 'New room',
+  'rooms.nameLabel': 'Room name',
+  'rooms.rename': 'Rename room',
+  'rooms.reorder': 'Drag to move the room',
+  'rooms.collapse': 'Collapse room',
+  'rooms.expand': 'Expand room',
+  'rooms.empty': 'Drop searches here',
+  'rooms.delete': 'Delete room {name}',
+  'rooms.deleteTitle': 'Delete room',
+  'rooms.deleteRelease': 'Move searches out',
+  'rooms.deleteWithSearches': 'Delete searches too',
+
   // Search criteria view
   'criteria.show': 'Show criteria',
   'criteria.hide': 'Hide criteria',
@@ -542,6 +556,20 @@ export const PL: Record<MessageKey, string> = {
     'Połącz swoją sesję Path of Exile, zanim dodasz wyszukiwania i zaczniesz wykrywać oferty.',
   'searches.loginRequiredCta': 'Przejdź do Ustawień',
 
+  // Pokoje — nazwane grupy wyszukiwań (#33)
+  'rooms.new': 'Nowy pokój',
+  'rooms.defaultName': 'Nowy pokój',
+  'rooms.nameLabel': 'Nazwa pokoju',
+  'rooms.rename': 'Zmień nazwę pokoju',
+  'rooms.reorder': 'Przeciągnij, aby przenieść pokój',
+  'rooms.collapse': 'Zwiń pokój',
+  'rooms.expand': 'Rozwiń pokój',
+  'rooms.empty': 'Przeciągnij tu wyszukiwania',
+  'rooms.delete': 'Usuń pokój {name}',
+  'rooms.deleteTitle': 'Usuń pokój',
+  'rooms.deleteRelease': 'Przenieś wyszukiwania na zewnątrz',
+  'rooms.deleteWithSearches': 'Usuń też wyszukiwania',
+
   // Search criteria view
   'criteria.show': 'Pokaż kryteria',
   'criteria.hide': 'Ukryj kryteria',
@@ -682,6 +710,11 @@ export type PluralForms = {
 
 export const EN_PLURALS = {
   'searches.hitCount': { one: '{count} hit', other: '{count} hits' },
+  'rooms.memberCount': { one: '{count} search', other: '{count} searches' },
+  'rooms.deleteBody': {
+    one: 'The room "{name}" contains {count} search. Delete it too, or move it out?',
+    other: 'The room "{name}" contains {count} searches. Delete them too, or move them out?',
+  },
 } as const satisfies Record<string, PluralForms>;
 
 export type PluralKey = keyof typeof EN_PLURALS;
@@ -692,5 +725,18 @@ export const PL_PLURALS: Record<PluralKey, PluralForms> = {
     few: '{count} trafienia',
     many: '{count} trafień',
     other: '{count} trafienia',
+  },
+  'rooms.memberCount': {
+    one: '{count} wyszukiwanie',
+    few: '{count} wyszukiwania',
+    many: '{count} wyszukiwań',
+    other: '{count} wyszukiwania',
+  },
+  'rooms.deleteBody': {
+    one: 'Pokój „{name}” zawiera {count} wyszukiwanie. Usunąć je razem z pokojem, czy przenieść na zewnątrz?',
+    few: 'Pokój „{name}” zawiera {count} wyszukiwania. Usunąć je razem z pokojem, czy przenieść na zewnątrz?',
+    many: 'Pokój „{name}” zawiera {count} wyszukiwań. Usunąć je razem z pokojem, czy przenieść na zewnątrz?',
+    other:
+      'Pokój „{name}” zawiera {count} wyszukiwania. Usunąć je razem z pokojem, czy przenieść na zewnątrz?',
   },
 };

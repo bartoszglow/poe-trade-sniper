@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   PurchaseMode,
+  RoomDeleteMode,
   RoomInfo,
   SearchLayoutEntry,
   SearchRuntimeInfo,
@@ -42,8 +43,6 @@ export function useSearches() {
   const [rooms, setRooms] = useState<RoomInfo[]>([]);
   const [layout, setLayout] = useState<SearchLayoutEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
-  /** Latest searches snapshot for callbacks that must not re-subscribe on data. */
-  const searchesRef = useRef<SearchRuntimeInfo[]>([]);
   // A refetch fires on every searches-changed/engine-status bump. Without
   // ordering, a slower earlier response can land after a newer one and clobber
   // it — e.g. the "poll" gap-cover response overwriting the fresh "ws" badge,
@@ -56,7 +55,6 @@ export function useSearches() {
     apiGet<SearchesView>('/api/searches')
       .then((view) => {
         if (requestId !== latestRequestId.current) return;
-        searchesRef.current = view.searches;
         setSearches(view.searches);
         setRooms(view.rooms);
         setLayout(view.layout);
@@ -95,38 +93,53 @@ export function useSearches() {
     [refresh],
   );
 
-  /**
-   * Reorder from a flat id list (the current flat DnD, pre-#33-Phase-2 UI),
-   * translated to the server's layout tree PRESERVING room memberships: members
-   * group onto their room entry at the first member's slot, so a flat drag can
-   * never silently dissolve a room.
-   */
-  const reorder = useCallback(
-    async (order: string[]) => {
-      const roomIdBySearchId = new Map(
-        searchesRef.current.map((search) => [search.id, search.roomId]),
-      );
-      const layoutEntries: SearchLayoutEntry[] = [];
-      const roomEntryById = new Map<string, Extract<SearchLayoutEntry, { kind: 'room' }>>();
-      for (const searchId of order) {
-        const roomId = roomIdBySearchId.get(searchId) ?? null;
-        if (roomId === null) {
-          layoutEntries.push({ kind: 'search', id: searchId });
-          continue;
-        }
-        let roomEntry = roomEntryById.get(roomId);
-        if (!roomEntry) {
-          roomEntry = { kind: 'room', id: roomId, searchIds: [] };
-          roomEntryById.set(roomId, roomEntry);
-          layoutEntries.push(roomEntry);
-        }
-        roomEntry.searchIds.push(searchId);
-      }
-      await apiSend<SearchesView>('POST', '/api/searches/reorder', { layout: layoutEntries });
+  /** Commit a drag-and-drop result: top-level order + room membership in one call (#33). */
+  const reorderLayout = useCallback(
+    async (nextLayout: SearchLayoutEntry[]) => {
+      await apiSend<SearchesView>('POST', '/api/searches/reorder', { layout: nextLayout });
       refresh();
     },
     [refresh],
   );
 
-  return { searches, rooms, layout, loaded, add, update, remove, reorder };
+  /** Creates the room (appended at the end) and returns it, for follow-up UI (rename). */
+  const createRoom = useCallback(
+    async (name: string): Promise<RoomInfo | null> => {
+      const view = await apiSend<SearchesView>('POST', '/api/rooms', { name });
+      refresh();
+      return view.rooms.at(-1) ?? null;
+    },
+    [refresh],
+  );
+
+  const updateRoom = useCallback(
+    async (roomId: string, payload: { name?: string; collapsed?: boolean }) => {
+      await apiSend<SearchesView>('PATCH', `/api/rooms/${roomId}`, payload);
+      refresh();
+    },
+    [refresh],
+  );
+
+  /** The mode is the operator's D-room-2 choice — always explicit, never defaulted. */
+  const removeRoom = useCallback(
+    async (roomId: string, mode: RoomDeleteMode) => {
+      await apiSend<SearchesView>('DELETE', `/api/rooms/${roomId}?mode=${mode}`);
+      refresh();
+    },
+    [refresh],
+  );
+
+  return {
+    searches,
+    rooms,
+    layout,
+    loaded,
+    add,
+    update,
+    remove,
+    reorderLayout,
+    createRoom,
+    updateRoom,
+    removeRoom,
+  };
 }

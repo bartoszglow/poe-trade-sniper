@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ExternalLink,
+  FolderPlus,
   GripVertical,
   ListFilter,
   LogIn,
@@ -15,14 +16,16 @@ import {
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
-  closestCenter,
+  closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
@@ -31,6 +34,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   tradeSearchPageUrl,
   type EngineStatus,
+  type SearchLayoutEntry,
   type SearchPreview,
   type SearchRuntimeInfo,
 } from '@poe-sniper/shared';
@@ -40,6 +44,7 @@ import { Field } from '../components/Field';
 import { IconButton } from '../components/IconButton';
 import { Modal } from '../components/Modal';
 import { QueryCriteriaView } from '../components/QueryCriteriaView';
+import { RoomSection } from '../components/RoomSection';
 import { Select } from '../components/Select';
 import { Tooltip } from '../components/Tooltip';
 import { Switch } from '../components/Switch';
@@ -53,6 +58,14 @@ import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { resolveBuyControl, type BuyControl } from '../lib/resolve-buy-control';
 import { ApiError, apiSend } from '../lib/api';
+import {
+  locateSearch,
+  moveRoom,
+  moveSearch,
+  reorderWithinContainer,
+  roomIdFromDndId,
+  roomDragId,
+} from '../lib/search-layout-dnd';
 
 /** A search row glows for ~this long after one of its hits lands in the live feed. */
 const HIGHLIGHT_MS = 60_000;
@@ -515,23 +528,53 @@ function LoginRequired() {
   );
 }
 
+/**
+ * pointerWithin gives precise container targeting while a pointer drags a
+ * search into/out of rooms; closestCorners covers the keyboard sensor (no
+ * pointer coordinates) — the standard dnd-kit multiple-containers pairing.
+ */
+const collisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
+};
+
 export function SearchesPage() {
   const t = useT();
   const { status } = useServerStatus();
-  const { searches, loaded, add, update, remove, reorder } = useSearches();
+  const {
+    searches,
+    rooms,
+    layout,
+    loaded,
+    add,
+    update,
+    remove,
+    reorderLayout,
+    createRoom,
+    updateRoom,
+    removeRoom,
+  } = useSearches();
   const { paused, setDetectionPaused } = useDetection();
   const { lastHitAtBySearchId } = useEventStream();
 
-  // Local copy so a drag reorders instantly (optimistic); it re-syncs from the server on
-  // every searches change (add/remove/reorder refetch) — done DURING render (React's
-  // adjust-state-on-prop-change pattern), not in an effect. The server order IS the
-  // user's order now, so there's no client-side re-sort.
-  const [items, setItems] = useState<SearchRuntimeInfo[]>(searches);
-  const [syncedSearches, setSyncedSearches] = useState(searches);
-  if (searches !== syncedSearches) {
-    setSyncedSearches(searches);
-    setItems(searches);
+  // Local layout copy so a drag rearranges instantly (optimistic); it re-syncs from the
+  // server on every searches change (add/remove/reorder refetch) — done DURING render
+  // (React's adjust-state-on-prop-change pattern), not in an effect. The server layout
+  // IS the user's order now, so there's no client-side re-sort.
+  const [layoutState, setLayoutState] = useState<SearchLayoutEntry[]>(layout);
+  const [syncedLayout, setSyncedLayout] = useState(layout);
+  if (layout !== syncedLayout) {
+    setSyncedLayout(layout);
+    setLayoutState(layout);
   }
+
+  /**
+   * The room to open in rename mode right after "New room" creates it.
+   * RoomSection captures the flag as initial state on mount; the flag clears
+   * when that rename commits (the common case) and dies with the page anyway —
+   * so a rare list remount before the rename can at worst reopen the editor.
+   */
+  const [justCreatedRoomId, setJustCreatedRoomId] = useState<string | null>(null);
 
   // Re-render periodically so the ~60s "just found" row highlight ages out.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -550,17 +593,64 @@ export function SearchesPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  /** Cross-container preview: a dragged SEARCH enters/leaves a room live. */
+  function handleDragOver(event: DragOverEvent): void {
+    const { active, over } = event;
+    if (!over) return;
+    const activeId = String(active.id);
+    if (roomIdFromDndId(activeId) !== null) return; // rooms settle on drop
+    const overId = String(over.id);
+    if (activeId === overId) return;
+    const activeLocation = locateSearch(layoutState, activeId);
+    if (!activeLocation) return;
+    const overRoomId = roomIdFromDndId(overId);
+    if (overRoomId !== null) {
+      // Over a room block / its empty drop zone → append (works collapsed too).
+      if (activeLocation.roomId === overRoomId) return;
+      const roomEntry = layoutState.find(
+        (entry) => entry.kind === 'room' && entry.id === overRoomId,
+      );
+      if (roomEntry?.kind !== 'room') return;
+      setLayoutState(
+        moveSearch(layoutState, activeId, {
+          roomId: overRoomId,
+          index: roomEntry.searchIds.length,
+        }),
+      );
+      return;
+    }
+    const overLocation = locateSearch(layoutState, overId);
+    if (!overLocation || overLocation.roomId === activeLocation.roomId) return;
+    setLayoutState(moveSearch(layoutState, activeId, overLocation));
+  }
+
   function handleDragEnd(event: DragEndEvent): void {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((entry) => entry.id === active.id);
-    const newIndex = items.findIndex((entry) => entry.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const next = arrayMove(items, oldIndex, newIndex);
-    setItems(next); // optimistic — the searches refetch reconciles
-    void reorder(next.map((entry) => entry.id)).catch(() => {
-      // On failure the refetch restores the server order.
+    const activeId = String(active.id);
+    let next = layoutState;
+    if (over) {
+      const overId = String(over.id);
+      const activeRoomId = roomIdFromDndId(activeId);
+      if (activeRoomId !== null) {
+        next = moveRoom(layoutState, activeRoomId, overId);
+      } else if (activeId !== overId && roomIdFromDndId(overId) === null) {
+        next = reorderWithinContainer(layoutState, activeId, overId);
+      }
+    }
+    setLayoutState(next); // optimistic — the searches refetch reconciles
+    if (JSON.stringify(next) === JSON.stringify(syncedLayout)) return; // nothing changed
+    void reorderLayout(next).catch(() => {
+      // On failure the refetch restores the server layout.
     });
+  }
+
+  function handleDragCancel(): void {
+    setLayoutState(syncedLayout);
+  }
+
+  async function addRoom(): Promise<void> {
+    const room = await createRoom(t('rooms.defaultName'));
+    setJustCreatedRoomId(room?.id ?? null);
   }
 
   // Buy control resolved once for the whole list (SearchRow stays presentational).
@@ -571,17 +661,44 @@ export function SearchesPage() {
   const needsLogin =
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
+  const searchesById = new Map(searches.map((search) => [search.id, search]));
+  const roomsById = new Map(rooms.map((room) => [room.id, room]));
+
+  const renderSearchRow = (search: SearchRuntimeInfo) => (
+    <SearchRow
+      key={search.id}
+      search={search}
+      highlighted={isHighlighted(search.id)}
+      buyControl={resolveBuyControl({
+        isDesktop,
+        isMac,
+        canControl,
+        autoBuy: search.autoBuy,
+      })}
+      onUpdate={(payload) => update(search.id, payload)}
+      onRemove={() => remove(search.id)}
+    />
+  );
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-ink">{t('searches.title')}</h1>
-        <span className="flex items-center gap-2 text-xs text-ink-muted">
-          {t('searches.detectionToggle')}
-          <Switch
-            checked={!paused}
-            onChange={(detectionOn) => void setDetectionPaused(!detectionOn)}
-            label={t('searches.detectionToggle')}
-          />
+        <span className="flex items-center gap-3">
+          {!needsLogin && (
+            <Button variant="ghost" onClick={() => void addRoom()}>
+              <FolderPlus className="h-4 w-4" />
+              {t('rooms.new')}
+            </Button>
+          )}
+          <span className="flex items-center gap-2 text-xs text-ink-muted">
+            {t('searches.detectionToggle')}
+            <Switch
+              checked={!paused}
+              onChange={(detectionOn) => void setDetectionPaused(!detectionOn)}
+              label={t('searches.detectionToggle')}
+            />
+          </span>
         </span>
       </div>
       {needsLogin ? (
@@ -589,34 +706,52 @@ export function SearchesPage() {
       ) : (
         <>
           <AddSearchForm onAdd={add} />
-          {loaded && searches.length === 0 && (
+          {loaded && searches.length === 0 && rooms.length === 0 && (
             <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
           )}
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={collisionDetection}
+            onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
           >
             <SortableContext
-              items={items.map((entry) => entry.id)}
+              items={layoutState.map((entry) =>
+                entry.kind === 'room' ? roomDragId(entry.id) : entry.id,
+              )}
               strategy={verticalListSortingStrategy}
             >
               <ul className="flex flex-col gap-2">
-                {items.map((search) => (
-                  <SearchRow
-                    key={search.id}
-                    search={search}
-                    highlighted={isHighlighted(search.id)}
-                    buyControl={resolveBuyControl({
-                      isDesktop,
-                      isMac,
-                      canControl,
-                      autoBuy: search.autoBuy,
-                    })}
-                    onUpdate={(payload) => update(search.id, payload)}
-                    onRemove={() => remove(search.id)}
-                  />
-                ))}
+                {layoutState.map((entry) => {
+                  if (entry.kind === 'search') {
+                    const search = searchesById.get(entry.id);
+                    return search ? renderSearchRow(search) : null;
+                  }
+                  const room = roomsById.get(entry.id);
+                  if (!room) return null;
+                  const members = entry.searchIds
+                    .map((searchId) => searchesById.get(searchId))
+                    .filter((search): search is SearchRuntimeInfo => search !== undefined);
+                  return (
+                    <RoomSection
+                      key={room.id}
+                      room={room}
+                      members={members}
+                      highlighted={
+                        room.collapsed && members.some((member) => isHighlighted(member.id))
+                      }
+                      startRenaming={justCreatedRoomId === room.id}
+                      renderSearch={renderSearchRow}
+                      onRename={(name) => {
+                        if (justCreatedRoomId === room.id) setJustCreatedRoomId(null);
+                        return updateRoom(room.id, { name });
+                      }}
+                      onToggleCollapsed={() => updateRoom(room.id, { collapsed: !room.collapsed })}
+                      onDelete={(mode) => removeRoom(room.id, mode)}
+                    />
+                  );
+                })}
               </ul>
             </SortableContext>
           </DndContext>
