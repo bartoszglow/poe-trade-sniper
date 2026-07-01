@@ -1,6 +1,9 @@
 # 33 — Rooms: named groups of searches (Searches view)
 
-**Status: PLANNED** (2026-07-01, approved in-session). Not started.
+**Status: PHASE 1 (server) DONE** — `dc821b6`, 2026-07-02. Verify green (server 202,
+web 13, desktop 6); live-checked against the dev desktop (rooms CRUD + layout reorder +
+mode-less delete → 400). Phase 2 (web UI) next, then Phase 3 (polish).
+Planned 2026-07-01, approved in-session.
 
 Named "rooms" group related searches (e.g. five helmet searches while shopping for a
 helmet). Rooms reorder like searches, searches drag into / out of rooms. One level deep —
