@@ -3,7 +3,7 @@ type: note
 status: active
 tags: [poe2, sniper, future-ideas]
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-07-01
 ---
 
 # poe-trade-sniper — Future ideas (parking lot)
@@ -24,6 +24,21 @@ phase requires an explicit decision in [40_decisions](40_decisions.md).
 - **Cross-machine sync** of searches/history (parked O-4 — reopens cloud/Atlas question).
 - **Electron IPC transport** for UI↔core (optimization over loopback HTTP, see O-2).
 - **Code signing / notarization** of desktop builds (Win + macOS).
+- **Premium tier via one-time activation keys** (parked 2026-07-01, researched).
+  Key entry on the About/Support page unlocks premium features (e.g. auto-buy).
+  Constraint decided up front: **no 3rd-party services** (rules out Keygen /
+  Polar / Lemon Squeezy) — so the shape is a **tiny self-hosted key service**
+  (e.g. Cloudflare Worker + D1: `keys` table, one-time `POST /activate` with
+  machine fingerprint → returns an Ed25519-**signed entitlement** the app
+  caches in `app_state` and verifies offline via an embedded public key;
+  generation via an admin CLI, keys distributed manually as donation
+  thank-yous). In-app side mirrors the existing capability gate:
+  `EntitlementService` next to `PermissionGateService`, `entitlements` in
+  `/api/status`, enforcement at the same server choke points as
+  `gate.assert('control')`. Caveats recorded: client-side gating is
+  honor-system (signed blob stops casual DB edits only); a feature-unlocking
+  key is legally a **sale**, not a donation (VAT/income); check GGG's stance on
+  monetized trade tools before launch.
 
 ## Queued for next (agreed 2026-06-12, do after the Network view)
 
