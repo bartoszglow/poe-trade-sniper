@@ -24,6 +24,10 @@ phase requires an explicit decision in [40_decisions](40_decisions.md).
 - **Cross-machine sync** of searches/history (parked O-4 — reopens cloud/Atlas question).
 - **Electron IPC transport** for UI↔core (optimization over loopback HTTP, see O-2).
 - **Code signing / notarization** of desktop builds (Win + macOS).
+- **Room master switch** — enable/disable all searches in a room from its header
+  (parked 2026-07-01 while planning rooms, see
+  [33_search_rooms_plan](33_search_rooms_plan.md) D-room-1; needs a stagger +
+  partial-state story).
 - **Premium tier via one-time activation keys** (parked 2026-07-01, researched).
   Key entry on the About/Support page unlocks premium features (e.g. auto-buy).
   Constraint decided up front: **no 3rd-party services** (rules out Keygen /
