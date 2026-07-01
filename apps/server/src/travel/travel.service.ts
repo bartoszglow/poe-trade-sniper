@@ -94,6 +94,44 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     return { position: this.queue.length - 1 };
   }
 
+  /**
+   * Manual travel RETRY for an aged live hit. The stored token has expired, so re-resolve
+   * the listing (SearchManager.refreshListing → a FRESH token) and travel with that. The
+   * event is tagged with the ORIGINAL listingId so the live-hits card tracks the retry. If
+   * the offer is gone, emit a `failed` ("no longer listed") and report it. Manual + a single
+   * re-resolve per click — never an auto loop (the Tier-2 re-search bucket lockout is 30 min).
+   */
+  async retryTravel(
+    searchId: string,
+    listingId: string,
+    offerKey: string,
+  ): Promise<{ found: boolean }> {
+    const search = this.searchManager.getSearchRef(searchId);
+    if (!search) return { found: false };
+    const listing = await this.searchManager.refreshListing(searchId, listingId, offerKey);
+    if (!listing?.hideoutToken) {
+      this.realtimeBus.publish({
+        type: 'travel',
+        phase: 'failed',
+        source: 'manual',
+        searchId,
+        listingId,
+        itemName: listing?.itemName ?? null,
+        detail: 'no longer listed',
+        at: new Date().toISOString(),
+      });
+      return { found: false };
+    }
+    this.enqueue({
+      hideoutToken: listing.hideoutToken,
+      search,
+      listingId,
+      itemName: listing.itemName,
+      source: 'manual',
+    });
+    return { found: true };
+  }
+
   private maybeAutoTravel(event: DomainEvent): void {
     if (event.type !== 'hit') return;
     const { listing } = event;

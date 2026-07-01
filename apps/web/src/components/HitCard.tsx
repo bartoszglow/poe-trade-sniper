@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { RotateCcw, ShoppingCart, Zap } from 'lucide-react';
 import type { Listing } from '@poe-sniper/shared';
 import type { BuyState, TravelState } from '../hooks/EventStreamProvider';
@@ -32,6 +33,8 @@ interface HitCardProps {
   canBuy: boolean;
   onTravel: () => void;
   onBuy: () => void;
+  /** Re-resolve a fresh token server-side, then travel (for aged/failed hits). */
+  onRetry: () => Promise<void>;
 }
 
 export function HitCard({
@@ -44,11 +47,24 @@ export function HitCard({
   canBuy,
   onTravel,
   onBuy,
+  onRetry,
 }: HitCardProps) {
   const t = useT();
   const phase = travelState?.phase;
   const travelBusy = phase === 'queued' || phase === 'started';
   const buyDisplay = buyState ? BUY_PHASE_DISPLAY[buyState.phase] : undefined;
+  const [retrying, setRetrying] = useState(false);
+
+  // Re-resolve a fresh token, then travel. Used for the failed-phase Retry and for a stale
+  // (token-expired) Travel — both work regardless of the original token's age.
+  async function reResolveTravel(): Promise<void> {
+    setRetrying(true);
+    try {
+      await onRetry();
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   return (
     <div
@@ -91,12 +107,12 @@ export function HitCard({
                 <Button
                   variant="ghost"
                   className="!px-2 !py-0.5 text-xs"
-                  disabled={!tokenFresh}
-                  title={tokenFresh ? t('hitCard.travelTitle') : t('hitCard.tokenExpired')}
-                  onClick={onTravel}
+                  disabled={retrying}
+                  title={t('hitCard.retryTitle')}
+                  onClick={() => void reResolveTravel()}
                 >
                   <RotateCcw className="h-3 w-3" />
-                  {tokenFresh ? t('hitCard.retry') : t('hitCard.expired')}
+                  {retrying ? t('hitCard.retrying') : t('hitCard.retry')}
                 </Button>
               </>
             )}
@@ -104,12 +120,12 @@ export function HitCard({
               <Button
                 variant="primary"
                 className="!px-2 !py-0.5 text-xs"
-                disabled={!tokenFresh || travelBusy}
-                title={tokenFresh ? t('hitCard.travelTitle') : t('hitCard.tokenExpired')}
-                onClick={onTravel}
+                disabled={travelBusy || retrying}
+                title={tokenFresh ? t('hitCard.travelTitle') : t('hitCard.retryTitle')}
+                onClick={() => (tokenFresh ? onTravel() : void reResolveTravel())}
               >
                 <Zap className="h-3 w-3" />
-                {tokenFresh ? t('hitCard.travel') : t('hitCard.expired')}
+                {retrying ? t('hitCard.retrying') : t('hitCard.travel')}
               </Button>
             )}
             {canBuy && !travelBusy && (

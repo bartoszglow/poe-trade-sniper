@@ -39,6 +39,7 @@ import {
   TradeApiClient,
   type TradeSearchRef,
 } from '../trade-api/trade-api.client.js';
+import { offerKey } from '@poe-sniper/shared';
 import { ENGINE_REGISTRY, type EngineFactory } from './engine-registry.js';
 import { LiveOfferRegistry } from './live-offer-registry.js';
 import { parseSearchInput, queryStatusOption } from './search-input.js';
@@ -391,6 +392,45 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
     this.publishSearchesChanged();
     return this.list();
+  }
+
+  /**
+   * Re-resolve a single listing to recover a FRESH hideout token for a retry. Tokens die
+   * ~300 s and are never persisted, and GGG re-serves offers under new result-hash ids
+   * (see offer.ts), so a retry can't reuse the stored token/id — it must re-resolve.
+   * Tier 1: re-fetch the known id (cheap, FETCH bucket); if it still resolves to the SAME
+   * offer with a token, use it. Tier 2 (fallback): re-run the search newest-first and match
+   * the offer by its stable `offerKey`. Returns the fresh listing or null (sold / delisted /
+   * not in the current top results). Tier 2 spends a SEARCH-bucket hit, so callers MUST keep
+   * this manual + single-shot — never an auto loop (search lockouts stack for 30 min).
+   */
+  async refreshListing(
+    searchId: string,
+    listingId: string,
+    targetOfferKey: string,
+  ): Promise<Listing | null> {
+    const watcher = this.watchers.get(searchId);
+    if (!watcher) return null;
+    const search = this.toRef(watcher.row);
+    const correlationId = randomUUID();
+    // Tier 1 — fetch the known id; if it still maps to the same offer with a token, done.
+    try {
+      const [byId] = await this.tradeApi.fetchListings(search, [listingId], correlationId);
+      if (byId?.hideoutToken && offerKey(byId) === targetOfferKey) return byId;
+    } catch (error) {
+      this.logger.warn(`refresh tier-1 fetch failed: ${errorMessage(error)}`);
+    }
+    // Tier 2 — re-search (newest-first) + match by the stable offer identity.
+    const { ids } = await this.tradeApi.executeSearch(search, watcher.row.filters, correlationId);
+    if (ids.length === 0) return null;
+    const fresh = await this.tradeApi.fetchListings(
+      search,
+      ids.slice(0, this.config.FETCH_BATCH_SIZE),
+      correlationId,
+    );
+    return (
+      fresh.find((listing) => listing.hideoutToken && offerKey(listing) === targetOfferKey) ?? null
+    );
   }
 
   /** All configured searches as a round-trippable list (live rows; hold no credentials). */

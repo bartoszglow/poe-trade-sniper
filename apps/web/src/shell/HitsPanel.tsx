@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Eraser, Zap } from 'lucide-react';
-import type { Listing } from '@poe-sniper/shared';
+import { offerKey, type Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { HitCard } from '../components/HitCard';
 import { useEventStream } from '../hooks/EventStreamProvider';
@@ -76,6 +76,18 @@ export function HitsPanel() {
     });
   }
 
+  // Retry travel on an aged hit: the stored token is expired, so the server re-resolves a
+  // FRESH token (re-fetch by id, else re-search + match by offer identity). No token sent.
+  async function retry(listing: Listing): Promise<void> {
+    await apiSend<{ found: boolean }>('POST', '/api/travel/retry', {
+      searchId: listing.searchId,
+      listingId: listing.listingId,
+      offerKey: offerKey(listing),
+    }).catch(() => {
+      // Outcome (traveled / "no longer listed") arrives as a travel event on the stream.
+    });
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-4 py-2.5">
@@ -127,6 +139,7 @@ export function HitsPanel() {
                 canBuy={canBuy}
                 onTravel={() => travel(listing)}
                 onBuy={() => buy(listing)}
+                onRetry={() => retry(listing)}
               />
             ))}
           </div>

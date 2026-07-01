@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Travel retry on aged hits now works.** Retrying travel/buy on an old live hit used to
+  fire the stored hideout token, which is dead by then (~300 s TTL) — and GGG re-serves
+  offers under fresh ids, so the old id may not resolve either. The retry now re-resolves a
+  FRESH token (re-fetch by id, else re-search matched by offer identity) before travelling;
+  if the offer is gone it says "no longer listed" instead of failing silently. Auto-travel
+  is unchanged (fire-once on fresh hits; never re-searches).
 - Live WebSocket detection now actually delivers hits on PoE2 (it was silently
   doing nothing and the search ran on polling only). Two distinct bugs, both
   found by comparing our socket to a real browser tab against live GGG:

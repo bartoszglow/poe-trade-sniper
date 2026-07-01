@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Listing } from '@poe-sniper/shared';
+import { offerKey, type Listing } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
 import { hits } from '../db/schema.js';
@@ -702,6 +702,72 @@ describe('SearchManager', () => {
         'AbCdEf001',
         'AbCdEf002',
       ]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('refreshListing re-fetches a fresh token by id and matches by offerKey (tier 1) (#30)', async () => {
+    const { manager, tradeApi, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      const target: Listing = {
+        listingId: 'fresh-id',
+        searchId: 'AbCdEf001',
+        itemName: 'Storm Veil',
+        price: { amount: 5, currency: 'divine' },
+        seller: 'seller#1',
+        hideoutToken: `tok-${'x'.repeat(30)}`,
+        item: null,
+        detectedAt: '2026-06-30T00:00:00.000Z',
+      };
+      // Arg-based mock: the tier-1 fetch (by the old id) resolves the offer with a token.
+      vi.mocked(tradeApi.fetchListings).mockImplementation((_search, ids) =>
+        Promise.resolve(ids.includes('old-id') ? [target] : []),
+      );
+      const result = await manager.refreshListing('AbCdEf001', 'old-id', offerKey(target));
+      expect(result).toBe(target);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('refreshListing falls back to a re-search matched by offerKey (tier 2) (#30)', async () => {
+    const { manager, tradeApi, executeSearch, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      const target: Listing = {
+        listingId: 'reserved-id',
+        searchId: 'AbCdEf001',
+        itemName: 'Storm Veil',
+        price: { amount: 5, currency: 'divine' },
+        seller: 'seller#1',
+        hideoutToken: `tok-${'y'.repeat(30)}`,
+        item: null,
+        detectedAt: '2026-06-30T00:00:00.000Z',
+      };
+      // Tier 1 (old id) finds nothing; the re-search returns a new id whose fetch matches.
+      vi.mocked(tradeApi.fetchListings).mockImplementation((_search, ids) =>
+        Promise.resolve(ids.includes('reserved-id') ? [target] : []),
+      );
+      executeSearch.mockResolvedValue({ ids: ['reserved-id'], total: 1, rateLimited: false });
+      const result = await manager.refreshListing('AbCdEf001', 'old-id', offerKey(target));
+      expect(result).toBe(target);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('refreshListing returns null when the offer is gone (#30)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      // Default mocks: tier-1 fetch [] and re-search ids [] → no match.
+      const result = await manager.refreshListing('AbCdEf001', 'old-id', 'no-such-offer');
+      expect(result).toBeNull();
     } finally {
       manager.onApplicationShutdown();
       database.$client.close();
