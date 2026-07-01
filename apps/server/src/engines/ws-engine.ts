@@ -58,6 +58,11 @@ export class WsEngine implements DetectionEngine {
   private stopped = false;
   private context: EngineContext | null = null;
   private callbacks: EngineCallbacks | null = null;
+  /** Ids buffered from live frames, drained in one in-flight fetch (burst coalescing). */
+  private pendingIds: string[] = [];
+  private fetchInFlight = false;
+  /** Last listing-frame timestamp — for the reaction-time / burst-size debug log. */
+  private lastListingFrameAtMs = 0;
 
   constructor(
     private readonly config: WsConfig,
@@ -80,6 +85,7 @@ export class WsEngine implements DetectionEngine {
     this.reconnectTimer = null;
     this.socket?.terminate();
     this.socket = null;
+    this.pendingIds = [];
     this.callbacks?.onStatus('stopped', null);
   }
 
@@ -125,14 +131,16 @@ export class WsEngine implements DetectionEngine {
     });
 
     socket.on('message', (data: Buffer) => {
-      // Defense-in-depth: handleMessage fetches + normalizes live listings, so
-      // an unexpected throw must never become an unhandled rejection that kills
-      // the process. Per-listing failures are already isolated in fetchListings.
-      this.handleMessage(data.toString()).catch((error: unknown) => {
+      // Defense-in-depth: an unexpected throw here must never crash the process.
+      // handleMessage is now synchronous (buffer + kick a fire-and-forget drain);
+      // the drain isolates its own async fetch failures.
+      try {
+        this.handleMessage(data.toString());
+      } catch (error) {
         this.logger.warn(
           `[${this.context?.correlationId}] live message handling failed: ${errorMessage(error)}`,
         );
-      });
+      }
     });
 
     socket.on('error', (error: Error) => {
@@ -187,22 +195,59 @@ export class WsEngine implements DetectionEngine {
     this.reconnectTimer = setTimeout(() => this.connect(), delayMs);
   }
 
-  private async handleMessage(text: string): Promise<void> {
+  private handleMessage(text: string): void {
     if (!this.context || !this.callbacks) return;
-    // Record every raw frame for Network-view visibility: GGG sends an
-    // {"auth":true} ack on connect and then {"new":[ids]} batches. Logging the
-    // raw payload makes "connected but silent" diagnosable (no auth = no feed).
+    // Record every raw frame for Network-view visibility: GGG sends an {"auth":true}
+    // ack on connect, then one {"result":"<jwt>"} per new listing (PoE1's {"new":[ids]}
+    // is the legacy fallback). Logging the raw payload makes "connected but silent"
+    // diagnosable (no auth = no feed).
     this.recordWs('ws-frame', null, text.slice(0, 200));
     const newIds = parseLiveMessage(text);
     if (!newIds) return;
-    const idsToFetch = newIds.slice(0, this.config.MAX_FRESH_IDS_PER_TICK);
-    const listings = await this.tradeApi.fetchListings(
-      this.context.search,
-      idsToFetch,
-      this.context.correlationId,
+
+    // Reaction-time instrumentation: the gap since the last listing frame + the queue
+    // depth sizes real bursts (small gaps with a fetch in-flight = a burst being coalesced).
+    const nowMs = Date.now();
+    const sinceLastMs = this.lastListingFrameAtMs > 0 ? nowMs - this.lastListingFrameAtMs : -1;
+    this.lastListingFrameAtMs = nowMs;
+    this.logger.debug(
+      `[${this.context.correlationId}] live listing: ${newIds.length} id(s) +${sinceLastMs}ms, ` +
+        `${this.pendingIds.length} queued, fetch ${this.fetchInFlight ? 'in-flight' : 'idle'}`,
     );
-    if (!this.stopped && listings.length > 0) {
-      this.callbacks.onListings(listings);
+
+    // Coalesce bursts: buffer the ids and drain them in a single in-flight fetch. PoE2
+    // pushes ONE listing per frame, so without this each of k near-simultaneous listings
+    // would pay the governor's ~600ms fetch spacing (the k-th waits ~600·(k−1)ms). Frames
+    // that land while a fetch is running pile onto the next batch instead — collapsing a
+    // burst toward ceil(k/10) fetches (fetchListings already batches ≤10 ids/call). The
+    // FIRST frame fires immediately, so a lone listing pays zero added latency.
+    this.pendingIds.push(...newIds);
+    void this.drainPendingFetches();
+  }
+
+  /** Drain buffered live ids in batches, one fetch at a time; ids that arrive during a
+   *  fetch are picked up by the same loop (single-threaded → no lost ids, no double-drain). */
+  private async drainPendingFetches(): Promise<void> {
+    if (this.fetchInFlight || !this.context || !this.callbacks) return;
+    // Stable refs — survive the awaits (and TS's post-await re-widening of `this.*`).
+    const { context, callbacks } = this;
+    this.fetchInFlight = true;
+    try {
+      while (this.pendingIds.length > 0 && !this.stopped) {
+        const batch = this.pendingIds.splice(0, this.config.MAX_FRESH_IDS_PER_TICK);
+        const listings = await this.tradeApi.fetchListings(
+          context.search,
+          batch,
+          context.correlationId,
+        );
+        if (!this.stopped && listings.length > 0) {
+          callbacks.onListings(listings);
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`[${context.correlationId}] live fetch failed: ${errorMessage(error)}`);
+    } finally {
+      this.fetchInFlight = false;
     }
   }
 }

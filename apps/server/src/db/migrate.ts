@@ -28,6 +28,11 @@ export function openDatabase(databasePath: string) {
   }
   const sqlite = new Database(databasePath);
   sqlite.pragma('journal_mode = WAL');
+  // WAL defaults to synchronous=FULL (an fsync on every commit). On the hit hot path
+  // that fsync sits in front of the auto-travel trigger; NORMAL fsyncs only at WAL
+  // checkpoints, keeping the DB consistent and losing at most the last few rows on an
+  // OS crash/power-loss (never on an app crash) — the right trade for a local hit log.
+  sqlite.pragma('synchronous = NORMAL');
   const database = drizzle(sqlite, { schema });
   migrate(database, { migrationsFolder });
   return database;

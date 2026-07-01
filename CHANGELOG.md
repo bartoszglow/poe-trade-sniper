@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Faster reaction on contested bursts.** When several matching listings dropped at once, they
+  were fetched one-by-one (each waiting on the rate-limit spacing), so the 5th could lag seconds.
+  They're now coalesced into a single fetch — the first still fires instantly, the rest ride
+  along. Also removed a per-hit disk-sync that sat in front of the auto-travel trigger. (No
+  change to the rate-limit safety margins.)
 - **Window title no longer overlaps the macOS window buttons**, and the app shows its proper
   name **"PoE Trade Sniper"** in the title bar (the traffic lights are pinned so the title
   clears them on every macOS version).

@@ -40,6 +40,9 @@ export class RateLimitGovernor {
       this.policyNextSlotMs.set(policyKey, slot + minSpacingMs);
       const waitMs = slot - now;
       if (waitMs <= 0) return;
+      // Reaction-time instrumentation: a non-zero wait is spacing/pause latency on a
+      // (possibly hot-path) call — surfacing it quantifies burst serialization.
+      this.logger.debug(`${policyKey}: waiting ${waitMs}ms for slot`);
       await sleep(waitMs);
       if (Date.now() >= slot) return;
     }
