@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Window title no longer overlaps the macOS window buttons**, and the app shows its proper
+  name **"PoE Trade Sniper"** in the title bar (the traffic lights are pinned so the title
+  clears them on every macOS version).
 - **Travel failures now say _why_.** A failed teleport shows a clear reason parsed from GGG's
   response — e.g. a calm "no longer available" (muted, not alarming) when the item sold before
   you arrived, or "rate-limited — try again shortly" — instead of a generic red "failed". Other

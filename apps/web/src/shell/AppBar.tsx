@@ -41,7 +41,7 @@ export function AppBar({ serverHealthy, streamConnected, detection }: AppBarProp
   return (
     <div className="app-drag-region flex h-full items-center gap-3 border-b border-edge bg-surface-1 px-4">
       <span className="font-mono text-sm font-semibold tracking-wide text-gold">
-        poe-trade-sniper
+        PoE Trade Sniper
       </span>
       <div className="flex-1" />
       {detection.total > 0 && (

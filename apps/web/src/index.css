@@ -68,8 +68,9 @@ html[data-shell='desktop'] .app-no-drag {
 html[data-shell='desktop'] .app-window-controls {
   width: 0;
 }
-/* macOS traffic lights overlay the app bar's left edge (hiddenInset).
-   px on purpose: the lights are pixel-positioned, our root rem is 14px. */
+/* macOS traffic lights overlay the app bar's left edge. They're pinned in main.ts
+   (trafficLightPosition x:14) so this clears them with margin. px on purpose: the
+   lights are pixel-positioned, our root rem is 14px. */
 html[data-shell='desktop'] .app-drag-region {
   padding-left: 84px;
 }

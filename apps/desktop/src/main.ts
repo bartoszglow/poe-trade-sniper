@@ -85,9 +85,13 @@ function createWindow(url: string): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0b0a08',
-    title: 'poe-trade-sniper',
-    // D-8: our app bar IS the title bar; macOS traffic lights overlay it.
-    titleBarStyle: 'hiddenInset',
+    title: 'PoE Trade Sniper',
+    // D-8: our app bar IS the title bar; the macOS traffic lights overlay it. Pin them at a
+    // known spot (vertically centered in the 2.5rem / 35px bar) so the app bar's left padding
+    // clears them deterministically — `hiddenInset`'s macOS-default position drifted and
+    // collided with the title. `trafficLightPosition` requires `hidden` (not `hiddenInset`).
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 14, y: 11 },
     webPreferences: {
       preload: join(import.meta.dirname, 'preload.cjs'),
       // Renderer is plain web content — no Node access, fully sandboxed.
