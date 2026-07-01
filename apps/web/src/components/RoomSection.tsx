@@ -25,6 +25,7 @@ export function RoomSection({
   members,
   highlighted,
   startRenaming = false,
+  forceCollapsed = false,
   renderSearch,
   onRename,
   onToggleCollapsed,
@@ -36,6 +37,12 @@ export function RoomSection({
   highlighted: boolean;
   /** Open the name editor immediately (right after creation). */
   startRenaming?: boolean;
+  /**
+   * Render collapsed regardless of the persisted state — the page sets this
+   * while a ROOM block is being dragged, so every top-level slot is compact
+   * and easy to target. Purely visual; `room.collapsed` is untouched.
+   */
+  forceCollapsed?: boolean;
   renderSearch: (search: SearchRuntimeInfo) => ReactNode;
   onRename: (name: string) => Promise<void>;
   onToggleCollapsed: () => Promise<void>;
@@ -83,7 +90,7 @@ export function RoomSection({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`rounded-lg border transition-colors ${
         isDragging
-          ? 'z-10 border-gold/70 opacity-80'
+          ? 'border-gold/40 opacity-40'
           : highlighted
             ? 'border-gold/60 bg-gold/5'
             : 'border-edge bg-surface-0'
@@ -153,7 +160,7 @@ export function RoomSection({
           <Trash2 className="h-4 w-4" />
         </IconButton>
       </div>
-      {!room.collapsed && (
+      {!room.collapsed && !forceCollapsed && (
         <SortableContext
           items={members.map((member) => member.id)}
           strategy={verticalListSortingStrategy}

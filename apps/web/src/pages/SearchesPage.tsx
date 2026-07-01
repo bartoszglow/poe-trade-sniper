@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ExternalLink,
+  Folder,
   FolderPlus,
   GripVertical,
   ListFilter,
@@ -13,7 +14,9 @@ import {
 } from 'lucide-react';
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
   TouchSensor,
   closestCorners,
@@ -23,6 +26,7 @@ import {
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -329,7 +333,7 @@ function SearchRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`rounded-lg border px-4 py-3 transition-colors ${
         isDragging
-          ? 'z-10 border-gold/70 opacity-80'
+          ? 'border-gold/40 opacity-40'
           : highlighted
             ? 'border-gold/60 bg-gold/5'
             : 'border-edge bg-surface-1'
@@ -528,6 +532,29 @@ function LoginRequired() {
   );
 }
 
+/** Floating DragOverlay ghost for a dragged search — compact, never clipped. */
+function SearchDragGhost({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-gold/70 bg-surface-1 px-4 py-3 shadow-lg">
+      <GripVertical className="h-4 w-4 text-ink-faint" />
+      <span className="truncate font-medium text-ink">{label}</span>
+    </div>
+  );
+}
+
+/** Floating DragOverlay ghost for a dragged room block. */
+function RoomDragGhost({ name, memberCount }: { name: string; memberCount: number }) {
+  const tn = useTn();
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-gold/70 bg-surface-0 px-4 py-2.5 shadow-lg">
+      <GripVertical className="h-4 w-4 text-ink-faint" />
+      <Folder className="h-4 w-4 text-ink-muted" />
+      <span className="truncate font-medium text-ink">{name}</span>
+      <Badge tone="neutral">{tn('rooms.memberCount', memberCount)}</Badge>
+    </div>
+  );
+}
+
 /**
  * pointerWithin gives precise container targeting while a pointer drags a
  * search into/out of rooms; closestCorners covers the keyboard sensor (no
@@ -593,6 +620,14 @@ export function SearchesPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  /** The id being dragged — drives the DragOverlay ghost + compact-rooms mode. */
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const isRoomDragActive = activeDragId !== null && roomIdFromDndId(activeDragId) !== null;
+
+  function handleDragStart(event: DragStartEvent): void {
+    setActiveDragId(String(event.active.id));
+  }
+
   /** Cross-container preview: a dragged SEARCH enters/leaves a room live. */
   function handleDragOver(event: DragOverEvent): void {
     const { active, over } = event;
@@ -626,6 +661,7 @@ export function SearchesPage() {
 
   function handleDragEnd(event: DragEndEvent): void {
     const { active, over } = event;
+    setActiveDragId(null);
     const activeId = String(active.id);
     let next = layoutState;
     if (over) {
@@ -645,6 +681,7 @@ export function SearchesPage() {
   }
 
   function handleDragCancel(): void {
+    setActiveDragId(null);
     setLayoutState(syncedLayout);
   }
 
@@ -663,6 +700,21 @@ export function SearchesPage() {
 
   const searchesById = new Map(searches.map((search) => [search.id, search]));
   const roomsById = new Map(rooms.map((room) => [room.id, room]));
+
+  function renderDragGhost(dndId: string) {
+    const draggedRoomId = roomIdFromDndId(dndId);
+    if (draggedRoomId !== null) {
+      const room = roomsById.get(draggedRoomId);
+      if (!room) return null;
+      const roomEntry = layoutState.find(
+        (entry) => entry.kind === 'room' && entry.id === draggedRoomId,
+      );
+      const memberCount = roomEntry?.kind === 'room' ? roomEntry.searchIds.length : 0;
+      return <RoomDragGhost name={room.name} memberCount={memberCount} />;
+    }
+    const search = searchesById.get(dndId);
+    return search ? <SearchDragGhost label={search.label} /> : null;
+  }
 
   const renderSearchRow = (search: SearchRuntimeInfo) => (
     <SearchRow
@@ -712,6 +764,10 @@ export function SearchesPage() {
           <DndContext
             sensors={sensors}
             collisionDetection={collisionDetection}
+            // Rooms grow/shrink WHILE a search drags across them (live preview),
+            // so droppable rects must re-measure continuously, not just on start.
+            measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+            onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
@@ -742,6 +798,7 @@ export function SearchesPage() {
                         room.collapsed && members.some((member) => isHighlighted(member.id))
                       }
                       startRenaming={justCreatedRoomId === room.id}
+                      forceCollapsed={isRoomDragActive}
                       renderSearch={renderSearchRow}
                       onRename={(name) => {
                         if (justCreatedRoomId === room.id) setJustCreatedRoomId(null);
@@ -754,6 +811,9 @@ export function SearchesPage() {
                 })}
               </ul>
             </SortableContext>
+            {/* The dragged item renders as a floating ghost above everything —
+                never clipped by room borders, and the source row just dims. */}
+            <DragOverlay>{activeDragId !== null && renderDragGhost(activeDragId)}</DragOverlay>
           </DndContext>
         </>
       )}
