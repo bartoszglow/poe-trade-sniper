@@ -6,6 +6,7 @@ import { CorrelationIdMiddleware } from './correlation-id.middleware.js';
 import { HostGuardMiddleware } from './host-guard.middleware.js';
 import { HealthController } from './health.controller.js';
 import { LeaguesController } from './leagues.controller.js';
+import { RoomsController } from './rooms.controller.js';
 import { SearchesController } from './searches.controller.js';
 import { StatsController } from './stats.controller.js';
 import { StatusController } from './status.controller.js';
@@ -15,6 +16,7 @@ import { StatusController } from './status.controller.js';
   controllers: [
     HealthController,
     LeaguesController,
+    RoomsController,
     SearchesController,
     StatsController,
     StatusController,

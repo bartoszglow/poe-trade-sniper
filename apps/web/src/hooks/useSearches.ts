@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PurchaseMode, SearchRuntimeInfo } from '@poe-sniper/shared';
+import type {
+  PurchaseMode,
+  RoomInfo,
+  SearchLayoutEntry,
+  SearchRuntimeInfo,
+  SearchesView,
+} from '@poe-sniper/shared';
 import { apiGet, apiSend } from '../lib/api';
 import { useDebouncedValue } from './useDebouncedValue';
 import { useEventStream } from './EventStreamProvider';
@@ -33,7 +39,11 @@ export function useSearches() {
   // call refresh() directly, so add/edit/remove stay immediate.
   const debouncedVersion = useDebouncedValue(searchesVersion, REFETCH_DEBOUNCE_MS);
   const [searches, setSearches] = useState<SearchRuntimeInfo[]>([]);
+  const [rooms, setRooms] = useState<RoomInfo[]>([]);
+  const [layout, setLayout] = useState<SearchLayoutEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  /** Latest searches snapshot for callbacks that must not re-subscribe on data. */
+  const searchesRef = useRef<SearchRuntimeInfo[]>([]);
   // A refetch fires on every searches-changed/engine-status bump. Without
   // ordering, a slower earlier response can land after a newer one and clobber
   // it — e.g. the "poll" gap-cover response overwriting the fresh "ws" badge,
@@ -43,10 +53,13 @@ export function useSearches() {
 
   const refresh = useCallback(() => {
     const requestId = (latestRequestId.current += 1);
-    apiGet<SearchRuntimeInfo[]>('/api/searches')
-      .then((rows) => {
+    apiGet<SearchesView>('/api/searches')
+      .then((view) => {
         if (requestId !== latestRequestId.current) return;
-        setSearches(rows);
+        searchesRef.current = view.searches;
+        setSearches(view.searches);
+        setRooms(view.rooms);
+        setLayout(view.layout);
         setLoaded(true);
       })
       .catch(() => {
@@ -82,13 +95,38 @@ export function useSearches() {
     [refresh],
   );
 
+  /**
+   * Reorder from a flat id list (the current flat DnD, pre-#33-Phase-2 UI),
+   * translated to the server's layout tree PRESERVING room memberships: members
+   * group onto their room entry at the first member's slot, so a flat drag can
+   * never silently dissolve a room.
+   */
   const reorder = useCallback(
     async (order: string[]) => {
-      await apiSend<SearchRuntimeInfo[]>('POST', '/api/searches/reorder', { order });
+      const roomIdBySearchId = new Map(
+        searchesRef.current.map((search) => [search.id, search.roomId]),
+      );
+      const layoutEntries: SearchLayoutEntry[] = [];
+      const roomEntryById = new Map<string, Extract<SearchLayoutEntry, { kind: 'room' }>>();
+      for (const searchId of order) {
+        const roomId = roomIdBySearchId.get(searchId) ?? null;
+        if (roomId === null) {
+          layoutEntries.push({ kind: 'search', id: searchId });
+          continue;
+        }
+        let roomEntry = roomEntryById.get(roomId);
+        if (!roomEntry) {
+          roomEntry = { kind: 'room', id: roomId, searchIds: [] };
+          roomEntryById.set(roomId, roomEntry);
+          layoutEntries.push(roomEntry);
+        }
+        roomEntry.searchIds.push(searchId);
+      }
+      await apiSend<SearchesView>('POST', '/api/searches/reorder', { layout: layoutEntries });
       refresh();
     },
     [refresh],
   );
 
-  return { searches, loaded, add, update, remove, reorder };
+  return { searches, rooms, layout, loaded, add, update, remove, reorder };
 }

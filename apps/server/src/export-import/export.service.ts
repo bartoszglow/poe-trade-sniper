@@ -70,6 +70,7 @@ export class ExportService {
       version: SEARCH_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
       searches: this.searchManager.exportSearches(),
+      rooms: this.searchManager.exportRooms(),
     };
   }
 

@@ -54,7 +54,30 @@ export interface ManagedSearch {
   filters: unknown;
   /** ISO-8601 timestamp of when the search was added. */
   addedAt: string;
+  /** Room (named group) this search belongs to, or null = top level. */
+  roomId: string | null;
 }
+
+/** A named group of searches on the Searches view (one level deep — no nesting). */
+export interface RoomInfo {
+  id: string;
+  name: string;
+  /** Collapsed in the UI (persisted so it survives restarts). */
+  collapsed: boolean;
+  /** ISO-8601 timestamp of when the room was created. */
+  addedAt: string;
+}
+
+/**
+ * One top-level slot of the Searches view: an ungrouped search, or a room with
+ * its members in order. The explicit tree is unambiguous even for empty rooms.
+ */
+export type SearchLayoutEntry =
+  | { kind: 'search'; id: string }
+  | { kind: 'room'; id: string; searchIds: string[] };
+
+/** On room deletion the operator chooses; there is deliberately no default. */
+export type RoomDeleteMode = 'release' | 'delete-searches';
 
 /** One entry of the trade-site league list (id = the URL league segment). */
 export interface LeagueInfo {
@@ -100,4 +123,16 @@ export interface SearchRuntimeInfo extends ManagedSearch {
   statusDetail: string | null;
   hitCount: number;
   lastHitAt: string | null;
+}
+
+/**
+ * The full Searches view (GET /api/searches and every rooms/reorder mutation).
+ * `searches` is the flattened canonical order (rooms expanded in place) — the
+ * same order the server's poll rotation walks; `layout` is the top-level tree
+ * the UI renders.
+ */
+export interface SearchesView {
+  searches: SearchRuntimeInfo[];
+  rooms: RoomInfo[];
+  layout: SearchLayoutEntry[];
 }

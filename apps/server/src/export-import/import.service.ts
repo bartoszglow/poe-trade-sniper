@@ -23,6 +23,17 @@ const searchEntrySchema = z
     purchaseMode: z.enum(PURCHASE_MODES as [string, ...string[]]).nullable(),
     filters: z.record(z.string(), z.unknown()),
     addedAt: z.string().min(1),
+    /** Membership within the file's rooms (v2); absent in v1 exports. */
+    roomId: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+/** A v2 room entry — `id` only correlates memberships within the file. */
+const roomEntrySchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1).max(60),
+    collapsed: z.boolean().optional(),
   })
   .strict();
 
@@ -32,6 +43,8 @@ const envelopeSchema = z
     version: z.number().int(),
     exportedAt: z.string().optional(),
     searches: z.array(searchEntrySchema).max(2000),
+    /** v2; a v1 file simply has none. */
+    rooms: z.array(roomEntrySchema).max(500).optional(),
   })
   .strict();
 
@@ -53,9 +66,15 @@ export class ImportService {
         `unsupported export version ${parsed.data.version} (this app reads up to ${SEARCH_EXPORT_VERSION})`,
       );
     }
-    return this.searchManager.importSearches(
-      parsed.data.searches as unknown as ManagedSearch[],
-      mode,
-    );
+    const entries = parsed.data.searches.map((entry) => ({
+      ...entry,
+      roomId: entry.roomId ?? null,
+    })) as unknown as ManagedSearch[];
+    const exportedRooms = (parsed.data.rooms ?? []).map((room) => ({
+      id: room.id,
+      name: room.name,
+      collapsed: room.collapsed ?? false,
+    }));
+    return this.searchManager.importSearches(entries, exportedRooms, mode);
   }
 }

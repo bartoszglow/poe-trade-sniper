@@ -16,11 +16,17 @@ const fixtureSearch: ManagedSearch = {
   purchaseMode: null,
   filters: { query: { status: { option: 'securable' } } },
   addedAt: '2026-06-25T00:00:00.000Z',
+  roomId: 'room-1',
 };
+
+const fixtureRoom = { id: 'room-1', name: 'Helmets', collapsed: false };
 
 function makeService() {
   const database = openDatabase(':memory:');
-  const manager = { exportSearches: () => [fixtureSearch] } as unknown as SearchManager;
+  const manager = {
+    exportSearches: () => [fixtureSearch],
+    exportRooms: () => [fixtureRoom],
+  } as unknown as SearchManager;
   return { service: new ExportService(database, manager), database };
 }
 
@@ -30,9 +36,10 @@ describe('ExportService', () => {
     try {
       const envelope = service.exportSearchesEnvelope();
       expect(envelope.kind).toBe('poe-sniper-searches');
-      expect(envelope.version).toBe(1);
+      expect(envelope.version).toBe(2);
       expect(typeof envelope.exportedAt).toBe('string');
       expect(envelope.searches).toEqual([fixtureSearch]);
+      expect(envelope.rooms).toEqual([fixtureRoom]);
     } finally {
       database.$client.close();
     }

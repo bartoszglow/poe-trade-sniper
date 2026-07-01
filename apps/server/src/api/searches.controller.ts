@@ -1,23 +1,14 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Inject,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
   PURCHASE_MODES,
   type Hit,
   type SearchPreview,
   type SearchRuntimeInfo,
+  type SearchesView,
 } from '@poe-sniper/shared';
 import { SearchManager } from '../search/search-manager.js';
+import { parseOrBadRequest } from './request-validation.js';
 
 const purchaseModeSchema = z.enum(PURCHASE_MODES as [string, ...string[]]);
 
@@ -57,6 +48,19 @@ const previewSearchSchema = z.object({
   league: z.string().min(1).optional(),
 });
 
+/** The reorder payload: the explicit top-level tree (#33) — unambiguous even for empty rooms. */
+const layoutEntrySchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('search'), id: z.string().min(1) }).strict(),
+  z
+    .object({
+      kind: z.literal('room'),
+      id: z.string().min(1),
+      searchIds: z.array(z.string().min(1)).max(2000),
+    })
+    .strict(),
+]);
+const reorderSchema = z.object({ layout: z.array(layoutEntrySchema).max(2000) });
+
 const listHitsSchema = z.object({
   searchId: z.string().min(1).optional(),
   search: z.string().min(1).max(120).optional(),
@@ -67,26 +71,13 @@ const listHitsSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-function parseOrBadRequest<Schema extends z.ZodType>(
-  schema: Schema,
-  body: unknown,
-): z.infer<Schema> {
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    throw new BadRequestException(
-      parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
-    );
-  }
-  return parsed.data;
-}
-
 @Controller()
 export class SearchesController {
   constructor(@Inject(SearchManager) private readonly searchManager: SearchManager) {}
 
   @Get('searches')
-  list(): SearchRuntimeInfo[] {
-    return this.searchManager.list();
+  list(): SearchesView {
+    return this.searchManager.view();
   }
 
   /** Global detection pause state — drives the Searches-view master toggle. */
@@ -113,11 +104,11 @@ export class SearchesController {
     });
   }
 
-  /** Apply a user-defined drag-and-drop order (full list of ids, top first). */
+  /** Apply a user-defined drag-and-drop layout (#33): top-level order + room membership. */
   @Post('searches/reorder')
-  reorder(@Body() body: unknown): SearchRuntimeInfo[] {
-    const { order } = parseOrBadRequest(z.object({ order: z.array(z.string().min(1)) }), body);
-    return this.searchManager.reorder(order);
+  reorder(@Body() body: unknown): SearchesView {
+    const { layout } = parseOrBadRequest(reorderSchema, body);
+    return this.searchManager.reorder(layout);
   }
 
   /** Resolve without persisting — powers the add-form criteria preview. */

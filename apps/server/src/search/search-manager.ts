@@ -13,6 +13,7 @@ import { and, asc, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
 import type {
   EngineKind,
   EngineStatus,
+  ExportedRoom,
   Hit,
   ImportConflictMode,
   ImportResult,
@@ -20,8 +21,12 @@ import type {
   ManagedSearch,
   PurchaseMode,
   Realm,
+  RoomDeleteMode,
+  RoomInfo,
+  SearchLayoutEntry,
   SearchPreview,
   SearchRuntimeInfo,
+  SearchesView,
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
@@ -29,7 +34,7 @@ import { OutboundGuard } from '../guard/outbound-guard.js';
 import { PermissionGateService } from '../permissions/permission-gate.service.js';
 import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
-import { hits, searches } from '../db/schema.js';
+import { hits, rooms, searches } from '../db/schema.js';
 import type { DetectionEngine, EngineContext } from '../engines/detection-engine.js';
 import { PollEngine } from '../engines/poll-engine.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
@@ -43,6 +48,7 @@ import { offerKey } from '@poe-sniper/shared';
 import { ENGINE_REGISTRY, type EngineFactory } from './engine-registry.js';
 import { LiveOfferRegistry } from './live-offer-registry.js';
 import { parseSearchInput, queryStatusOption } from './search-input.js';
+import { buildLayout, normalizeLayout, type LayoutSearchState } from './search-layout.js';
 
 export interface AddSearchOptions {
   label?: string;
@@ -104,6 +110,16 @@ interface Watcher {
   lastHitAt: string | null;
 }
 
+/** In-memory room state (#33). Map insertion order = top-level room order. */
+interface RoomState {
+  id: string;
+  name: string;
+  collapsed: boolean;
+  addedAt: string;
+  /** Last persisted top-level index — anchors the room when it has no members. */
+  position: number;
+}
+
 /**
  * Owns the watched-search lifecycle: persistence, engine selection via the
  * registry, the shared round-robin poll scheduler (one search POST per tick
@@ -114,6 +130,8 @@ interface Watcher {
 export class SearchManager implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(SearchManager.name);
   private readonly watchers = new Map<string, Watcher>();
+  /** Named search groups (#33); iteration order = top-level room order. */
+  private readonly rooms = new Map<string, RoomState>();
   private schedulerTimer: NodeJS.Timeout | null = null;
   private roundRobinIndex = 0;
   private tickInFlight = false;
@@ -135,18 +153,29 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   ) {}
 
   onApplicationBootstrap(): void {
-    // Rehydrate in the user's drag order: position ASC (nulls last), then addedAt. The
-    // Map insertion order IS the list order AND the round-robin poll rotation, so this
-    // restores both across restarts.
-    const rows = this.database
+    // Rehydrate rooms first (memberships are validated against them), then the
+    // searches in the user's drag order. `position` carries TWO scopes (#33): the
+    // top-level index (rooms + ungrouped searches share one sequence) and the
+    // within-room index; nulls sort last by addedAt in their scope. The flattened
+    // depth-first result IS the Map insertion order = list order = poll rotation.
+    const roomRows = this.database
       .select()
-      .from(searches)
+      .from(rooms)
       .orderBy(
-        asc(sql`coalesce(${searches.position}, ${Number.MAX_SAFE_INTEGER})`),
-        asc(searches.addedAt),
+        asc(sql`coalesce(${rooms.position}, ${Number.MAX_SAFE_INTEGER})`),
+        asc(rooms.addedAt),
       )
       .all();
-    for (const row of rows) {
+    for (const roomRow of roomRows) {
+      this.rooms.set(roomRow.id, {
+        id: roomRow.id,
+        name: roomRow.name,
+        collapsed: roomRow.collapsed,
+        addedAt: roomRow.addedAt,
+        position: roomRow.position ?? Number.MAX_SAFE_INTEGER,
+      });
+    }
+    for (const row of this.rowsInFlattenedOrder()) {
       this.watchers.set(row.id, this.createWatcher(this.rowToManagedSearch(row)));
     }
     // Restore hit count + last-hit from the hits table in ONE grouped query (not
@@ -221,6 +250,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       purchaseMode,
       filters: resolvedQuery,
       addedAt: new Date().toISOString(),
+      roomId: null,
     };
     this.database
       .insert(searches)
@@ -372,30 +402,100 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
-   * Apply a user-defined order (drag-and-drop). Persists `position = index` per id, then
-   * rebuilds the watchers Map in that order — which is BOTH the displayed list order AND
-   * the round-robin poll rotation (top searches poll a tick earlier). Race-tolerant: ids
-   * that no longer exist are skipped, and any search not mentioned (e.g. added since the
-   * client fetched) is appended in its current order so nothing is dropped. Never touches
-   * the buy lock / travel queue.
+   * Apply a user-defined layout (drag-and-drop, #33): top-level order of rooms +
+   * ungrouped searches, membership, and within-room order — all in one call, so a
+   * drag into/out of a room commits atomically with the ordering it implies. The
+   * flattened result rebuilds the watchers Map, which is BOTH the displayed list
+   * order AND the round-robin poll rotation (top searches poll a tick earlier).
+   * Race-tolerant (see normalizeLayout): unknown ids are skipped and unmentioned
+   * searches/rooms are appended so nothing is dropped. Never touches the buy
+   * lock / travel queue.
    */
-  reorder(orderedIds: string[]): SearchRuntimeInfo[] {
-    const current = new Map(this.watchers);
-    const requested = [...new Set(orderedIds)].filter((id) => current.has(id));
-    const leftovers = [...current.keys()].filter((id) => !requested.includes(id));
-    const finalOrder = [...requested, ...leftovers];
-    this.database.transaction((tx) => {
-      finalOrder.forEach((id, index) => {
-        tx.update(searches).set({ position: index }).where(eq(searches.id, id)).run();
-      });
-    });
-    this.watchers.clear();
-    for (const id of finalOrder) {
-      const watcher = current.get(id);
-      if (watcher) this.watchers.set(id, watcher);
-    }
+  reorder(requestedLayout: SearchLayoutEntry[]): SearchesView {
+    const normalized = normalizeLayout(requestedLayout, this.layoutSearchStates(), [
+      ...this.rooms.keys(),
+    ]);
+    this.database.transaction((tx) => this.persistLayout(tx, normalized.layout));
+    this.applyLayoutToMemory(normalized.layout, normalized.flattened);
     this.publishSearchesChanged();
-    return this.list();
+    return this.view();
+  }
+
+  /** The full Searches view: flattened searches + rooms + the top-level layout tree. */
+  view(): SearchesView {
+    return { searches: this.list(), rooms: this.listRooms(), layout: this.currentLayout() };
+  }
+
+  listRooms(): RoomInfo[] {
+    return [...this.rooms.values()].map((room) => ({
+      id: room.id,
+      name: room.name,
+      collapsed: room.collapsed,
+      addedAt: room.addedAt,
+    }));
+  }
+
+  createRoom(name: string): SearchesView {
+    const room: RoomState = {
+      id: randomUUID(),
+      name: name.trim(),
+      collapsed: false,
+      addedAt: new Date().toISOString(),
+      // Appended at the end of the top level.
+      position: this.currentLayout().length,
+    };
+    this.database.insert(rooms).values(room).run();
+    this.rooms.set(room.id, room);
+    this.publishSearchesChanged();
+    return this.view();
+  }
+
+  updateRoom(roomId: string, options: { name?: string; collapsed?: boolean }): SearchesView {
+    const room = this.requireRoom(roomId);
+    room.name = options.name?.trim() ?? room.name;
+    room.collapsed = options.collapsed ?? room.collapsed;
+    this.database
+      .update(rooms)
+      .set({ name: room.name, collapsed: room.collapsed })
+      .where(eq(rooms.id, roomId))
+      .run();
+    this.publishSearchesChanged();
+    return this.view();
+  }
+
+  /**
+   * Delete a room with an operator-chosen fate for its members (D-room-2 — the
+   * API forces the choice, there is no default). `release` keeps the members
+   * exactly where they sat, now top-level; `delete-searches` tears each member
+   * down like a normal search removal. Row deletes + the layout re-persist are
+   * one transaction; hits of deleted searches are handled as in `remove()`.
+   */
+  deleteRoom(roomId: string, mode: RoomDeleteMode): SearchesView {
+    this.requireRoom(roomId);
+    const members = [...this.watchers.values()].filter((watcher) => watcher.row.roomId === roomId);
+    for (const member of members) {
+      if (mode === 'delete-searches') {
+        this.stopEngines(member);
+        this.watchers.delete(member.row.id);
+      } else {
+        // Release: same flattened slot, no room — the layout keeps it in place.
+        member.row = { ...member.row, roomId: null };
+      }
+    }
+    this.rooms.delete(roomId);
+    const layout = this.currentLayout();
+    this.database.transaction((tx) => {
+      if (mode === 'delete-searches') {
+        for (const member of members) {
+          tx.delete(searches).where(eq(searches.id, member.row.id)).run();
+        }
+      }
+      tx.delete(rooms).where(eq(rooms.id, roomId)).run();
+      this.persistLayout(tx, layout);
+    });
+    this.syncRoomPositions(layout);
+    this.publishSearchesChanged();
+    return this.view();
   }
 
   /**
@@ -442,15 +542,31 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return [...this.watchers.values()].map((watcher) => ({ ...watcher.row }));
   }
 
+  /** Rooms as exported alongside the searches (ids correlate memberships in the file). */
+  exportRooms(): ExportedRoom[] {
+    return [...this.rooms.values()].map((room) => ({
+      id: room.id,
+      name: room.name,
+      collapsed: room.collapsed,
+    }));
+  }
+
   /**
    * Restore searches from an export. Each entry is inserted with its stored `filters`
    * AS-IS — no `resolveQuery()` (we keep no raw input and want import to work offline);
    * the watcher is re-created and started. Auto-travel/buy that fail the safety gate are
    * coerced OFF rather than failing the whole entry. On id conflict: `skip` keeps the
-   * existing search, `replace` removes then re-inserts it. Never accepts credentials —
-   * the entry shape has none.
+   * existing search, `replace` removes then re-inserts it. Rooms in the file are matched
+   * to existing rooms BY NAME (else created), and memberships remapped through that —
+   * file room ids never leak into this database. Never accepts credentials — the entry
+   * shape has none.
    */
-  importSearches(entries: ManagedSearch[], mode: ImportConflictMode): ImportResult {
+  importSearches(
+    entries: ManagedSearch[],
+    exportedRooms: ExportedRoom[],
+    mode: ImportConflictMode,
+  ): ImportResult {
+    const roomIdByExportedId = this.importRooms(exportedRooms);
     let imported = 0;
     let skipped = 0;
     const errors: string[] = [];
@@ -487,6 +603,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
           purchaseMode: entry.purchaseMode,
           filters: entry.filters,
           addedAt: entry.addedAt,
+          roomId: entry.roomId !== null ? (roomIdByExportedId.get(entry.roomId) ?? null) : null,
         };
         this.database
           .insert(searches)
@@ -506,6 +623,33 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
     if (imported > 0) this.publishSearchesChanged();
     return { imported, skipped, errors };
+  }
+
+  /**
+   * Materialize an export's rooms: an existing room with the same name is reused
+   * (idempotent re-import), anything else is created fresh with a NEW id and
+   * appended at the top level. Returns file-room-id → actual-room-id.
+   */
+  private importRooms(exportedRooms: ExportedRoom[]): Map<string, string> {
+    const roomIdByExportedId = new Map<string, string>();
+    for (const exportedRoom of exportedRooms) {
+      const existing = [...this.rooms.values()].find((room) => room.name === exportedRoom.name);
+      if (existing) {
+        roomIdByExportedId.set(exportedRoom.id, existing.id);
+        continue;
+      }
+      const room: RoomState = {
+        id: randomUUID(),
+        name: exportedRoom.name,
+        collapsed: exportedRoom.collapsed,
+        addedAt: new Date().toISOString(),
+        position: this.currentLayout().length,
+      };
+      this.database.insert(rooms).values(room).run();
+      this.rooms.set(room.id, room);
+      roomIdByExportedId.set(exportedRoom.id, room.id);
+    }
+    return roomIdByExportedId;
   }
 
   listHits(query: HitQuery): Hit[] {
@@ -911,6 +1055,116 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return watcher;
   }
 
+  private requireRoom(roomId: string): RoomState {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new NotFoundException(`room ${roomId} does not exist`);
+    return room;
+  }
+
+  /** Current flattened order + membership, as the layout algebra consumes it. */
+  private layoutSearchStates(): LayoutSearchState[] {
+    return [...this.watchers.values()].map((watcher) => ({
+      id: watcher.row.id,
+      roomId: watcher.row.roomId,
+    }));
+  }
+
+  private currentLayout(): SearchLayoutEntry[] {
+    return buildLayout(
+      this.layoutSearchStates(),
+      [...this.rooms.values()].map((room) => ({ id: room.id, position: room.position })),
+    );
+  }
+
+  /**
+   * Persist a canonical layout: one shared 0..N-1 sequence over the top level
+   * (rooms + ungrouped searches), 0..M within each room, membership included.
+   * Callers wrap this in their transaction so structural changes land atomically.
+   */
+  private persistLayout(tx: Pick<SniperDatabase, 'update'>, layout: SearchLayoutEntry[]): void {
+    layout.forEach((entry, topLevelIndex) => {
+      if (entry.kind === 'search') {
+        tx.update(searches)
+          .set({ position: topLevelIndex, roomId: null })
+          .where(eq(searches.id, entry.id))
+          .run();
+        return;
+      }
+      tx.update(rooms).set({ position: topLevelIndex }).where(eq(rooms.id, entry.id)).run();
+      entry.searchIds.forEach((memberId, memberIndex) => {
+        tx.update(searches)
+          .set({ position: memberIndex, roomId: entry.id })
+          .where(eq(searches.id, memberId))
+          .run();
+      });
+    });
+  }
+
+  /** Rebuild the watchers Map (flattened order + membership) and room order from a layout. */
+  private applyLayoutToMemory(layout: SearchLayoutEntry[], flattened: LayoutSearchState[]): void {
+    const currentWatchers = new Map(this.watchers);
+    this.watchers.clear();
+    for (const state of flattened) {
+      const watcher = currentWatchers.get(state.id);
+      if (!watcher) continue;
+      watcher.row = { ...watcher.row, roomId: state.roomId };
+      this.watchers.set(state.id, watcher);
+    }
+    const currentRooms = new Map(this.rooms);
+    this.rooms.clear();
+    for (const entry of layout) {
+      if (entry.kind !== 'room') continue;
+      const room = currentRooms.get(entry.id);
+      if (room) this.rooms.set(entry.id, room);
+    }
+    this.syncRoomPositions(layout);
+  }
+
+  /** Refresh each room's remembered top-level index (the empty-room anchor). */
+  private syncRoomPositions(layout: SearchLayoutEntry[]): void {
+    layout.forEach((entry, topLevelIndex) => {
+      if (entry.kind !== 'room') return;
+      const room = this.rooms.get(entry.id);
+      if (room) room.position = topLevelIndex;
+    });
+  }
+
+  /** DB rows in flattened canonical order (bootstrap) — see onApplicationBootstrap. */
+  private rowsInFlattenedOrder(): Array<typeof searches.$inferSelect> {
+    const rows = this.database.select().from(searches).all();
+    interface ScopedToken {
+      position: number;
+      addedAt: string;
+      rows: Array<typeof searches.$inferSelect>;
+    }
+    const byScope = (first: ScopedToken, second: ScopedToken): number =>
+      first.position - second.position || first.addedAt.localeCompare(second.addedAt);
+    const memberTokensByRoom = new Map<string, ScopedToken[]>();
+    const topLevelTokens: ScopedToken[] = [];
+    for (const row of rows) {
+      const token: ScopedToken = {
+        position: row.position ?? Number.MAX_SAFE_INTEGER,
+        addedAt: row.addedAt,
+        rows: [row],
+      };
+      const roomId = row.roomId !== null && this.rooms.has(row.roomId) ? row.roomId : null;
+      if (roomId === null) {
+        topLevelTokens.push(token);
+      } else {
+        memberTokensByRoom.set(roomId, [...(memberTokensByRoom.get(roomId) ?? []), token]);
+      }
+    }
+    for (const room of this.rooms.values()) {
+      const memberTokens = (memberTokensByRoom.get(room.id) ?? []).sort(byScope);
+      topLevelTokens.push({
+        position: room.position,
+        addedAt: room.addedAt,
+        rows: memberTokens.flatMap((token) => token.rows),
+      });
+    }
+    return topLevelTokens.sort(byScope).flatMap((token) => token.rows);
+  }
+
   /** Restore hitCount + lastHitAt for ALL watchers in one grouped query (PERF-6). */
   private hydrateAllHitStats(): void {
     const rows = this.database
@@ -956,6 +1210,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       purchaseMode: (row.purchaseMode as PurchaseMode | null) ?? null,
       filters: row.filters,
       addedAt: row.addedAt,
+      // A stale membership (room row gone) self-heals to top-level.
+      roomId: row.roomId !== null && this.rooms.has(row.roomId) ? row.roomId : null,
     };
   }
 

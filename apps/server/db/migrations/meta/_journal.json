@@ -57,6 +57,13 @@
       "when": 1782823998723,
       "tag": "0007_search_position",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1782943509014,
+      "tag": "0008_rooms",
+      "breakpoints": true
     }
   ]
 }

@@ -24,10 +24,37 @@ const validEntry = {
 const validEnvelope = { kind: 'poe-sniper-searches', version: 1, searches: [validEntry] };
 
 describe('ImportService', () => {
-  it('accepts a valid envelope and forwards the entries + mode to the manager', () => {
+  it('accepts a valid v1 envelope and forwards the entries + mode to the manager', () => {
     const { service, importSearches } = makeService();
     expect(service.importSearches(validEnvelope, 'skip').imported).toBe(1);
-    expect(importSearches).toHaveBeenCalledWith([validEntry], 'skip');
+    // v1 entries carry no roomId → normalized to null; v1 has no rooms.
+    expect(importSearches).toHaveBeenCalledWith([{ ...validEntry, roomId: null }], [], 'skip');
+  });
+
+  it('accepts a v2 envelope with rooms and remaps memberships through the manager (#33)', () => {
+    const { service, importSearches } = makeService();
+    const envelope = {
+      kind: 'poe-sniper-searches',
+      version: 2,
+      searches: [{ ...validEntry, roomId: 'file-room-1' }],
+      rooms: [{ id: 'file-room-1', name: 'Helmets', collapsed: true }],
+    };
+    expect(service.importSearches(envelope, 'skip').imported).toBe(1);
+    expect(importSearches).toHaveBeenCalledWith(
+      [{ ...validEntry, roomId: 'file-room-1' }],
+      [{ id: 'file-room-1', name: 'Helmets', collapsed: true }],
+      'skip',
+    );
+  });
+
+  it('rejects an off-contract rooms entry (extra keys, strict)', () => {
+    const { service } = makeService();
+    const envelope = {
+      ...validEnvelope,
+      version: 2,
+      rooms: [{ id: 'r1', name: 'Helmets', smuggled: 'nope' }],
+    };
+    expect(() => service.importSearches(envelope, 'skip')).toThrow(BadRequestException);
   });
 
   it('rejects the wrong envelope kind', () => {

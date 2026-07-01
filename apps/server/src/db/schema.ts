@@ -18,8 +18,24 @@ export const searches = sqliteTable('searches', {
   filters: text('filters', { mode: 'json' }).notNull(),
   addedAt: text('added_at').notNull(),
   /** User-defined display + poll-rotation order (drag-and-drop). Null = unordered;
-   *  sorted last by addedAt. Drives both the list order and the round-robin rotation. */
+   *  sorted last by addedAt. Two scopes (#33): top-level index when room_id is null,
+   *  within-room index otherwise. Drives both the list order and the poll rotation. */
   position: integer('position'),
+  /** Room membership (#33). No FK — foreign_keys is OFF in this app; room deletion
+   *  re-homes or removes members explicitly in code, inside one transaction. */
+  roomId: text('room_id'),
+});
+
+/** Named groups of searches on the Searches view (#33). One level deep. */
+export const rooms = sqliteTable('rooms', {
+  /** Room id (uuid). */
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  /** Collapsed in the UI — persisted so the view survives restarts. */
+  collapsed: integer('collapsed', { mode: 'boolean' }).notNull().default(false),
+  /** Top-level order, same single sequence as ungrouped searches' position. */
+  position: integer('position'),
+  addedAt: text('added_at').notNull(),
 });
 
 /** Detection history — enables later analytics ("what I bought / saved"). */

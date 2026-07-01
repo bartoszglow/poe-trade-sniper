@@ -652,7 +652,7 @@ describe('SearchManager', () => {
       expect(first.id).toBe('AbCdEf123');
 
       // Re-importing the same export skips the already-present search.
-      expect(manager.importSearches(exported, 'skip')).toEqual({
+      expect(manager.importSearches(exported, [], 'skip')).toEqual({
         imported: 0,
         skipped: 1,
         errors: [],
@@ -661,6 +661,7 @@ describe('SearchManager', () => {
       // A different id is restored straight from the export shape (no resolveQuery).
       const result = manager.importSearches(
         [{ ...first, id: 'NewSearch1', label: 'Restored' }],
+        [],
         'skip',
       );
       expect(result.imported).toBe(1);
@@ -683,7 +684,11 @@ describe('SearchManager', () => {
         'AbCdEf003',
       ]);
 
-      manager.reorder(['AbCdEf003', 'AbCdEf001', 'AbCdEf002']);
+      manager.reorder([
+        { kind: 'search', id: 'AbCdEf003' },
+        { kind: 'search', id: 'AbCdEf001' },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
       expect(manager.list().map((entry) => entry.id)).toEqual([
         'AbCdEf003',
         'AbCdEf001',
@@ -724,7 +729,11 @@ describe('SearchManager', () => {
       await manager.add('AbCdEf002', {});
       await manager.add('AbCdEf003', {});
       // Mentions a ghost id (skipped) and omits AbCdEf002 (appended in current order).
-      manager.reorder(['AbCdEf003', 'ghost-id', 'AbCdEf001']);
+      manager.reorder([
+        { kind: 'search', id: 'AbCdEf003' },
+        { kind: 'search', id: 'ghost-id' },
+        { kind: 'search', id: 'AbCdEf001' },
+      ]);
       expect(manager.list().map((entry) => entry.id)).toEqual([
         'AbCdEf003',
         'AbCdEf001',
@@ -893,6 +902,226 @@ describe('SearchManager', () => {
       }
     } finally {
       database.$client.close();
+    }
+  });
+
+  it('rooms: membership + two-scope order persist across a reload (#33)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', { label: 'A' });
+      await manager.add('AbCdEf002', { label: 'B' });
+      await manager.add('AbCdEf003', { label: 'C' });
+      const created = manager.createRoom('Helmets');
+      const roomId = created.rooms[0]!.id;
+
+      // [room(C, A), B] — the room block also sets the flattened poll order.
+      const view = manager.reorder([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf003', 'AbCdEf001'] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+      expect(view.layout).toEqual([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf003', 'AbCdEf001'] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+      expect(view.searches.map((entry) => entry.id)).toEqual([
+        'AbCdEf003',
+        'AbCdEf001',
+        'AbCdEf002',
+      ]);
+      expect(view.searches[0]?.roomId).toBe(roomId);
+      manager.updateRoom(roomId, { collapsed: true });
+      manager.onApplicationShutdown();
+
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        { resolveQuery: vi.fn() } as unknown as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+        ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        const restored = reloaded.view();
+        expect(restored.layout).toEqual(view.layout);
+        expect(restored.searches.map((entry) => entry.id)).toEqual([
+          'AbCdEf003',
+          'AbCdEf001',
+          'AbCdEf002',
+        ]);
+        expect(restored.rooms).toHaveLength(1);
+        expect(restored.rooms[0]).toMatchObject({ id: roomId, name: 'Helmets', collapsed: true });
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('an empty room keeps its top-level slot across a reload (#33)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      const roomId = manager.createRoom('Empty room').rooms[0]!.id;
+      manager.reorder([
+        { kind: 'search', id: 'AbCdEf001' },
+        { kind: 'room', id: roomId, searchIds: [] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+      manager.onApplicationShutdown();
+
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        { resolveQuery: vi.fn() } as unknown as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+        ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        expect(reloaded.view().layout).toEqual([
+          { kind: 'search', id: 'AbCdEf001' },
+          { kind: 'room', id: roomId, searchIds: [] },
+          { kind: 'search', id: 'AbCdEf002' },
+        ]);
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('deleting a room with mode=release drops members in place, top-level (D-room-2)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      await manager.add('AbCdEf003', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([
+        { kind: 'search', id: 'AbCdEf001' },
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf002'] },
+        { kind: 'search', id: 'AbCdEf003' },
+      ]);
+
+      const view = manager.deleteRoom(roomId, 'release');
+      expect(view.rooms).toEqual([]);
+      expect(view.layout).toEqual([
+        { kind: 'search', id: 'AbCdEf001' },
+        { kind: 'search', id: 'AbCdEf002' },
+        { kind: 'search', id: 'AbCdEf003' },
+      ]);
+      expect(view.searches.every((entry) => entry.roomId === null)).toBe(true);
+      // Fully persisted: the room row is gone, memberships nulled.
+      const roomCount = database.$client.prepare('SELECT COUNT(*) AS c FROM rooms').get() as {
+        c: number;
+      };
+      expect(roomCount.c).toBe(0);
+      const memberRows = database.$client
+        .prepare('SELECT room_id FROM searches WHERE room_id IS NOT NULL')
+        .all();
+      expect(memberRows).toEqual([]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('deleting a room with mode=delete-searches tears the members down (D-room-2)', async () => {
+    const { manager, database, executeSearch } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001'] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+
+      const view = manager.deleteRoom(roomId, 'delete-searches');
+      expect(view.searches.map((entry) => entry.id)).toEqual(['AbCdEf002']);
+      const searchRows = database.$client.prepare('SELECT id FROM searches').all() as Array<{
+        id: string;
+      }>;
+      expect(searchRows).toEqual([{ id: 'AbCdEf002' }]);
+      // The deleted member no longer polls.
+      executeSearch.mockClear();
+      await manager.runSchedulerTick();
+      await manager.runSchedulerTick();
+      const tickedSearches = executeSearch.mock.calls.map(
+        (call) => (call as unknown as [{ searchId: string }])[0].searchId,
+      );
+      expect(tickedSearches).not.toContain('AbCdEf001');
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('reorder omitting a room member keeps it in its room (#33 race rules)', async () => {
+    const context = createManager();
+    try {
+      await context.manager.add('AbCdEf001', {});
+      await context.manager.add('AbCdEf002', {});
+      const roomId = context.manager.createRoom('Helmets').rooms[0]!.id;
+      context.manager.reorder([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001'] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+      // A stale client reorders only the ungrouped search — the member must stay roomed.
+      const view = context.manager.reorder([{ kind: 'search', id: 'AbCdEf002' }]);
+      expect(view.layout).toEqual([
+        { kind: 'search', id: 'AbCdEf002' },
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001'] },
+      ]);
+    } finally {
+      context.manager.onApplicationShutdown();
+      context.database.$client.close();
+    }
+  });
+
+  it('export/import round-trips rooms — matched by name, membership remapped (#33)', async () => {
+    const source = createManager();
+    const target = createManager();
+    try {
+      await source.manager.add('AbCdEf001', { label: 'Roomed' });
+      await source.manager.add('AbCdEf002', { label: 'Loose' });
+      const roomId = source.manager.createRoom('Helmets').rooms[0]!.id;
+      source.manager.reorder([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001'] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+
+      const exportedSearches = source.manager.exportSearches();
+      const exportedRooms = source.manager.exportRooms();
+      expect(exportedRooms).toEqual([{ id: roomId, name: 'Helmets', collapsed: false }]);
+
+      const result = target.manager.importSearches(exportedSearches, exportedRooms, 'skip');
+      expect(result).toEqual({ imported: 2, skipped: 0, errors: [] });
+      const view = target.manager.view();
+      const importedRoom = view.rooms[0]!;
+      expect(importedRoom.name).toBe('Helmets');
+      expect(importedRoom.id).not.toBe(roomId); // fresh id — file ids never leak
+      expect(view.searches.find((entry) => entry.id === 'AbCdEf001')?.roomId).toBe(importedRoom.id);
+
+      // Idempotent re-import: same name reused, no duplicate room.
+      target.manager.importSearches(exportedSearches, exportedRooms, 'replace');
+      expect(target.manager.view().rooms).toHaveLength(1);
+    } finally {
+      source.manager.onApplicationShutdown();
+      source.database.$client.close();
+      target.manager.onApplicationShutdown();
+      target.database.$client.close();
     }
   });
 
