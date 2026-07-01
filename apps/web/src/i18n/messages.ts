@@ -120,6 +120,13 @@ export const EN = {
   'engineStatus.degraded': 'degraded',
   'engineStatus.stopped': 'stopped',
   'engineStatus.paused': 'paused',
+  // Hover-popover explanations for the status / engine badges
+  'engineStatusDesc.pending': 'Waiting to start.',
+  'engineStatusDesc.connecting': 'Opening the live WebSocket connection.',
+  'engineStatusDesc.active': 'Running — watching for new listings.',
+  'engineStatusDesc.degraded': 'Degraded — running on the polling fallback after a problem.',
+  'engineStatusDesc.stopped': 'Stopped — this search is turned off.',
+  'engineStatusDesc.paused': 'Paused — detection is globally paused.',
 
   // Live hits panel
   'hitsPanel.title': 'Live hits',
@@ -166,6 +173,7 @@ export const EN = {
   'searches.editLabel': 'Rename',
   'searches.saveLabel': 'Save name',
   'searches.editSearch': 'Edit search',
+  'searches.openOnTradeSite': 'Open this search on the trade site',
   'searches.editLabelField': 'Label',
   'searches.editSearchField': 'Search (id or trade URL)',
   'searches.editSearchHint': 'Re-points this row to a new search — your hits stay.',
@@ -425,6 +433,13 @@ export const PL: Record<MessageKey, string> = {
   'engineStatus.degraded': 'niestabilny',
   'engineStatus.stopped': 'zatrzymany',
   'engineStatus.paused': 'wstrzymany',
+  // Objaśnienia (popover po najechaniu) dla plakietek statusu / silnika
+  'engineStatusDesc.pending': 'Oczekuje na start.',
+  'engineStatusDesc.connecting': 'Otwieranie połączenia WebSocket na żywo.',
+  'engineStatusDesc.active': 'Działa — nasłuchuje nowych ofert.',
+  'engineStatusDesc.degraded': 'Ograniczony — działa na trybie zapasowym (polling) po problemie.',
+  'engineStatusDesc.stopped': 'Zatrzymany — ten search jest wyłączony.',
+  'engineStatusDesc.paused': 'Wstrzymany — wykrywanie jest globalnie wstrzymane.',
 
   // Live hits panel
   'hitsPanel.title': 'Trafienia na żywo',
@@ -470,6 +485,7 @@ export const PL: Record<MessageKey, string> = {
   'searches.editLabel': 'Zmień nazwę',
   'searches.saveLabel': 'Zapisz nazwę',
   'searches.editSearch': 'Edytuj search',
+  'searches.openOnTradeSite': 'Otwórz ten search na stronie handlu',
   'searches.editLabelField': 'Etykieta',
   'searches.editSearchField': 'Search (id lub URL handlu)',
   'searches.editSearchHint': 'Przekierowuje wiersz na nowy search — trafienia pozostają.',

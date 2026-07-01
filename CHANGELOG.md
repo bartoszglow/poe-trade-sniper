@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open a search on the trade site**: each search row now has an external-link button
+  that opens its Path of Exile trade page in the browser.
+- **Hover popovers on the status badges**: the POLL / WS / ACTIVE (and every other status)
+  badge now explains itself on hover or keyboard focus.
 - **macOS permissions in Settings** (desktop only): Screen Recording +
   Accessibility toggles that reflect the live OS status and prompt / deep-link to
   grant them — the foundation for screen-capture-based automation.
@@ -27,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Enabling detection no longer bursts past the connection limit.** Turning detection back
+  on with many searches used to open all their live connections at once and trip the rate
+  limit; the searches now start one-by-one with a short (500 ms) gap between each.
+- Dropped the redundant "live websocket connected" line under an active search — the WS badge
+  (now with a hover explanation) already says it; error/degraded details still show.
 - **Travel retry on aged hits now works.** Retrying travel/buy on an old live hit used to
   fire the stored hideout token, which is dead by then (~300 s TTL) — and GGG re-serves
   offers under fresh ids, so the old id may not resolve either. The retry now re-resolves a

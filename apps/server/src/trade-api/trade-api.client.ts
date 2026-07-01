@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import type {
-  LeagueInfo,
-  Listing,
-  NetworkOutcome,
-  SessionState,
-  StatDictionaryEntry,
+import {
+  type LeagueInfo,
+  type Listing,
+  type NetworkOutcome,
+  type SessionState,
+  type StatDictionaryEntry,
+  tradeSearchPageUrl,
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
@@ -61,9 +62,10 @@ const POLICY_WHISPER = 'whisper';
 const POLICY_ACCOUNT = 'account';
 const POLICY_DATA = 'data';
 
-/** The Referer the whisper endpoint expects — the search's trade page. */
+/** The Referer the whisper endpoint expects — the search's trade page. Delegates
+ *  to the shared url builder so the format lives in exactly one place. */
 export function searchPageUrl(baseUrl: string, search: TradeSearchRef): string {
-  return `${baseUrl}/trade2/search/${search.realm}/${encodeURIComponent(search.league)}/${search.searchId}`;
+  return tradeSearchPageUrl(search.realm, search.league, search.searchId, baseUrl);
 }
 
 /**

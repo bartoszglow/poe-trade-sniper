@@ -18,6 +18,21 @@ Evidence source for all 2026-06-11 entries: the old `poe2-live-sniper` prototype
 | `POST /api/trade2/whisper` body `{token}`                    | **Browser-free travel.** Requires `X-Requested-With: XMLHttpRequest` + Referer = the search page; without the header → 403 code 6 even from a logged-in context. Returns `{success: true}`. Bypasses the client-side "In demand. Teleport Anyway?" modal.                                                                                                                                                                                                                                                                          | 2026-06-11 |
 | `wss://…/api/trade2/live/<realm>/<league>/<id>`              | Push detection. Frames (per `live-message.ts`): PoE2 emits a per-listing fetch **JWT** `{"result": "<jwt>"}` passed straight to `/fetch/<jwt>` (legacy PoE1 `{"new": ["<listingId>", …]}` also accepted); anything else is keepalive/noise. **WORKING again as of 2026-06-12** (handshake + `active` verified live; was 504-down from ~patch 0.5.0 until a 2026-06 patch). Probe → poll fallback stays mandatory. **Tarpit:** unauthenticated handshakes hang forever — always send session cookies and enforce a connect timeout. | 2026-06-12 |
 
+## Trade website (human-facing) URLs
+
+The desktop UI links out to the trade site. Evidenced format — the same segments the
+resolve/live endpoints and the whisper `Referer` use (and `search-input.ts` parses back
+in): the search PAGE is
+`https://www.pathofexile.com/trade2/search/<realm>/<urlEncodedLeague>/<searchId>`.
+Single-sourced in `packages/shared/src/trade-url.ts` (`tradeSearchPageUrl`); the server's
+whisper `searchPageUrl()` now delegates to it. (2026-07-01)
+
+**No per-listing deep link.** Nothing observed lets a trade-site URL target a single
+listing, and the only per-listing id we hold (`listingId`) is ephemeral/re-served (see the
+retry note below + `offer.ts`). Links are therefore search-level only — a live hit can link
+to its search page, not to the exact item. Do not construct a per-listing URL without adding
+verified evidence here first (hard rule #2).
+
 ## Purchase type — `status.option` values
 
 The trade-site status dropdown offers five purchase types. API values mapping

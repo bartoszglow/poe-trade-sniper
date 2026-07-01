@@ -300,6 +300,34 @@ describe('SearchManager', () => {
     }
   });
 
+  it('enabling detection drips searches out one-by-one with a stagger gap (#31)', async () => {
+    vi.useFakeTimers();
+    const { manager, database, wsEngines } = createManager(); // DETECTION_STAGGER_MS default 500
+    try {
+      // Pause first so add() registers the searches without starting their engines.
+      manager.setDetectionPaused(true);
+      await manager.add('AbCdEf201', {});
+      await manager.add('AbCdEf202', {});
+      await manager.add('AbCdEf203', {});
+      expect(wsEngines).toHaveLength(0);
+
+      // Resume → the first start runs synchronously; the rest drip 500ms apart
+      // instead of firing three ws-connects at once.
+      manager.setDetectionPaused(false);
+      expect(wsEngines).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(499);
+      expect(wsEngines).toHaveLength(1); // still within the gap
+      await vi.advanceTimersByTimeAsync(1);
+      expect(wsEngines).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(wsEngines).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('restores hit count and last-hit from persisted hits on bootstrap', async () => {
     const { manager, database } = createManager();
     try {

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  ExternalLink,
   GripVertical,
   ListFilter,
   LogIn,
@@ -27,7 +28,12 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { EngineStatus, SearchPreview, SearchRuntimeInfo } from '@poe-sniper/shared';
+import {
+  tradeSearchPageUrl,
+  type EngineStatus,
+  type SearchPreview,
+  type SearchRuntimeInfo,
+} from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
@@ -35,6 +41,7 @@ import { IconButton } from '../components/IconButton';
 import { Modal } from '../components/Modal';
 import { QueryCriteriaView } from '../components/QueryCriteriaView';
 import { Select } from '../components/Select';
+import { Tooltip } from '../components/Tooltip';
 import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
@@ -67,6 +74,16 @@ const STATUS_LABEL_KEYS: Record<EngineStatus, MessageKey> = {
   degraded: 'engineStatus.degraded',
   stopped: 'engineStatus.stopped',
   paused: 'engineStatus.paused',
+};
+
+/** Hover-popover explanations for each status badge. */
+const STATUS_DESC_KEYS: Record<EngineStatus, MessageKey> = {
+  pending: 'engineStatusDesc.pending',
+  connecting: 'engineStatusDesc.connecting',
+  active: 'engineStatusDesc.active',
+  degraded: 'engineStatusDesc.degraded',
+  stopped: 'engineStatusDesc.stopped',
+  paused: 'engineStatusDesc.paused',
 };
 
 function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promise<void> }) {
@@ -358,9 +375,27 @@ function SearchRow({
             >
               <Pencil className="h-3 w-3" />
             </IconButton>
-            <Badge tone={STATUS_TONES[search.status]}>{t(STATUS_LABEL_KEYS[search.status])}</Badge>
+            <a
+              href={tradeSearchPageUrl(search.realm, search.league, search.id)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t('searches.openOnTradeSite')}
+              title={t('searches.openOnTradeSite')}
+              className="shrink-0 text-ink-faint transition-colors hover:text-ink"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+            <Tooltip content={t(STATUS_DESC_KEYS[search.status])}>
+              <Badge tone={STATUS_TONES[search.status]}>
+                {t(STATUS_LABEL_KEYS[search.status])}
+              </Badge>
+            </Tooltip>
             {search.engine && (
-              <Badge tone={search.engine === 'ws' ? 'gold' : 'neutral'}>{search.engine}</Badge>
+              <Tooltip
+                content={t(search.engine === 'ws' ? 'detection.wsTitle' : 'detection.pollTitle')}
+              >
+                <Badge tone={search.engine === 'ws' ? 'gold' : 'neutral'}>{search.engine}</Badge>
+              </Tooltip>
             )}
           </div>
           <div className="mt-0.5 text-xs text-ink-faint">
@@ -435,7 +470,10 @@ function SearchRow({
           </IconButton>
         )}
       </div>
-      {search.statusDetail && (
+      {/* Only surface the status detail when something is off — on the happy path the
+          ACTIVE + WS/POLL badges (with their hover popovers) already say it, so the
+          raw "live websocket connected" line is redundant noise. */}
+      {search.statusDetail && search.status !== 'active' && (
         <div className="mt-1.5 text-xs text-ink-faint">{search.statusDetail}</div>
       )}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}

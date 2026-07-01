@@ -78,6 +78,8 @@ export interface HitQuery {
 /** Prune cadence — checking on every single hit would be wasted writes. */
 const PRUNE_EVERY_HITS = 100;
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 interface Watcher {
   row: ManagedSearch;
   /**
@@ -115,6 +117,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private schedulerTimer: NodeJS.Timeout | null = null;
   private roundRobinIndex = 0;
   private tickInFlight = false;
+  /** True while a staggered start-drip is in flight — keeps overlapping ticks/resumes from double-starting. */
+  private startingWatchers = false;
   private hitsSincePrune = 0;
   /** Global pause: every enabled search halts as PAUSED until resumed. */
   private detectionPaused = false;
@@ -578,14 +582,16 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   setDetectionPaused(paused: boolean): boolean {
     if (paused === this.detectionPaused) return this.detectionPaused;
     this.detectionPaused = paused;
-    for (const watcher of this.watchers.values()) {
-      if (!watcher.row.enabled) continue;
-      if (paused) {
+    if (paused) {
+      for (const watcher of this.watchers.values()) {
+        if (!watcher.row.enabled) continue;
         this.stopEngines(watcher);
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
-      } else {
-        this.startWatcher(watcher);
       }
+    } else {
+      // Resume: drip the starts out one-by-one with a gap (see startPendingWatchers)
+      // so re-enabling detection with many searches doesn't burst the ws-connect latch.
+      this.startPendingWatchers();
     }
     this.publishSearchesChanged();
     return this.detectionPaused;
@@ -633,16 +639,52 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
   }
 
+  /**
+   * Start every enabled-but-not-yet-running watcher — ONE AT A TIME with a
+   * DETECTION_STAGGER_MS gap between each. Enabling detection (or a post-guard
+   * restart) with N searches otherwise fires N ws-connects in a burst and trips
+   * the per-minute connect latch; dripping the starts out keeps it under the
+   * ceiling. Fire-and-forget: callers (bootstrap / scheduler tick / resume)
+   * return immediately while the starts drip. Re-entrancy is guarded — a tick or
+   * resume that fires mid-drip is a no-op, so the same watcher is never
+   * double-started; watchers that become pending during the drip are picked up
+   * by the next tick.
+   */
   private startPendingWatchers(): void {
-    if (this.detectionPaused) return;
-    for (const watcher of this.watchers.values()) {
-      if (!watcher.row.enabled) continue;
-      if (
+    if (this.detectionPaused || this.startingWatchers) return;
+    const pending = [...this.watchers.values()].filter(
+      (watcher) =>
+        watcher.row.enabled &&
         watcher.wsEngine === null &&
         watcher.pollEngine === null &&
-        watcher.status !== 'stopped'
+        watcher.status !== 'stopped',
+    );
+    if (pending.length === 0) return;
+    this.startingWatchers = true;
+    void this.startWatchersStaggered(pending).finally(() => {
+      this.startingWatchers = false;
+    });
+  }
+
+  private async startWatchersStaggered(pending: Watcher[]): Promise<void> {
+    for (let index = 0; index < pending.length; index += 1) {
+      const watcher = pending[index]!;
+      // A gap is real elapsed time — re-check under current state: the watcher may
+      // have been paused, removed/re-pointed, stopped, or already started since the
+      // snapshot was taken.
+      if (this.detectionPaused) return;
+      if (this.watchers.get(watcher.row.id) !== watcher) continue;
+      if (
+        !watcher.row.enabled ||
+        watcher.wsEngine !== null ||
+        watcher.pollEngine !== null ||
+        watcher.status === 'stopped'
       ) {
-        this.startWatcher(watcher);
+        continue;
+      }
+      this.startWatcher(watcher);
+      if (index < pending.length - 1 && this.config.DETECTION_STAGGER_MS > 0) {
+        await sleep(this.config.DETECTION_STAGGER_MS);
       }
     }
   }

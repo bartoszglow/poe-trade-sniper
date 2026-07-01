@@ -65,6 +65,13 @@ export const envSchema = z.object({
   MAX_FRESH_IDS_PER_TICK: z.coerce.number().int().min(1).default(20),
   /** Bounded-growth cap for per-search seen-id sets. */
   SEEN_IDS_CAP: z.coerce.number().int().min(100).default(5_000),
+  /**
+   * Gap between starting each search's engines when detection is (re)enabled.
+   * Enabling detection with N searches otherwise fires N ws-connects at once and
+   * trips the per-minute ws-connect latch (GUARD_MAX_WS_CONNECTS_PER_MINUTE);
+   * dripping them out one-by-one keeps the burst under the ceiling. 0 = no gap.
+   */
+  DETECTION_STAGGER_MS: z.coerce.number().int().min(0).default(500),
 
   /** League list barely changes — cache window for GET /api/leagues. */
   LEAGUE_CACHE_TTL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
