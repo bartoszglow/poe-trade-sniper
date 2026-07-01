@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **About & Support view** (new nav item): who makes the tool, a calm "support development"
+  section with donation buttons, and non-monetary ways to help — plus a GGG fan-tool
+  disclaimer. Links live in one config; buttons appear as they're filled in.
 - **Open a search on the trade site**: each search row now has an external-link button
   that opens its Path of Exile trade page in the browser.
 - **Hover popovers on the status badges**: the POLL / WS / ACTIVE (and every other status)

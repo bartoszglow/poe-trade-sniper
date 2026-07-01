@@ -29,6 +29,22 @@ export const EN = {
   'nav.activity': 'Activity',
   'nav.network': 'Network',
   'nav.settings': 'Settings',
+  'nav.about': 'About & Support',
+
+  // About & Support view
+  'about.tagline': 'Fast, free hideout-trade sniping for Path of Exile 2.',
+  'about.madeBy': 'Made by',
+  'about.bio': 'Full-stack developer — building this solo in my spare time.',
+  'about.supportHeading': 'Support development',
+  'about.supportBlurb':
+    "This tool is free and built by one person. If it's saved you time or divines, a small tip keeps it growing. 🙏",
+  'about.nonMonetary': 'Not into money? These help too:',
+  'about.star': 'Star on GitHub',
+  'about.reportBug': 'Report a bug',
+  'about.comingSoon': 'Support links coming soon — thank you for your patience.',
+  'about.version': 'Version {version}',
+  'about.disclaimer':
+    'A community fan tool. Not affiliated with or endorsed by Grinding Gear Games.',
   'activity.title': 'Activity',
   'activity.empty': 'No actions yet.',
   'activity.details': 'Item details',
@@ -343,6 +359,22 @@ export const PL: Record<MessageKey, string> = {
   'nav.activity': 'Aktywność',
   'nav.network': 'Sieć',
   'nav.settings': 'Ustawienia',
+  'nav.about': 'O programie i wsparcie',
+
+  // About & Support view
+  'about.tagline': 'Szybki, darmowy sniper ofert handlowych do Path of Exile 2.',
+  'about.madeBy': 'Autor',
+  'about.bio': 'Programista full-stack — tworzę to solo, po godzinach.',
+  'about.supportHeading': 'Wesprzyj rozwój',
+  'about.supportBlurb':
+    'To narzędzie jest darmowe i tworzone przez jedną osobę. Jeśli oszczędziło Ci czas lub diviny, drobny napiwek pomaga je rozwijać. 🙏',
+  'about.nonMonetary': 'Nie chcesz wpłacać? To też pomaga:',
+  'about.star': 'Gwiazdka na GitHubie',
+  'about.reportBug': 'Zgłoś błąd',
+  'about.comingSoon': 'Linki do wsparcia wkrótce — dziękuję za cierpliwość.',
+  'about.version': 'Wersja {version}',
+  'about.disclaimer':
+    'Narzędzie fanowskie. Niepowiązane z Grinding Gear Games ani przez nich wspierane.',
   'activity.title': 'Aktywność',
   'activity.empty': 'Brak akcji.',
   'activity.details': 'Szczegóły przedmiotu',
