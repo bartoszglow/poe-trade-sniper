@@ -73,6 +73,15 @@ Served to the UI via cached `GET /api/leagues`.
   match the offer by `offerKey` (Tier 2). `TODO(verify)`: whether a recently-issued id stays
   fetchable long enough for the cheap Tier-1 refresh to reliably re-issue a token — needs a
   recorded/mock probe (never live, hard rule #8); Tier 2 (re-search) is the reliable path.
+- **Whisper (travel) failure codes — observed.** The whisper endpoint returns a JSON error body
+  `{error: {code, message}}` on failure. Observed live:
+  - `404 code 1` → `"Item no longer available"` — the listing sold/vanished (the common case;
+    even a just-re-fetched id whispers 404 once the item is gone). Observed 2026-07-01.
+  - `403 code 6` → `"Forbidden"` — a missing `X-Requested-With` / wrong Referer (see the whisper
+    row above). A _format_ problem, not a business one.
+    These are mapped to a stable UI reason by `classifyTravelFailure` (`packages/shared/src/travel-failure.ts`,
+    registry-style); `429` → rate-limited; anything else stays `unknown`. Add a new code there only
+    with evidence here (hard rule #2).
 
 ## Auth & session
 

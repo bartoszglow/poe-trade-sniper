@@ -32,6 +32,8 @@ export class TradeApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** GGG error body `error.code` when present — lets callers classify the failure. */
+    readonly gggCode: number | null = null,
   ) {
     super(message);
     this.name = 'TradeApiError';
@@ -207,15 +209,17 @@ export class TradeApiClient {
     );
     if (!response.ok) {
       let detail = `HTTP ${response.status}`;
+      let gggCode: number | null = null;
       try {
         const payload = (await response.json()) as { error?: { code?: number; message?: string } };
         if (payload.error?.message) {
+          gggCode = payload.error.code ?? null;
           detail = `${detail}: ${payload.error.message} (code ${payload.error.code ?? '?'})`;
         }
       } catch {
         // non-JSON error body — keep the bare status
       }
-      throw new TradeApiError(response.status, `travel: ${detail}`);
+      throw new TradeApiError(response.status, `travel: ${detail}`, gggCode);
     }
     const payload = (await response.json()) as { success?: boolean };
     if (payload.success !== true) {

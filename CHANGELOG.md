@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Travel failures now say _why_.** A failed teleport shows a clear reason parsed from GGG's
+  response — e.g. a calm "no longer available" (muted, not alarming) when the item sold before
+  you arrived, or "rate-limited — try again shortly" — instead of a generic red "failed". Other
+  cases keep the plain "failed" with the raw detail on hover.
 - **Enabling detection no longer bursts past the connection limit.** Turning detection back
   on with many searches used to open all their live connections at once and trip the rate
   limit; the searches now start one-by-one with a short (500 ms) gap between each.

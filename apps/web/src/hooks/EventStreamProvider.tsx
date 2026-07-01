@@ -12,6 +12,7 @@ import type {
   DomainEvent,
   NetworkLogEntry,
   TravelEvent,
+  TravelFailureReason,
 } from '@poe-sniper/shared';
 import { translateStatic } from '../i18n/i18n';
 import { isHitSoundEnabled, playHitSound } from '../lib/hit-sound';
@@ -26,6 +27,8 @@ const NETWORK_CAP = 1000;
 export interface TravelState {
   phase: TravelEvent['phase'];
   detail: string | null;
+  /** Set on a failed travel — a stable reason the UI maps to a friendly label. */
+  reason: TravelFailureReason | null;
 }
 
 export interface BuyState {
@@ -118,7 +121,7 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
         activityVersion: state.activityVersion + 1,
         travelStateByListingId: {
           ...state.travelStateByListingId,
-          [event.listingId]: { phase: event.phase, detail: event.detail },
+          [event.listingId]: { phase: event.phase, detail: event.detail, reason: event.reason },
         },
       };
     case 'buy':

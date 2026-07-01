@@ -197,6 +197,23 @@ describe('TradeApiClient.travel', () => {
     }
   });
 
+  it('travel carries the GGG error code on the thrown error (404 code 1 = item gone)', async () => {
+    const fetchStub = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({ error: { code: 1, message: 'Item no longer available' } }, 404),
+      ),
+    );
+    const { client, database } = createClient(fetchStub);
+    try {
+      await expect(client.travel('jwt-token', SEARCH, 'cid')).rejects.toMatchObject({
+        status: 404,
+        gggCode: 1,
+      });
+    } finally {
+      database.$client.close();
+    }
+  });
+
   it('rejects a 200 that does not confirm success', async () => {
     const fetchStub = vi.fn(() => Promise.resolve(jsonResponse({ success: false })));
     const { client, database } = createClient(fetchStub);

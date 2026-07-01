@@ -24,6 +24,7 @@ function travel(phase: TravelEvent['phase'], overrides: Partial<TravelEvent> = {
     listingId: 'l1',
     itemName: 'Astramentis',
     detail: null,
+    reason: null,
     at: new Date().toISOString(),
     ...overrides,
   };

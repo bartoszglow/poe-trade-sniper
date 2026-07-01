@@ -6,13 +6,22 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import type { DomainEvent, TravelEvent } from '@poe-sniper/shared';
+import {
+  classifyTravelFailure,
+  type DomainEvent,
+  type TravelEvent,
+  type TravelFailureReason,
+} from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
 import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { SearchManager } from '../search/search-manager.js';
-import { TradeApiClient, type TradeSearchRef } from '../trade-api/trade-api.client.js';
+import {
+  TradeApiClient,
+  TradeApiError,
+  type TradeSearchRef,
+} from '../trade-api/trade-api.client.js';
 import { GameFocusService } from './game-focus.service.js';
 
 export interface TravelRequest {
@@ -29,7 +38,10 @@ interface QueuedTravel extends TravelRequest {
 
 export interface TravelStatus {
   queueLength: number;
-  lastTravel: Pick<TravelEvent, 'phase' | 'source' | 'itemName' | 'detail' | 'at'> | null;
+  lastTravel: Pick<
+    TravelEvent,
+    'phase' | 'source' | 'itemName' | 'detail' | 'reason' | 'at'
+  > | null;
 }
 
 /**
@@ -118,6 +130,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
         listingId,
         itemName: listing?.itemName ?? null,
         detail: 'no longer listed',
+        reason: 'item_gone',
         at: new Date().toISOString(),
       });
       return { found: false };
@@ -176,7 +189,11 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
           this.rememberTraveled(request.listingId);
           this.publish('success', request, null);
         } catch (error) {
-          this.publish('failed', request, errorMessage(error));
+          const reason =
+            error instanceof TradeApiError
+              ? classifyTravelFailure(error.status, error.gggCode)
+              : 'unknown';
+          this.publish('failed', request, errorMessage(error), reason);
         }
       }
     } finally {
@@ -199,6 +216,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     phase: TravelEvent['phase'],
     request: TravelRequest,
     detail: string | null,
+    reason: TravelFailureReason | null = null,
   ): void {
     const event: TravelEvent = {
       type: 'travel',
@@ -208,6 +226,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
       listingId: request.listingId,
       itemName: request.itemName,
       detail,
+      reason,
       at: new Date().toISOString(),
     };
     if (phase !== 'queued') {
@@ -216,6 +235,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
         source: event.source,
         itemName: event.itemName,
         detail,
+        reason,
         at: event.at,
       };
     }

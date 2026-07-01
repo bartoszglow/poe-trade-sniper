@@ -29,6 +29,7 @@ function travelSuccess(overrides: Partial<TravelEvent> = {}): TravelEvent {
     listingId: 'l1',
     itemName: 'Item',
     detail: null,
+    reason: null,
     at: '2026-06-24T00:00:00.000Z',
     ...overrides,
   };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RotateCcw, ShoppingCart, Zap } from 'lucide-react';
-import type { Listing } from '@poe-sniper/shared';
+import type { Listing, TravelFailureReason } from '@poe-sniper/shared';
 import type { BuyState, TravelState } from '../hooks/EventStreamProvider';
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
@@ -18,6 +18,17 @@ const BUY_PHASE_DISPLAY: Partial<Record<BuyState['phase'], { key: MessageKey; to
   aborted: { key: 'hitCard.buyAborted', tone: 'text-ink-faint' },
   failed: { key: 'hitCard.buyFailed', tone: 'text-danger' },
 };
+
+/**
+ * A failed travel's GGG reason → a friendly label + tone. A sold item ('item_gone') is
+ * muted, not alarming — it's expected in a fast market; a rate-limit is gold (actionable).
+ * Unmapped reasons ('forbidden' / 'unknown') fall back to the plain red "failed".
+ */
+const TRAVEL_FAIL_DISPLAY: Partial<Record<TravelFailureReason, { key: MessageKey; tone: string }>> =
+  {
+    item_gone: { key: 'hitCard.travelGone', tone: 'text-ink-muted' },
+    rate_limited: { key: 'hitCard.travelRateLimited', tone: 'text-gold' },
+  };
 
 interface HitCardProps {
   listing: Listing;
@@ -53,6 +64,9 @@ export function HitCard({
   const phase = travelState?.phase;
   const travelBusy = phase === 'queued' || phase === 'started';
   const buyDisplay = buyState ? BUY_PHASE_DISPLAY[buyState.phase] : undefined;
+  const travelFailDisplay = travelState?.reason
+    ? TRAVEL_FAIL_DISPLAY[travelState.reason]
+    : undefined;
   const [retrying, setRetrying] = useState(false);
 
   // Re-resolve a fresh token, then travel. Used for the failed-phase Retry and for a stale
@@ -101,8 +115,11 @@ export function HitCard({
             )}
             {phase === 'failed' && (
               <>
-                <span className="text-xs text-danger" title={travelState?.detail ?? undefined}>
-                  {t('hitCard.failed')}
+                <span
+                  className={`text-xs ${travelFailDisplay?.tone ?? 'text-danger'}`}
+                  title={travelState?.detail ?? undefined}
+                >
+                  {t(travelFailDisplay?.key ?? 'hitCard.failed')}
                 </span>
                 <Button
                   variant="ghost"

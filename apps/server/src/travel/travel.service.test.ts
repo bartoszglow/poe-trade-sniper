@@ -4,7 +4,11 @@ import { loadConfig } from '../config/env.js';
 import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import type { SearchManager } from '../search/search-manager.js';
-import type { TradeApiClient, TradeSearchRef } from '../trade-api/trade-api.client.js';
+import {
+  TradeApiError,
+  type TradeApiClient,
+  type TradeSearchRef,
+} from '../trade-api/trade-api.client.js';
 import { TravelService, type TravelRequest } from './travel.service.js';
 import type { GameFocusService } from './game-focus.service.js';
 
@@ -108,6 +112,22 @@ describe('TravelService', () => {
 
     const failed = travelEvents.find((event) => event.phase === 'failed');
     expect(failed?.detail).toContain('code 6');
+    // A plain (non-TradeApiError) rejection can't be classified → generic reason.
+    expect(failed?.reason).toBe('unknown');
+    service.onApplicationShutdown();
+  });
+
+  it('classifies a GGG "item no longer available" (404 code 1) as reason=item_gone', async () => {
+    const { service, tradeApi, travelEvents } = createService();
+    (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new TradeApiError(404, 'travel: HTTP 404: Item no longer available (code 1)', 1),
+    );
+    service.enqueue(manualRequest());
+    await flushQueue();
+
+    const failed = travelEvents.find((event) => event.phase === 'failed');
+    expect(failed?.reason).toBe('item_gone');
+    expect(service.status().lastTravel?.reason).toBe('item_gone');
     service.onApplicationShutdown();
   });
 

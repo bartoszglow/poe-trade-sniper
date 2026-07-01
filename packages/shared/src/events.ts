@@ -1,4 +1,10 @@
-import type { Listing, EngineKind, EngineStatus, ManagedSearch } from './index.js';
+import type {
+  Listing,
+  EngineKind,
+  EngineStatus,
+  ManagedSearch,
+  TravelFailureReason,
+} from './index.js';
 
 /**
  * Closed union of realtime events published on the RealtimeBus and delivered
@@ -65,6 +71,8 @@ export interface TravelEvent {
   listingId: string | null;
   itemName: string | null;
   detail: string | null;
+  /** Set only on `phase: 'failed'` — a stable reason the UI maps to a friendly label. */
+  reason: TravelFailureReason | null;
   at: string;
 }
 
