@@ -1,13 +1,15 @@
 # 33 — Rooms: named groups of searches (Searches view)
 
-**Status: PHASE 1 (server) + PHASE 2 (web UI) DONE** — `dc821b6` + `bcf9a55`, 2026-07-02.
-Verify green (server 202, web 26, desktop 6). Phase 1 live-checked against the dev desktop
-(rooms CRUD + layout reorder + mode-less delete → 400). Phase 2 shipped `RoomSection`
-(collapse persisted, inline rename, auto-rename on create, member-count badge, delete-choice
-dialog per D-room-2, empty-room drop zone, collapsed-room hit highlight), the pure DnD layout
-algebra in `apps/web/src/lib/search-layout-dnd.ts` (13 unit tests), and the multi-container
-DnD (pointerWithin + closestCorners; drop on a room header appends, works collapsed).
-**Phase 3 remaining: hands-on drag interaction tuning** after operator use.
+**Status: ALL PHASES DONE** — `dc821b6` (1: server) + `bcf9a55` (2: web UI) + `e24d207`
+(3: drag polish), 2026-07-02. Verify green (server 202, web 26, desktop 6). Phase 1
+live-checked against the dev desktop (rooms CRUD + layout reorder + mode-less delete → 400).
+Phase 2 shipped `RoomSection` (collapse persisted, inline rename, auto-rename on create,
+member-count badge, delete-choice dialog per D-room-2, empty-room drop zone, collapsed-room
+hit highlight), the pure DnD layout algebra in `apps/web/src/lib/search-layout-dnd.ts`
+(13 unit tests), and the multi-container DnD (pointerWithin + closestCorners; drop on a room
+header appends, works collapsed). Phase 3 added `DragOverlay` ghosts (search + room, never
+clipped; source dims), `MeasuringStrategy.Always` (rooms resize mid-drag), and compact-rooms
+mode while dragging a room block. Further feel-tuning happens on operator feedback.
 Planned 2026-07-01, approved in-session.
 
 Named "rooms" group related searches (e.g. five helmet searches while shopping for a
