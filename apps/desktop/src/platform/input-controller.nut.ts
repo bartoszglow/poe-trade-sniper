@@ -152,5 +152,24 @@ export function createNutInputController(probe: PermissionProbe): InputControlle
         await new Promise((resolve) => setTimeout(resolve, KEY_HOLD_MS));
       }
     },
+
+    async copySelection(): Promise<void> {
+      requireGrant(probe, 'control', ['screenRecording', 'accessibility']);
+      // The platform copy chord: Cmd+C on macOS, Ctrl+C elsewhere. Holds the
+      // modifier across the C press+release so the game registers the copy
+      // (a near-instant chord was as unreliable as the plain-key taps above).
+      // NEEDS on-Mac + in-game validation (like the other synthetic input).
+      const modifier = process.platform === 'darwin' ? Key.LeftCmd : Key.LeftControl;
+      markSyntheticKey();
+      await keyboard.pressKey(modifier);
+      await new Promise((resolve) => setTimeout(resolve, KEY_HOLD_MS));
+      markSyntheticKey();
+      await keyboard.pressKey(Key.C);
+      await new Promise((resolve) => setTimeout(resolve, KEY_HOLD_MS));
+      markSyntheticKey();
+      await keyboard.releaseKey(Key.C);
+      markSyntheticKey();
+      await keyboard.releaseKey(modifier);
+    },
   };
 }

@@ -110,6 +110,12 @@ export interface InputController {
   /** Type a literal string (e.g. the `/hideout` chat command). Each key is marked
    *  synthetic so it doesn't trip the user-input abort watcher. */
   typeText(text: string): Promise<void>;
+  /**
+   * Send the platform copy chord (Cmd+C on macOS, Ctrl+C elsewhere) so the game
+   * copies the hovered item to the clipboard for a price check (#37). Marked
+   * synthetic like the other emitted keys. Optional — a shell without native
+   * input omits it (the operator then copies the item manually). */
+  copySelection?(): Promise<void>;
 }
 
 /**

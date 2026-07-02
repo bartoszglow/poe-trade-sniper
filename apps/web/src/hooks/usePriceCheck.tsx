@@ -16,6 +16,9 @@ const PriceCheckContext = createContext<PriceCheckState | null>(null);
 
 /** Custom event a desktop-hotkey bridge dispatches with item text to price. */
 const HOTKEY_EVENT = 'sniper:price-check-item';
+/** Custom event carrying an ALREADY-computed result (desktop POSTs once, then
+ *  pushes the result to the panel — avoids double-spending the search budget). */
+const RESULT_EVENT = 'sniper:price-check-result';
 
 /**
  * App-wide price-check state (#37): a paste in Settings/panel or a desktop
@@ -46,14 +49,27 @@ export function PriceCheckProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
-  // A desktop hotkey pushes item text via a window event (preload → renderer).
+  // A desktop hotkey pushes item text (web/dev path) OR a pre-computed result
+  // (desktop bridge, which POSTs once and distributes) via window events.
   useEffect(() => {
     const onHotkeyItem = (event: Event) => {
       const detail = (event as CustomEvent<{ itemText?: string }>).detail;
       if (detail?.itemText) void check(detail.itemText);
     };
+    const onResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ result?: PriceCheckResult }>).detail;
+      if (detail?.result) {
+        setResult(detail.result);
+        setChecking(false);
+        setError(null);
+      }
+    };
     window.addEventListener(HOTKEY_EVENT, onHotkeyItem);
-    return () => window.removeEventListener(HOTKEY_EVENT, onHotkeyItem);
+    window.addEventListener(RESULT_EVENT, onResult);
+    return () => {
+      window.removeEventListener(HOTKEY_EVENT, onHotkeyItem);
+      window.removeEventListener(RESULT_EVENT, onResult);
+    };
   }, [check]);
 
   return (

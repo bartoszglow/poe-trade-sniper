@@ -18,3 +18,11 @@ contextBridge.exposeInMainWorld('desktopPermissions', {
 
 // Lets the renderer detect the OS without the deprecated navigator.platform.
 contextBridge.exposeInMainWorld('systemInfo', { platform: process.platform });
+
+// Price-check bridge (#37): the main process computes a result off the global
+// hotkey and pushes it here; we re-dispatch it as a window event the
+// usePriceCheck hook already listens for. Renderer stays sandboxed (no ipc).
+ipcRenderer.on('price-check:result', (_event, result) => {
+  window.dispatchEvent(new CustomEvent('sniper:price-check-result', { detail: { result } }));
+});
+

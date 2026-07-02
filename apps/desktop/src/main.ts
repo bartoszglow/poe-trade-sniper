@@ -4,6 +4,7 @@ import { app, BrowserWindow, nativeImage, shell } from 'electron';
 import type { DesktopPlatform, RunningServer, StartServerOptions } from '@poe-sniper/server';
 import { createDesktopPlatform } from './platform/build-desktop-platform.js';
 import { registerPermissionsIpc } from './ipc/permissions.ipc.js';
+import { registerPriceCheckIpc, type PriceCheckBridge } from './ipc/price-check.ipc.js';
 
 /**
  * Desktop shell (preliminary, D-4: one server, two shells): boots the NestJS
@@ -160,6 +161,8 @@ if (!singleInstance) {
 } else {
   let runningServer: RunningServer | null = null;
   let windowUrl = devUrl ?? '';
+  let mainWindow: BrowserWindow | null = null;
+  let priceCheckBridge: PriceCheckBridge | null = null;
 
   app
     .whenReady()
@@ -184,11 +187,25 @@ if (!singleInstance) {
       } else if (runningServer) {
         windowUrl = `http://localhost:${runningServer.port}`;
       }
-      createWindow(windowUrl);
+      mainWindow = createWindow(windowUrl);
+
+      // Price-check hotkey bridge (#37). The API lives on the in-process server
+      // when we booted one; otherwise the window's dev origin proxies /api.
+      const apiBaseUrl = runningServer ? `http://localhost:${runningServer.port}` : (devUrl ?? '');
+      if (apiBaseUrl) {
+        priceCheckBridge = registerPriceCheckIpc({
+          platform,
+          getMainWindow: () => mainWindow,
+          apiBaseUrl,
+        });
+        void priceCheckBridge.refresh();
+        // Re-read settings so a hotkey change in Settings rebinds without a restart.
+        setInterval(() => void priceCheckBridge?.refresh(), 5_000);
+      }
 
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0 && windowUrl) {
-          createWindow(windowUrl);
+          mainWindow = createWindow(windowUrl);
         }
       });
     })
@@ -205,6 +222,8 @@ if (!singleInstance) {
 
   let quitting = false;
   app.on('before-quit', (quitEvent) => {
+    // Release the global shortcut + overlay window regardless of server mode.
+    priceCheckBridge?.dispose();
     // Dev mode points the window at the standalone server → nothing to close here.
     if (quitting || !runningServer) return;
     // Otherwise hold the quit until the in-process server's shutdown hooks finish
