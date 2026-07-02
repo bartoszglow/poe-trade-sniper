@@ -118,6 +118,7 @@ describe('buildQuery', () => {
       name: 'Corpse Shell',
       baseType: 'Advanced Dualstring Armour',
       itemLevel: 81,
+      quality: 20,
       corrupted: true,
       matchedStats: [{ statId: 'explicit.stat_life', text: '+# to maximum Life', values: [25] }],
     });
@@ -133,6 +134,7 @@ describe('buildQuery', () => {
     });
     expect(query.filters.misc_filters.filters).toEqual({
       ilvl: { min: 81 },
+      quality: { min: 20 },
       corrupted: { option: 'true' },
     });
     expect(built.sort).toEqual({ price: 'asc' });
@@ -144,6 +146,7 @@ describe('buildQuery', () => {
       name: 'Andvarius',
       baseType: 'Gold Ring',
       itemLevel: 60,
+      quality: null,
       corrupted: false,
       matchedStats: [{ statId: 'explicit.stat_rarity', text: '#% increased Rarity', values: [80] }],
     });
@@ -180,6 +183,7 @@ describe('end-to-end parse → match → query', () => {
       name: item.name,
       baseType: item.baseType,
       itemLevel: item.itemLevel,
+      quality: item.quality,
       corrupted: item.corrupted,
       matchedStats: matched,
     });

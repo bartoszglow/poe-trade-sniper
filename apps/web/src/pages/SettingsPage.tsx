@@ -65,7 +65,7 @@ function PriceCheckCard({
   onChanged: () => void;
 }) {
   const t = useT();
-  const { check, checking } = usePriceCheck();
+  const { check, checking, result, error } = usePriceCheck();
   const [hotkey, setHotkey] = useState(settings?.priceCheckHotkey ?? '');
   const [pasteText, setPasteText] = useState('');
   const sinks = settings?.priceCheckSinks ?? [];
@@ -142,6 +142,51 @@ function PriceCheckCard({
             {checking ? t('priceCheck.checking') : t('settings.priceCheckRun')}
           </Button>
         </div>
+        {/* Inline result — the test bench must show its answer here, not only in
+            the lg+ side panel (which may be hidden or off). */}
+        {error && <p className="mt-2 text-xs text-danger">{t('common.requestFailed')}</p>}
+        {result && (
+          <div className="mt-3 rounded-md border border-edge bg-surface-2 p-3 text-xs">
+            <div className="font-medium text-ink">
+              {result.item.name ?? result.item.baseType ?? t('priceCheck.unknownItem')}
+            </div>
+            {result.kind === 'aggregate' && result.estimate && (
+              <div className="mt-1 text-gold">
+                {t('priceCheck.estimate')}: {result.estimate.amount} {result.estimate.currency}
+              </div>
+            )}
+            {result.kind === 'listings' && (
+              <div className="mt-1 text-ink-muted">
+                {result.listings.length > 0
+                  ? result.listings
+                      .slice(0, 5)
+                      .map((listing) =>
+                        listing.price ? `${listing.price.amount} ${listing.price.currency}` : '—',
+                      )
+                      .join(' · ')
+                  : t('priceCheck.noListings')}
+              </div>
+            )}
+            {result.kind === 'unavailable' && (
+              <div className="mt-1 text-warn">
+                {t(
+                  result.declineReason === 'budget-low'
+                    ? 'priceCheck.declineBudget'
+                    : result.declineReason === 'no-session'
+                      ? 'priceCheck.declineNoSession'
+                      : result.declineReason === 'guard-tripped'
+                        ? 'priceCheck.declineGuard'
+                        : 'priceCheck.declineEmpty',
+                )}
+              </div>
+            )}
+            {result.item.unmatchedLines.length > 0 && (
+              <div className="mt-1 text-ink-faint">
+                {t('priceCheck.unmatched', { count: result.item.unmatchedLines.length })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </SettingsCard>
   );

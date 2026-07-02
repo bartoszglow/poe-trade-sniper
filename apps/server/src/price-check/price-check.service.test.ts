@@ -76,6 +76,12 @@ describe('PriceCheckService', () => {
     });
     const result = await service.check(RARE_TEXT);
     expect(priceSearch).toHaveBeenCalledOnce();
+    // The body MUST carry the { query, sort } envelope GGG requires — a flat
+    // body 400s (regression guard for the review S2 finding).
+    const passedQuery = priceSearch.mock.calls[0]![2] as { query: unknown; sort: unknown };
+    expect(passedQuery).toHaveProperty('query');
+    expect(passedQuery).toHaveProperty('sort');
+    expect((passedQuery.query as { status: unknown }).status).toBeDefined();
     expect(result.kind).toBe('listings');
     expect(result.listings[0]?.price).toEqual({ amount: 5, currency: 'divine' });
     expect(result.item.matchedStats.map((stat) => stat.statId)).toEqual(['explicit.stat_life']);

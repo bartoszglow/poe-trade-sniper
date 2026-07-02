@@ -193,14 +193,13 @@ if (!singleInstance) {
       // when we booted one; otherwise the window's dev origin proxies /api.
       const apiBaseUrl = runningServer ? `http://localhost:${runningServer.port}` : (devUrl ?? '');
       if (apiBaseUrl) {
+        // The bridge binds the hotkey, polls settings (so a hotkey change
+        // rebinds live), and cleans both up on dispose.
         priceCheckBridge = registerPriceCheckIpc({
           platform,
           getMainWindow: () => mainWindow,
           apiBaseUrl,
         });
-        void priceCheckBridge.refresh();
-        // Re-read settings so a hotkey change in Settings rebinds without a restart.
-        setInterval(() => void priceCheckBridge?.refresh(), 5_000);
       }
 
       app.on('activate', () => {

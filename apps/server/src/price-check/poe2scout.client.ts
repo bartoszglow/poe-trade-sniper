@@ -6,6 +6,8 @@ import { FetchFunction, HTTP_FETCH } from '../trade-api/trade-api.client.js';
 const BASE_URL = 'https://poe2scout.com/api';
 /** Fixed-value prices barely move within a check session; cache generously. */
 const CACHE_TTL_MS = 15 * 60 * 1000;
+/** Bound the cache — insertion-order eviction keeps memory flat over a session. */
+const CACHE_MAX_ENTRIES = 500;
 
 interface CacheEntry {
   at: number;
@@ -41,6 +43,10 @@ export class Poe2ScoutClient {
       price = await this.lookup(key);
     } catch (error) {
       this.logger.debug(`poe2scout lookup failed for "${name}": ${errorMessage(error)}`);
+    }
+    if (this.cache.size >= CACHE_MAX_ENTRIES) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) this.cache.delete(oldest);
     }
     this.cache.set(key, { at: Date.now(), price });
     return price;

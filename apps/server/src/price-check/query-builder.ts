@@ -14,6 +14,7 @@ export interface QueryBuildInput {
   name: string | null;
   baseType: string | null;
   itemLevel: number | null;
+  quality: number | null;
   corrupted: boolean;
   matchedStats: StatMatch[];
 }
@@ -40,6 +41,9 @@ export function buildQuery(input: QueryBuildInput): BuiltQuery {
   const typeFilters: Record<string, unknown> = {};
   const miscFilters: Record<string, { min?: number; option?: string }> = {};
   if (input.itemLevel !== null) miscFilters['ilvl'] = { min: input.itemLevel };
+  // Quality only meaningfully narrows gear/flasks; a positive roll floors the
+  // search so comparable-or-better quality surfaces.
+  if (input.quality !== null && input.quality > 0) miscFilters['quality'] = { min: input.quality };
   if (input.corrupted) miscFilters['corrupted'] = { option: 'true' };
 
   const query: Record<string, unknown> = {

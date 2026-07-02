@@ -8,7 +8,11 @@ import type {
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
-import { NoSessionError, TradeApiClient } from '../trade-api/trade-api.client.js';
+import {
+  GuardTrippedError,
+  NoSessionError,
+  TradeApiClient,
+} from '../trade-api/trade-api.client.js';
 import { errorMessage } from '../util/error-message.js';
 import { parseItemText } from './item-text-parser.js';
 import { matchModLine } from './stat-matcher.js';
@@ -17,6 +21,7 @@ import { Poe2ScoutClient } from './poe2scout.client.js';
 import { TradeDataService } from './trade-data.service.js';
 
 const POLICY_SEARCH = 'search';
+const POLICY_FETCH = 'fetch';
 
 /**
  * Orchestrates a price check (#37): parse item text → match stats → either
@@ -37,13 +42,31 @@ export class PriceCheckService {
   ) {}
 
   async check(itemText: string): Promise<PriceCheckResult> {
-    const headroom = this.governor.headroom(POLICY_SEARCH);
+    // A rare check spends BOTH a SEARCH and a FETCH slot (POST /search then
+    // GET /fetch), so the reserve must protect the tighter of the two — a
+    // price check must not push either bucket to the near-limit hold that would
+    // then delay detection's per-hit fetch (D-pc-2).
+    const headroom = Math.min(
+      this.governor.headroom(POLICY_SEARCH),
+      this.governor.headroom(POLICY_FETCH),
+    );
     const parsed = parseItemText(itemText);
     if (!parsed.name && parsed.modLines.length === 0) {
       return this.unavailable(this.emptyItem(parsed), null, headroom);
     }
 
-    const compiled = await this.tradeData.getCompiledStats();
+    // The dictionary fetch needs a session too; a first-ever check while
+    // offline / logged-out must degrade honestly, not 500.
+    let compiled;
+    try {
+      compiled = await this.tradeData.getCompiledStats();
+    } catch (error) {
+      if (error instanceof NoSessionError) {
+        return this.unavailable(this.emptyItem(parsed), 'no-session', headroom);
+      }
+      this.logger.warn(`dictionary load failed: ${errorMessage(error)}`);
+      return this.unavailable(this.emptyItem(parsed), null, headroom);
+    }
     const matchedStats: MatchedStat[] = [];
     const unmatchedLines: string[] = [];
     for (const line of parsed.modLines) {
@@ -74,16 +97,25 @@ export class PriceCheckService {
       };
     }
 
-    // Rares/magic/bases → live listings, but only if the SEARCH budget can spare
-    // it. Below the reserve, decline rather than starve detection (D-pc-2).
+    // Rares/magic/bases → live listings, but only if BOTH budgets can spare it.
+    // Below the reserve, decline rather than starve detection (D-pc-2).
     if (headroom < this.config.PRICE_CHECK_MIN_SEARCH_HEADROOM) {
       return this.unavailable(item, 'budget-low', headroom);
     }
+    // A magic item's "name" is the AFFIXED base (e.g. "Flaring Coral Ring of
+    // the Drake"), not a searchable base type — only pass a `type` the trade
+    // dictionary actually knows, else GGG matches nothing. Rares carry a real
+    // base line; uniques go by name. Drop an unknown base and rely on stats.
+    const baseType =
+      parsed.baseType && (await this.tradeData.isKnownItemName(parsed.baseType))
+        ? parsed.baseType
+        : null;
     const built = buildQuery({
       rarity: parsed.rarity,
       name: parsed.name,
-      baseType: parsed.baseType,
+      baseType,
       itemLevel: parsed.itemLevel,
+      quality: parsed.quality,
       corrupted: parsed.corrupted,
       matchedStats,
     });
@@ -91,7 +123,7 @@ export class PriceCheckService {
       const result = await this.tradeApi.priceSearch(
         this.config.DEFAULT_REALM,
         this.config.DEFAULT_LEAGUE,
-        { ...(built.query as object), sort: built.sort },
+        { query: built.query, sort: built.sort },
         this.config.PRICE_CHECK_LISTING_LIMIT,
         randomUUID(),
       );
@@ -111,6 +143,9 @@ export class PriceCheckService {
       };
     } catch (error) {
       if (error instanceof NoSessionError) return this.unavailable(item, 'no-session', headroom);
+      if (error instanceof GuardTrippedError) {
+        return this.unavailable(item, 'guard-tripped', headroom);
+      }
       this.logger.warn(`price search failed: ${errorMessage(error)}`);
       return this.unavailable(item, null, headroom);
     }

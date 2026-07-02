@@ -78,9 +78,10 @@ async function runPriceCheck(apiBaseUrl: string, itemText: string): Promise<unkn
   }
 }
 
+/** How often the bridge re-reads settings so a hotkey change rebinds live. */
+const SETTINGS_POLL_MS = 5_000;
+
 export interface PriceCheckBridge {
-  /** Re-read settings and (re)bind the global shortcut. Call on settings change. */
-  refresh: () => Promise<void>;
   dispose: () => void;
 }
 
@@ -96,8 +97,21 @@ export function registerPriceCheckIpc(options: {
 }): PriceCheckBridge {
   let boundHotkey: string | null = null;
   let overlay: ReturnType<typeof createPriceCheckOverlay> | null = null;
+  let inFlight = false;
 
   async function onTrigger(): Promise<void> {
+    // Re-entrancy guard: mashing the hotkey must not fire N concurrent checks
+    // (each would spend real SEARCH budget). Ignore triggers until this resolves.
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      await runOnce();
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  async function runOnce(): Promise<void> {
     const settings = await fetchSettings(options.apiBaseUrl);
     const sinks = settings?.priceCheckSinks ?? ['panel'];
     if (sinks.length === 0) return;
@@ -130,12 +144,17 @@ export function registerPriceCheckIpc(options: {
     }
   }
 
+  // Own the settings poll here so it's cleared on dispose (no leaked interval).
+  void refresh();
+  const pollTimer = setInterval(() => void refresh(), SETTINGS_POLL_MS);
+
   function dispose(): void {
+    clearInterval(pollTimer);
     if (boundHotkey) globalShortcut.unregister(boundHotkey);
     boundHotkey = null;
     overlay?.destroy();
     overlay = null;
   }
 
-  return { refresh, dispose };
+  return { dispose };
 }
