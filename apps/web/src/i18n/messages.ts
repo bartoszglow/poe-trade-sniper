@@ -176,6 +176,7 @@ export const EN = {
     'Your password never touches this app — only the session cookie is captured, stored encrypted and locally. The only server ever contacted is pathofexile.com.',
   'onboarding.loginSkip': 'Skip for now',
   'onboarding.loginSkipWarning': 'skipping = the app stays inactive',
+  'onboarding.loginConnected': 'Session connected ✓',
   'onboarding.searchTitle': 'Build the search on the trade site, paste it here',
   'onboarding.searchStepBuild': 'Build your whole search on the official PoE2 trade site',
   'onboarding.searchStepBuildHint':
@@ -206,7 +207,7 @@ export const EN = {
   'gettingStarted.title': 'Getting started',
   'gettingStarted.stepSession': 'Connect your Path of Exile session',
   'gettingStarted.stepSearch': 'Watch your first trade search',
-  'gettingStarted.stepSearchCta': 'Add one ↑',
+  'gettingStarted.stepSearchCta': 'Add one ↓',
   'gettingStarted.stepHit': 'Wait for your first live hit',
   'gettingStarted.stepHitPending': 'detection running…',
 
@@ -588,15 +589,16 @@ export const PL: Record<MessageKey, string> = {
     'Twoje hasło nigdy nie trafia do tej aplikacji — przechwytywane jest tylko ciasteczko sesji, zapisywane lokalnie i zaszyfrowane. Jedyny serwer, z którym się łączymy, to pathofexile.com.',
   'onboarding.loginSkip': 'Pomiń na razie',
   'onboarding.loginSkipWarning': 'pominięcie = aplikacja pozostaje nieaktywna',
+  'onboarding.loginConnected': 'Sesja połączona ✓',
   'onboarding.searchTitle': 'Zbuduj wyszukiwanie na stronie trade i wklej je tutaj',
   'onboarding.searchStepBuild': 'Całe wyszukiwanie zbuduj na oficjalnej stronie trade PoE2',
   'onboarding.searchStepBuildHint':
     'pathofexile.com/trade2 — przedmiot, statystyki, cena… wszystko definiujesz tam, nie w tej aplikacji.',
-  'onboarding.searchStepInstant': 'Zaznacz „Zakup natychmiastowy" w filtrach na stronie trade',
+  'onboarding.searchStepInstant': 'Zaznacz „Zakup natychmiastowy” w filtrach na stronie trade',
   'onboarding.searchStepInstantHint':
     'wymagane dla Podróży — tylko oferty z natychmiastowym zakupem mają token kryjówki.',
   'onboarding.searchStepCopy': 'Skopiuj URL wyszukiwania z paska adresu (albo samo id z końca)',
-  'onboarding.searchStepPaste': 'Wklej w „Obserwuj wyszukiwanie" — wykrywanie startuje od razu',
+  'onboarding.searchStepPaste': 'Wklej w „Obserwuj wyszukiwanie” — wykrywanie startuje od razu',
   'onboarding.searchTravelWarning':
     'TRAVEL teleportuje Twoją prawdziwą postać do kryjówki sprzedawcy. Domyślnie wyłączone, włączasz świadomie per wyszukiwanie.',
   'onboarding.legendActive': 'wykrywanie włączone',
@@ -617,7 +619,7 @@ export const PL: Record<MessageKey, string> = {
   'gettingStarted.title': 'Pierwsze kroki',
   'gettingStarted.stepSession': 'Połącz sesję Path of Exile',
   'gettingStarted.stepSearch': 'Obserwuj pierwsze wyszukiwanie',
-  'gettingStarted.stepSearchCta': 'Dodaj ↑',
+  'gettingStarted.stepSearchCta': 'Dodaj ↓',
   'gettingStarted.stepHit': 'Poczekaj na pierwsze trafienie',
   'gettingStarted.stepHitPending': 'wykrywanie działa…',
 

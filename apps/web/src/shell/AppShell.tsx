@@ -166,7 +166,14 @@ export function AppShell() {
           same login flow and closing it counts as dismissing the overlay, so a
           user who skipped login isn't immediately re-prompted. */}
       {!onboarding.wizardDone ? (
-        <OnboardingWizard onClose={() => setLoginOverlayDismissed(true)} />
+        // Suppress the boot overlay only when login was actually skipped — a
+        // user who logged in DURING the wizard should still get the blocking
+        // re-prompt if the session later expires in this page session.
+        <OnboardingWizard
+          onClose={() => {
+            if (needsLogin) setLoginOverlayDismissed(true);
+          }}
+        />
       ) : (
         needsLogin &&
         !loginOverlayDismissed && (

@@ -24,8 +24,12 @@ interface StepProps {
   isDesktopWidth: boolean;
   goNext: () => void;
   goBack: () => void;
-  /** Close the wizard for good (marks onboarding done). */
-  closeWizard: () => void;
+  /**
+   * Close the wizard for good (marks onboarding done). `navigateHome` only on
+   * the final "Start sniping" — a skip or a link-out must stay where it is
+   * (skipping from About/Settings would otherwise yank the user to Searches).
+   */
+  closeWizard: (options?: { navigateHome?: boolean }) => void;
 }
 
 function WelcomeStep({ goNext, closeWizard }: StepProps) {
@@ -48,7 +52,7 @@ function WelcomeStep({ goNext, closeWizard }: StepProps) {
       <footer className="flex items-center gap-2 border-t border-edge px-5 py-3">
         <button
           type="button"
-          onClick={closeWizard}
+          onClick={() => closeWizard()}
           className="text-xs text-ink-faint underline underline-offset-2 hover:text-ink"
         >
           {t('onboarding.skipIntro')}
@@ -62,48 +66,62 @@ function WelcomeStep({ goNext, closeWizard }: StepProps) {
   );
 }
 
-function LoginStep({ isDesktopWidth, goNext, goBack }: StepProps) {
+function LoginStep({ isDesktopWidth, goNext, goBack, closeWizard }: StepProps) {
   const t = useT();
-  const { refresh } = useServerStatus();
+  const { status, refresh } = useServerStatus();
   const { loginState, loginDetail, start, cancel } = useLoginCapture(refresh);
+  // Re-opened via "Show intro" with a live session: show the connected state
+  // instead of a "required" pitch with a pointless login button.
+  const sessionValid = status?.session.hasSession === true && status.session.probedValid !== false;
   return (
     <>
       <div className="space-y-3 p-5">
         <h2 className="text-base font-semibold text-ink">{t('onboarding.loginTitle')}</h2>
         <p className="text-sm text-ink-muted">{t('onboarding.loginWhy')}</p>
-        {isDesktopWidth ? (
-          <p className="text-sm text-ink-muted">{t('onboarding.loginChrome')}</p>
-        ) : (
-          <p className="rounded-md border border-info/40 bg-info/10 px-3 py-2 text-sm text-ink">
-            {t('onboarding.loginMobile')}
+        {sessionValid ? (
+          <p className="flex items-center gap-2 pt-1 text-sm text-ink">
+            <Badge tone="ok">{t('onboarding.loginConnected')}</Badge>
           </p>
-        )}
-        <div className="flex flex-col items-center gap-2 pt-1">
-          <Button
-            variant="primary"
-            className="w-full justify-center"
-            disabled={loginState === 'waiting-login'}
-            onClick={start}
-          >
-            <LogIn className="h-4 w-4" />
-            {t('login.withPoe')}
-          </Button>
-          {loginState === 'waiting-login' && (
-            <span className="flex items-center gap-2">
-              <Badge tone="gold">{t('login.waiting')}</Badge>
-              <Button variant="ghost" onClick={cancel}>
-                {t('common.cancel')}
+        ) : (
+          <>
+            {isDesktopWidth ? (
+              <p className="text-sm text-ink-muted">{t('onboarding.loginChrome')}</p>
+            ) : (
+              <p className="rounded-md border border-info/40 bg-info/10 px-3 py-2 text-sm text-ink">
+                {t('onboarding.loginMobile')}
+              </p>
+            )}
+            <div className="flex flex-col items-center gap-2 pt-1">
+              <Button
+                variant="primary"
+                className="w-full justify-center"
+                disabled={loginState === 'waiting-login'}
+                onClick={start}
+              >
+                <LogIn className="h-4 w-4" />
+                {t('login.withPoe')}
               </Button>
-            </span>
-          )}
-          {loginDetail && <p className="text-xs text-ink-faint">{loginDetail}</p>}
-          <Link
-            to="/settings"
-            className="text-xs text-ink-faint underline underline-offset-2 hover:text-ink"
-          >
-            {t('login.pasteInSettings')}
-          </Link>
-        </div>
+              {loginState === 'waiting-login' && (
+                <span className="flex items-center gap-2">
+                  <Badge tone="gold">{t('login.waiting')}</Badge>
+                  <Button variant="ghost" onClick={cancel}>
+                    {t('common.cancel')}
+                  </Button>
+                </span>
+              )}
+              {loginDetail && <p className="text-xs text-ink-faint">{loginDetail}</p>}
+              {/* The wizard must get out of the way of its own escape hatch —
+                  close (no home-navigate) and let the Link land on Settings. */}
+              <Link
+                to="/settings"
+                onClick={() => closeWizard()}
+                className="text-xs text-ink-faint underline underline-offset-2 hover:text-ink"
+              >
+                {t('login.pasteInSettings')}
+              </Link>
+            </div>
+          </>
+        )}
         <p className="flex gap-2 rounded-md border border-edge bg-surface-2 px-3 py-2 text-xs text-ink-muted">
           <Lock className="h-4 w-4 shrink-0 text-gold" />
           {t('onboarding.loginPrivacy')}
@@ -114,10 +132,18 @@ function LoginStep({ isDesktopWidth, goNext, goBack }: StepProps) {
           {t('onboarding.back')}
         </Button>
         <div className="flex-1" />
-        <span className="text-xs text-warn">{t('onboarding.loginSkipWarning')}</span>
-        <Button variant="ghost" onClick={goNext}>
-          {t('onboarding.loginSkip')}
-        </Button>
+        {sessionValid ? (
+          <Button variant="primary" onClick={goNext}>
+            {t('onboarding.next')}
+          </Button>
+        ) : (
+          <>
+            <span className="text-xs text-warn">{t('onboarding.loginSkipWarning')}</span>
+            <Button variant="ghost" onClick={goNext}>
+              {t('onboarding.loginSkip')}
+            </Button>
+          </>
+        )}
       </footer>
     </>
   );
@@ -215,7 +241,7 @@ function HitsStep({ isDesktopWidth, goBack, closeWizard }: StepProps) {
           {t('onboarding.back')}
         </Button>
         <div className="flex-1" />
-        <Button variant="primary" onClick={closeWizard}>
+        <Button variant="primary" onClick={() => closeWizard({ navigateHome: true })}>
           {t('onboarding.finish')}
         </Button>
       </footer>
@@ -248,10 +274,12 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
     if (sessionValid && stepIndex === LOGIN_STEP_INDEX) setStepIndex(stepIndex + 1);
   }
 
-  function closeWizard(): void {
+  function closeWizard(options?: { navigateHome?: boolean }): void {
     setOnboardingDone(true);
     onClose();
-    void navigate('/');
+    // Only the final "Start sniping" lands on Searches; skips and link-outs
+    // stay wherever the operator was (About/Settings re-open, cookie paste).
+    if (options?.navigateHome) void navigate('/');
   }
 
   const { Step } = STEPS[stepIndex]!;
