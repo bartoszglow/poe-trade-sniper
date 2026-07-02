@@ -24,6 +24,18 @@ helmet). Rooms reorder like searches, searches drag into / out of rooms. One lev
 - **D-room-2** — **deleting a room asks the operator**: either delete all member searches
   with it, or release them to the top level (inserted where the room was). Never a silent
   default; the dialog carries both actions.
+- **D-room-3** (added 2026-07-02, `0c8d94d`) — **a collapsed room auto-expands while a
+  member's hit highlight is fresh** (~60s) and folds back when it ages out; the header keeps
+  the gold glow for the whole window. Client-side visual override only — the persisted
+  `collapsed` is NEVER written by a hit. Manually collapsing mid-window (either an
+  auto-expanded room or a persisted-expanded one) suppresses the pop-open until the window
+  fully expires; suppression lives in a session-scoped module store
+  (`apps/web/src/lib/room-auto-expand.ts`) so route changes don't forget it. The highlight
+  aging tick pauses while the operator is mid-interaction (drag in flight, or a form field
+  focused) so a fold-back can't unmount an open edit modal or shift drop targets; freshness
+  derives from the server-confirmed layout, not the optimistic drag preview. Shipped after
+  a multi-agent adversarial review (8 confirmed findings fixed pre-commit); known cosmetic
+  leftover: an open (unfocused) criteria panel inside a folding room still closes with it.
 
 ## Canonical order — the load-bearing invariant
 
