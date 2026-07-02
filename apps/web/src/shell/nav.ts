@@ -1,9 +1,10 @@
 import type { ComponentType } from 'react';
-import { Activity, Crosshair, HandHeart, History, ScrollText, Settings } from 'lucide-react';
+import { Activity, Coins, Crosshair, HandHeart, History, ScrollText, Settings } from 'lucide-react';
 import type { MessageKey } from '../i18n/messages';
 import { SearchesPage } from '../pages/SearchesPage';
 import { HitsPage } from '../pages/HitsPage';
 import { ActivityPage } from '../pages/ActivityPage';
+import { PriceChecksPage } from '../pages/PriceChecksPage';
 import { NetworkPage } from '../pages/NetworkPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { AboutPage } from '../pages/AboutPage';
@@ -33,6 +34,13 @@ export const NAV_ENTRIES: NavEntry[] = [
     labelKey: 'nav.activity',
     icon: ScrollText,
     page: ActivityPage,
+  },
+  {
+    id: 'price-checks',
+    path: '/price-checks',
+    labelKey: 'nav.priceChecks',
+    icon: Coins,
+    page: PriceChecksPage,
   },
   {
     id: 'network',

@@ -1,15 +1,39 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { PriceCheckResult } from '@poe-sniper/shared';
 import { apiSend } from '../lib/api';
+
+/** One entry in the recent-price-checks history (session-local, newest first). */
+export interface PriceCheckEntry {
+  id: number;
+  /** Epoch ms of the check — the Price Checks view shows a relative time. */
+  at: number;
+  result: PriceCheckResult;
+}
+
+/** Newest-first cap — recent lookups, not an audit log (kept in memory only). */
+const HISTORY_CAP = 50;
 
 interface PriceCheckState {
   /** Latest result (from a paste or a desktop hotkey), or null. */
   result: PriceCheckResult | null;
+  /** All recent checks, newest first (session-local, capped). */
+  history: PriceCheckEntry[];
   checking: boolean;
   error: string | null;
   /** Run a check for raw item text (paste surface + desktop bridge). */
   check: (itemText: string) => Promise<void>;
+  /** Clear the latest result (the side panel / overlay surface). */
   clear: () => void;
+  /** Clear the whole recent-checks history (the Price Checks view). */
+  clearHistory: () => void;
 }
 
 const PriceCheckContext = createContext<PriceCheckState | null>(null);
@@ -21,33 +45,50 @@ const HOTKEY_EVENT = 'sniper:price-check-item';
 const RESULT_EVENT = 'sniper:price-check-result';
 
 /**
- * App-wide price-check state (#37): a paste in Settings/panel or a desktop
- * hotkey both feed the SAME result, shown in the in-app panel. Provider-level
- * so the result survives view changes (like the live-hits feed).
+ * App-wide price-check state (#37): a paste (Settings / Price Checks view) or a
+ * desktop hotkey feed the SAME result — shown in the in-app panel and appended
+ * to the recent-checks history. Provider-level so both the latest result and
+ * the history survive view changes (like the live-hits feed).
  */
 export function PriceCheckProvider({ children }: { children: ReactNode }) {
   const [result, setResult] = useState<PriceCheckResult | null>(null);
+  const [history, setHistory] = useState<PriceCheckEntry[]>([]);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Monotonic id source — a counter, so no Math.random / crypto in render.
+  const nextIdRef = useRef(1);
 
-  const check = useCallback(async (itemText: string) => {
-    if (!itemText.trim()) return;
-    setChecking(true);
+  // Record a computed result as the latest AND prepend it to the capped history.
+  const recordResult = useCallback((next: PriceCheckResult) => {
+    setResult(next);
     setError(null);
-    try {
-      const next = await apiSend<PriceCheckResult>('POST', '/api/price-check', { itemText });
-      setResult(next);
-    } catch {
-      setError('failed');
-    } finally {
-      setChecking(false);
-    }
+    setChecking(false);
+    const entry: PriceCheckEntry = { id: nextIdRef.current++, at: Date.now(), result: next };
+    setHistory((previous) => [entry, ...previous].slice(0, HISTORY_CAP));
   }, []);
+
+  const check = useCallback(
+    async (itemText: string) => {
+      if (!itemText.trim()) return;
+      setChecking(true);
+      setError(null);
+      try {
+        const next = await apiSend<PriceCheckResult>('POST', '/api/price-check', { itemText });
+        recordResult(next);
+      } catch {
+        setError('failed');
+        setChecking(false);
+      }
+    },
+    [recordResult],
+  );
 
   const clear = useCallback(() => {
     setResult(null);
     setError(null);
   }, []);
+
+  const clearHistory = useCallback(() => setHistory([]), []);
 
   // A desktop hotkey pushes item text (web/dev path) OR a pre-computed result
   // (desktop bridge, which POSTs once and distributes) via window events.
@@ -58,11 +99,7 @@ export function PriceCheckProvider({ children }: { children: ReactNode }) {
     };
     const onResult = (event: Event) => {
       const detail = (event as CustomEvent<{ result?: PriceCheckResult }>).detail;
-      if (detail?.result) {
-        setResult(detail.result);
-        setChecking(false);
-        setError(null);
-      }
+      if (detail?.result) recordResult(detail.result);
     };
     window.addEventListener(HOTKEY_EVENT, onHotkeyItem);
     window.addEventListener(RESULT_EVENT, onResult);
@@ -70,10 +107,12 @@ export function PriceCheckProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(HOTKEY_EVENT, onHotkeyItem);
       window.removeEventListener(RESULT_EVENT, onResult);
     };
-  }, [check]);
+  }, [check, recordResult]);
 
   return (
-    <PriceCheckContext.Provider value={{ result, checking, error, check, clear }}>
+    <PriceCheckContext.Provider
+      value={{ result, history, checking, error, check, clear, clearHistory }}
+    >
       {children}
     </PriceCheckContext.Provider>
   );

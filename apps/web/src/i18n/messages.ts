@@ -28,6 +28,7 @@ export const EN = {
   'nav.searches': 'Searches',
   'nav.hits': 'Hits',
   'nav.activity': 'Activity',
+  'nav.priceChecks': 'Price checks',
   'nav.network': 'Network',
   'nav.settings': 'Settings',
   'nav.about': 'About & Support',
@@ -176,6 +177,14 @@ export const EN = {
   'settings.priceCheckSinks': 'Show results in:',
   'settings.priceCheckSinkPanel': 'In-app panel',
   'settings.priceCheckSinkOverlay': 'Game overlay',
+  'priceChecks.title': 'Price checks',
+  'priceChecks.pasteHint':
+    'Copy an item in-game (Ctrl+C) and paste it here — or use your hotkey in-game.',
+  'priceChecks.pastePlaceholder': 'Item Class: …\nRarity: …',
+  'priceChecks.check': 'Check price',
+  'priceChecks.clearHistory': 'Clear history',
+  'priceChecks.empty':
+    'No price checks yet. Paste an item above, or press your price-check hotkey in-game.',
   'settings.priceCheckPaste': 'Test with pasted item text',
   'settings.priceCheckPasteHint':
     'Copy an item in-game (Ctrl+C) and paste it here to try the parser.',
@@ -475,6 +484,7 @@ export const PL: Record<MessageKey, string> = {
   'nav.searches': 'Wyszukiwania',
   'nav.hits': 'Trafienia',
   'nav.activity': 'Aktywność',
+  'nav.priceChecks': 'Wyceny',
   'nav.network': 'Sieć',
   'nav.settings': 'Ustawienia',
   'nav.about': 'O programie i wsparcie',
@@ -624,6 +634,13 @@ export const PL: Record<MessageKey, string> = {
   'settings.priceCheckSinks': 'Pokaż wyniki w:',
   'settings.priceCheckSinkPanel': 'Panel w aplikacji',
   'settings.priceCheckSinkOverlay': 'Nakładka w grze',
+  'priceChecks.title': 'Wyceny',
+  'priceChecks.pasteHint':
+    'Skopiuj przedmiot w grze (Ctrl+C) i wklej tutaj — albo użyj skrótu w grze.',
+  'priceChecks.pastePlaceholder': 'Item Class: …\nRarity: …',
+  'priceChecks.check': 'Sprawdź cenę',
+  'priceChecks.clearHistory': 'Wyczyść historię',
+  'priceChecks.empty': 'Brak wycen. Wklej przedmiot powyżej albo naciśnij skrót wyceny w grze.',
   'settings.priceCheckPaste': 'Test na wklejonym tekście',
   'settings.priceCheckPasteHint':
     'Skopiuj przedmiot w grze (Ctrl+C) i wklej tutaj, aby przetestować parser.',
