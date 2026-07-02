@@ -60,3 +60,22 @@ it back). Both prefs are per-device.
 `clampHitsPanelWidth` (band, viewport cap, rounding, tiny-viewport floor) in
 `hits-panel-layout.test.ts`. Drag feel + toggle behavior verified by hand
 (operator view, mockup-exempt).
+
+## Hit → search spotlight (added 2026-07-02, `470b25f`)
+
+Every hit card shows a **source-search chip** (the search's label, truncated,
+shrinkable; hidden if the search is gone). Clicking it navigates to Searches
+(no duplicate history entry when already there), **spotlights** the source row
+— same gold glow and the same 60s window as a fresh hit — auto-expands its
+collapsed room via the D-room-3 machinery (an explicit click even overrides a
+manual mid-window suppression), and scrolls the row into view (effect re-arms
+until the row exists, since the click usually arrives from another page; a
+freshness guard stops an expired spotlight from scroll-jumping later visits).
+**One spotlight at a time**: clicking a second hit replaces the first.
+Collapsing the spotlit room via its chevron dismisses the spotlight (no reopen
+fight; both checks read the server-confirmed layout, not the drag preview).
+Store: session-scoped one-slot module (`apps/web/src/lib/search-spotlight.ts`,
+unit-tested); `SEARCH_HIGHLIGHT_MS` is now the single shared 60s constant.
+Shipped after an adversarial review (2 real defects fixed pre-commit: the
+cross-page scroll never fired; a layout-source mismatch could reopen the
+chevron fight after a failed reorder POST).
