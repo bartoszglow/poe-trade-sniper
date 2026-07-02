@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { NAV_ENTRIES } from './nav';
 import { AppBar } from './AppBar';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { GuardBanner } from './GuardBanner';
 import { LoginOverlay } from './LoginOverlay';
 import { SessionBanner } from './SessionBanner';
@@ -9,20 +9,63 @@ import { UpdateBanner } from './UpdateBanner';
 import { IconRail } from './IconRail';
 import { HitsPanel } from './HitsPanel';
 import { StatusBar } from './StatusBar';
+import { ResizeHandle } from '../components/ResizeHandle';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useHealth } from '../hooks/useHealth';
+import { useHitsPanelLayout } from '../hooks/useHitsPanelLayout';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useNetworkViewEnabled } from '../hooks/useNetworkView';
+import {
+  HITS_PANEL_DEFAULT_WIDTH_PX,
+  HITS_PANEL_KEYBOARD_STEP_PX,
+  HITS_PANEL_MAX_WIDTH_PX,
+  HITS_PANEL_MIN_WIDTH_PX,
+  clampHitsPanelWidth,
+  resetHitsPanelWidth,
+  storeHitsPanelHidden,
+  storeHitsPanelWidth,
+} from '../lib/hits-panel-layout';
+import { useT } from '../i18n/i18n';
 
 export function AppShell() {
+  const t = useT();
   const health = useHealth();
   const eventStream = useEventStream();
   const { status, refresh } = useServerStatus();
   const { searches } = useSearches();
   const update = useUpdateCheck();
   const networkViewEnabled = useNetworkViewEnabled();
+  const hitsPanel = useHitsPanelLayout();
+  const hitsPanelHidden = hitsPanel.hiddenAt !== null;
+
+  // A drag previews the width by writing the CSS variable straight on the grid
+  // node — no React re-render per pointer move (the whole app hangs off this
+  // grid). The clamped value commits to the store on release.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const pendingWidthRef = useRef<number | null>(null);
+  function previewHitsPanelWidth(clientX: number): void {
+    const width = clampHitsPanelWidth(window.innerWidth - clientX, window.innerWidth);
+    gridRef.current?.style.setProperty('--hits-panel-width', `${width}px`);
+    pendingWidthRef.current = width;
+  }
+  function commitHitsPanelWidth(): void {
+    if (pendingWidthRef.current !== null) storeHitsPanelWidth(pendingWidthRef.current);
+    pendingWidthRef.current = null;
+  }
+  function stepHitsPanelWidth(direction: 'left' | 'right'): void {
+    // The panel sits on the right, so ArrowLeft = wider, ArrowRight = narrower.
+    const delta = direction === 'left' ? HITS_PANEL_KEYBOARD_STEP_PX : -HITS_PANEL_KEYBOARD_STEP_PX;
+    storeHitsPanelWidth(hitsPanel.widthPx + delta);
+  }
+
+  // Gold dot on the AppBar toggle: a NEW hit landed while the panel was hidden
+  // (`hit` events only — lastHitAtBySearchId is not stamped by re-serves).
+  const hiddenAt = hitsPanel.hiddenAt;
+  const hasUnseenHits =
+    hiddenAt !== null &&
+    Object.values(eventStream.lastHitAtBySearchId).some((hitAt) => hitAt > hiddenAt);
 
   // Global detection posture for the app bar — derived from the live searches
   // list (refetched on every engine-status SSE event), so it follows ws→poll
@@ -52,12 +95,21 @@ export function AppShell() {
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
   return (
-    <div className="grid h-screen grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden lg:grid-cols-[3rem_1fr_33rem]">
+    <div
+      ref={gridRef}
+      style={{ '--hits-panel-width': `${hitsPanel.widthPx}px` } as CSSProperties}
+      className={`grid h-screen grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden ${
+        hitsPanelHidden ? '' : 'lg:grid-cols-[3rem_1fr_var(--hits-panel-width)]'
+      }`}
+    >
       <header className="col-span-full">
         <AppBar
           serverHealthy={health.healthy}
           streamConnected={eventStream.connected}
           detection={detection}
+          hitsPanelHidden={hitsPanelHidden}
+          hasUnseenHits={hasUnseenHits}
+          onToggleHitsPanel={() => storeHitsPanelHidden(!hitsPanelHidden)}
         />
       </header>
 
@@ -80,9 +132,32 @@ export function AppShell() {
         </Routes>
       </main>
 
-      <aside className="hidden min-h-0 overflow-hidden border-l border-edge bg-surface-1 lg:block">
-        <HitsPanel />
-      </aside>
+      {!hitsPanelHidden && (
+        /* overflow-hidden lives on the inner wrapper so the resize handle can
+           overhang the border line without being clipped. */
+        <aside className="relative hidden min-h-0 border-l border-edge bg-surface-1 lg:block">
+          <ResizeHandle
+            ariaLabel={t('hitsPanel.resize')}
+            valueNow={hitsPanel.widthPx}
+            valueMin={HITS_PANEL_MIN_WIDTH_PX}
+            valueMax={HITS_PANEL_MAX_WIDTH_PX}
+            onDragTo={previewHitsPanelWidth}
+            onDragEnd={commitHitsPanelWidth}
+            onKeyStep={stepHitsPanelWidth}
+            onReset={() => {
+              pendingWidthRef.current = null;
+              gridRef.current?.style.setProperty(
+                '--hits-panel-width',
+                `${HITS_PANEL_DEFAULT_WIDTH_PX}px`,
+              );
+              resetHitsPanelWidth();
+            }}
+          />
+          <div className="h-full min-h-0 overflow-hidden">
+            <HitsPanel onHide={() => storeHitsPanelHidden(true)} />
+          </div>
+        </aside>
+      )}
 
       {needsLogin && !loginOverlayDismissed && (
         <LoginOverlay

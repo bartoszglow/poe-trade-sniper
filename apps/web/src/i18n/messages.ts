@@ -148,6 +148,9 @@ export const EN = {
   'hitsPanel.title': 'Live hits',
   'hitsPanel.empty': 'New listings stream here the moment an engine detects them.',
   'hitsPanel.clear': 'Clear the live feed',
+  'hitsPanel.hide': 'Hide live hits',
+  'hitsPanel.show': 'Show live hits',
+  'hitsPanel.resize': 'Drag to resize the live hits panel (double-click resets)',
 
   // Hit card / travel
   'hitCard.queued': 'queued…',
@@ -493,6 +496,9 @@ export const PL: Record<MessageKey, string> = {
   'hitsPanel.title': 'Trafienia na żywo',
   'hitsPanel.empty': 'Nowe oferty pojawią się tutaj, gdy tylko silnik je wykryje.',
   'hitsPanel.clear': 'Wyczyść widok',
+  'hitsPanel.hide': 'Ukryj trafienia na żywo',
+  'hitsPanel.show': 'Pokaż trafienia na żywo',
+  'hitsPanel.resize': 'Przeciągnij, aby zmienić szerokość panelu (dwuklik przywraca domyślną)',
 
   // Hit card / travel
   'hitCard.queued': 'w kolejce…',

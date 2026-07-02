@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eraser, Zap } from 'lucide-react';
+import { Eraser, PanelRightClose, Zap } from 'lucide-react';
 import { offerKey, type Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { HitCard } from '../components/HitCard';
@@ -17,7 +17,7 @@ const FRESHNESS_TICK_MS = 5_000;
 /** Hits older than this are greyed out in the live feed (visual only). */
 const STALE_HIT_MS = 300_000;
 
-export function HitsPanel() {
+export function HitsPanel({ onHide }: { onHide: () => void }) {
   const t = useT();
   const { connected, liveHits, travelStateByListingId, buyStateByListingId, clearLiveHits } =
     useEventStream();
@@ -110,6 +110,15 @@ export function HitsPanel() {
         <Badge tone={connected ? 'ok' : 'danger'}>
           {connected ? t('common.live') : t('common.offline')}
         </Badge>
+        <button
+          type="button"
+          onClick={onHide}
+          title={t('hitsPanel.hide')}
+          aria-label={t('hitsPanel.hide')}
+          className="rounded p-1 text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <PanelRightClose className="h-3.5 w-3.5" />
+        </button>
       </div>
       {/* Stable scroll container — never unmounted on clear (swapping the whole
           overflow container out was what left the ghost). Only the inner content swaps. */}
