@@ -100,3 +100,14 @@ Web:
     pasted from the operator's live game.
 - **B:** desktop hotkey → clipboard → sink routing; overlay window.
 - **C (later, parked):** Tier-2 tier/roll analytics; item-text i18n; whisper-from-result.
+
+## Phase D — Price Checks view (2026-07-03)
+
+A full nav view (`/price-checks`, `PriceChecksPage`) — the price-check counterpart to Hits:
+a paste-an-item box + the **recent-checks history** (newest first). History is
+**session-local + capped (50)** in `PriceCheckProvider` (not DB-backed — price checks are
+transient lookups, not audit history; a capped in-memory list matches "recent" and avoids
+a table + pruning), so it survives route changes but resets on reload. Every check (paste
+here, the Settings bench, OR a desktop hotkey from anywhere) lands in the same history and
+the side panel. The single-result rendering is extracted to `PriceCheckResultView` and
+shared by the panel, the Settings bench and this view (3-instance extraction).
