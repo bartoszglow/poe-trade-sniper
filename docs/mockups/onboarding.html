@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — first-run onboarding (#36)</title>
+<style>
+  :root {
+    --surface-0: #0b0a08; --surface-1: #141210; --surface-2: #1d1a16; --surface-3: #262219;
+    --edge: #2e2a22; --edge-strong: #443d2f;
+    --ink: #d6cfc2; --ink-muted: #8d8576; --ink-faint: #5d574c;
+    --gold: #c9a85c; --gold-bright: #e3c87e; --ok: #6fae6f; --warn: #c9974b; --info: #6f9ec2;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #060505; color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; padding: 24px; }
+  h1 { font-size: 16px; color: var(--gold); margin-bottom: 4px; }
+  .hint { color: var(--ink-muted); font-size: 12px; margin-bottom: 16px; }
+  .stepnav { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stepnav button { background: var(--surface-2); color: var(--ink-muted); border: 1px solid var(--edge); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .stepnav button.active { color: var(--gold-bright); border-color: var(--gold); background: var(--surface-3); }
+  .frames { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .framewrap > .label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+
+  /* backdrop imitating the app behind the overlay */
+  .backdrop { background: var(--surface-0); border: 1px solid var(--edge); border-radius: 10px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .backdrop.desktop { width: 760px; height: 560px; }
+  .backdrop.mobile { width: 375px; height: 640px; }
+  .backdrop::before { content: ""; position: absolute; inset: 0; background:
+    linear-gradient(0deg, transparent 94%, var(--surface-1) 94%),
+    linear-gradient(90deg, var(--surface-1) 6%, transparent 6%);
+    opacity: 0.8; }
+  .scrim { position: absolute; inset: 0; background: rgba(6, 5, 4, 0.75); }
+
+  /* the wizard card */
+  .wizard { position: relative; background: var(--surface-1); border: 1px solid var(--edge-strong); border-radius: 12px; width: 520px; max-width: calc(100% - 32px); padding: 0; box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+  .mobile .wizard { width: calc(100% - 24px); max-height: calc(100% - 40px); overflow-y: auto; }
+  .wizard header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--edge); }
+  .wizard header .logo { font-family: ui-monospace, monospace; font-weight: 700; color: var(--gold); font-size: 13px; }
+  .dots { margin-left: auto; display: flex; gap: 6px; }
+  .dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--edge-strong); }
+  .dots span.on { background: var(--gold); border-color: var(--gold); }
+  .wizard .body { padding: 20px 22px; }
+  .wizard h2 { font-size: 16px; color: var(--ink); margin-bottom: 8px; }
+  .wizard p { color: var(--ink-muted); font-size: 13px; margin-bottom: 10px; }
+  .wizard footer { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--edge); }
+  .btn { border-radius: 7px; padding: 7px 14px; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
+  .btn.primary { background: var(--gold); color: #171410; font-weight: 600; }
+  .btn.ghost { background: transparent; color: var(--ink-muted); border-color: var(--edge); }
+  .btn.linkish { background: none; border: none; color: var(--ink-faint); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; }
+  .spacer { flex: 1; }
+  .disclaimer { font-size: 11px; color: var(--ink-faint); border-top: 1px solid var(--edge); margin-top: 14px; padding-top: 10px; }
+  .pill { display: inline-block; border-radius: 5px; padding: 1px 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; }
+  .pill.gold { background: rgba(201,168,92,0.15); color: var(--gold-bright); }
+  .pill.warn { background: rgba(201,151,75,0.15); color: var(--warn); }
+  .pill.info { background: rgba(111,158,194,0.15); color: var(--info); }
+  .privacy { display: flex; gap: 8px; background: var(--surface-2); border: 1px solid var(--edge); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--ink-muted); margin-top: 10px; }
+  .howto { list-style: none; counter-reset: st; display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+  .howto li { counter-increment: st; display: flex; gap: 10px; font-size: 13px; color: var(--ink); }
+  .howto li::before { content: counter(st); flex: 0 0 22px; height: 22px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--edge-strong); color: var(--gold-bright); font-size: 11.5px; font-weight: 700; display: grid; place-items: center; }
+  .howto small { display: block; color: var(--ink-muted); font-size: 12px; }
+  .urlbar { margin: 6px 0 0; background: var(--surface-0); border: 1px solid var(--edge-strong); border-radius: 6px; padding: 6px 10px; font: 11.5px ui-monospace, monospace; color: var(--ink-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .urlbar b { color: var(--gold-bright); background: rgba(201,168,92,0.12); border-radius: 3px; padding: 0 2px; }
+  .callout { display: flex; gap: 9px; border: 1px solid rgba(201,151,75,0.5); background: rgba(201,151,75,0.08); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: var(--ink); margin-top: 4px; }
+  .callout .ic { color: var(--warn); font-weight: 700; }
+  .switchrow { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--ink-muted); }
+  .switchrow div { display: flex; align-items: center; gap: 6px; }
+  .sw { width: 26px; height: 15px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--edge-strong); position: relative; }
+  .sw::after { content: ""; position: absolute; top: 1px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--ink-faint); }
+  .sw.on { background: rgba(201,168,92,0.35); border-color: var(--gold); }
+  .sw.on::after { left: auto; right: 2px; background: var(--gold-bright); }
+  .panelviz { display: flex; gap: 8px; margin-top: 12px; }
+  .panelviz .col { border: 1px dashed var(--edge-strong); border-radius: 6px; padding: 6px 8px; font-size: 11px; color: var(--ink-faint); text-align: center; }
+  .mobilenote { border: 1px solid rgba(111,158,194,0.4); background: rgba(111,158,194,0.08); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-top: 10px; }
+  .loginbtn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 12px; }
+
+  /* checklist mockup */
+  .checkwrap { margin-top: 36px; }
+  .checkcard { width: 520px; max-width: 100%; background: var(--surface-1); border: 1px solid var(--edge); border-radius: 10px; padding: 14px 16px; }
+  .checkcard h3 { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted); display: flex; }
+  .checkcard h3 .x { margin-left: auto; color: var(--ink-faint); cursor: pointer; font-size: 13px; }
+  .check { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 13px; border-bottom: 1px solid var(--edge); }
+  .check:last-child { border-bottom: none; }
+  .check .box { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--edge-strong); display: grid; place-items: center; font-size: 11px; }
+  .check.done { color: var(--ink-faint); text-decoration: line-through; }
+  .check.done .box { background: rgba(111,174,111,0.2); border-color: var(--ok); color: var(--ok); }
+  .check .go { margin-left: auto; color: var(--gold); font-size: 12px; text-decoration: none; }
+</style>
+</head>
+<body>
+  <h1>Onboarding wizard — mockup (#36)</h1>
+  <div class="hint">Klikaj kroki 1–4 poniżej; oba widoki (desktop + mobile) pokazują ten sam krok. Copy = EN (katalog źródłowy); wersja PL 1:1 w messages.ts.</div>
+  <div class="stepnav" id="nav"></div>
+
+  <div class="frames">
+    <div class="framewrap">
+      <div class="label">Desktop (≥1024px)</div>
+      <div class="backdrop desktop"><div class="scrim"></div><div class="wizard" id="wiz-d"></div></div>
+    </div>
+    <div class="framewrap">
+      <div class="label">Mobile (375px)</div>
+      <div class="backdrop mobile"><div class="scrim"></div><div class="wizard" id="wiz-m"></div></div>
+    </div>
+  </div>
+
+  <div class="checkwrap">
+    <div class="label" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px;">
+      Phase 2 — "Getting started" checklist (na widoku Searches, znika po ukończeniu / dismissie)
+    </div>
+    <div class="checkcard">
+      <h3>Getting started <span class="x" title="Dismiss">✕</span></h3>
+      <div class="check done"><span class="box">✓</span> Connect your Path of Exile session</div>
+      <div class="check"><span class="box"></span> Watch your first trade search <a class="go" href="#">Add one ↑</a></div>
+      <div class="check"><span class="box"></span> Wait for your first live hit <span class="go" style="color:var(--ink-faint)">detection running…</span></div>
+    </div>
+  </div>
+
+<script>
+const steps = [
+  {
+    title: 'Welcome',
+    render: (mobile) => `
+      <h2>Win the listing before anyone else</h2>
+      <p>PoE Trade Sniper watches your Path of Exile 2 trade searches <b>live</b>. The moment
+      a matching item is listed you get an alert — and one click warps your character to the
+      seller's hideout. <b>You complete the trade yourself</b>; the app never buys for you.</p>
+      <p><span class="pill gold">LIVE</span> WebSocket detection &nbsp; <span class="pill info">POLL</span> automatic fallback</p>
+      <div class="disclaimer">A community fan tool. Not affiliated with or endorsed by Grinding Gear Games. Use at your own risk.</div>`,
+    footer: (mobile) => `<button class="btn linkish">Skip intro</button><span class="spacer"></span><button class="btn primary">Next →</button>`,
+  },
+  {
+    title: 'Login (required)',
+    render: (mobile) => `
+      <h2>Connect your PoE session — required</h2>
+      <p>The app rides your own pathofexile.com session. <b>Without it nothing works</b> —
+      detection and travel stay paused.</p>
+      ${mobile
+        ? `<div class="mobilenote"><b>Using a phone?</b> The login window opens on the computer
+           running the sniper. Alternatively paste your session cookie in Settings.</div>`
+        : `<p>A real <b>Chrome window</b> will open on the official pathofexile.com login page.
+           Log in there — it closes by itself when done.</p>`}
+      <button class="btn primary loginbtn">⚡ Log in with Path of Exile</button>
+      <div style="text-align:center;margin-top:8px"><button class="btn linkish">Prefer not to? Paste cookies in Settings</button></div>
+      <div class="privacy"><span>🔒</span><span>Your password never touches this app — only the session
+      cookie is captured, and it is stored <b>encrypted, locally</b>. The only server ever contacted is pathofexile.com.</span></div>`,
+    footer: (mobile) => `<button class="btn ghost">← Back</button>
+      <span class="spacer"></span>
+      <span style="font-size:11.5px;color:var(--warn)">skipping = app stays inactive</span>
+      <button class="btn ghost">Skip for now</button>`,
+  },
+  {
+    title: 'First search (how-to)',
+    render: (mobile) => `
+      <h2>Build the search on the trade site, paste it here</h2>
+      <ol class="howto">
+        <li><div>Build your whole search on the official <b>PoE2 trade site</b>
+          <small>pathofexile.com/trade2 — item, stats, price… everything is defined THERE, not in this app.</small></div></li>
+        <li><div>Tick <b>Instant Buyout</b> in the trade-site filters
+          <small>required for Travel — only instant-buyout listings carry a hideout token.</small></div></li>
+        <li><div>Copy the search <b>URL</b> from the address bar (or just the id at the end)
+          <div class="urlbar">pathofexile.com/trade2/search/poe2/Standard/<b>Abc4dE7fG</b></div></div></li>
+        <li><div>Paste it into <b>Watch a search</b> — detection starts immediately</div></li>
+      </ol>
+      <div class="callout"><span class="ic">⚠</span><span><b>TRAVEL teleports your real character</b> to the
+      seller's hideout. It is off by default and opt-in per search.</span></div>
+      <div class="switchrow">
+        <div><span class="sw on"></span> ACTIVE <small>— detection on</small></div>
+        <div><span class="sw"></span> TRAVEL <small>— auto-warp on hit</small></div>
+        <div><span class="sw"></span> BUY <small>— macOS app only</small></div>
+      </div>`,
+    footer: () => `<button class="btn ghost">← Back</button><span class="spacer"></span><button class="btn primary">Next →</button>`,
+  },
+  {
+    title: 'Where things happen',
+    render: (mobile) => mobile
+      ? `
+      <h2>Your views</h2>
+      <p><b>Searches</b> — manage what is watched. <b>Hits</b> — history of every detection.
+      <b>Activity</b> — what the automation did in-game.</p>
+      <div class="mobilenote"><b>Heads-up:</b> the live-hits action panel (travel/buy buttons) needs a
+      desktop-width window (≥1024px). On this screen you can manage searches and browse history.</div>`
+      : `
+      <h2>Hits stream in live — act fast</h2>
+      <p>New listings appear instantly in the <b>Live hits</b> panel on the right. The travel window
+      is short: hideout tokens die after <b>~4 minutes</b> (the button turns into a re-check after that).</p>
+      <div class="panelviz">
+        <div class="col" style="flex:0 0 44px">nav</div>
+        <div class="col" style="flex:1">your searches</div>
+        <div class="col" style="flex:0 0 150px;border-color:var(--gold);color:var(--gold-bright)">⚡ live hits<br/>travel / buy</div>
+      </div>
+      <p style="margin-top:10px">Drag the divider to resize the panel; hide it with the top-bar toggle.
+      <b>Hits</b> and <b>Activity</b> in the left rail keep the full history.</p>`,
+    footer: () => `<button class="btn ghost">← Back</button><span class="spacer"></span><button class="btn primary">Start sniping ✓</button>`,
+  },
+];
+
+let current = 0;
+const nav = document.getElementById('nav');
+steps.forEach((step, index) => {
+  const button = document.createElement('button');
+  button.textContent = `${index + 1}. ${step.title}`;
+  button.onclick = () => { current = index; paint(); };
+  nav.appendChild(button);
+});
+function frame(mobile) {
+  const step = steps[current];
+  const dots = steps.map((_, index) => `<span class="${index === current ? 'on' : ''}"></span>`).join('');
+  return `<header><span class="logo">PoE Trade Sniper</span><div class="dots">${dots}</div></header>
+    <div class="body">${step.render(mobile)}</div><footer>${step.footer(mobile)}</footer>`;
+}
+function paint() {
+  document.getElementById('wiz-d').innerHTML = frame(false);
+  document.getElementById('wiz-m').innerHTML = frame(true);
+  [...nav.children].forEach((button, index) => button.classList.toggle('active', index === current));
+}
+paint();
+</script>
+</body>
+</html>
