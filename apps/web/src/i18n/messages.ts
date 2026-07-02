@@ -210,6 +210,10 @@ export const EN = {
   'searches.activeFor': 'Detection active for {label}',
   'searches.autoFor': 'Auto travel for {label}',
   'searches.remove': 'Remove {label}',
+  'searches.archive': 'Archive {label}',
+  'searches.restore': 'Restore {label}',
+  'searches.archivedSection': 'Archived',
+  'searches.archivedOn': 'archived {time}',
   'searches.last': 'last {time}',
   'searches.loginRequiredTitle': 'Log in to start sniping',
   'searches.loginRequiredBody':
@@ -559,6 +563,10 @@ export const PL: Record<MessageKey, string> = {
   'searches.activeFor': 'Wykrywanie aktywne dla {label}',
   'searches.autoFor': 'Automatyczna podróż dla {label}',
   'searches.remove': 'Usuń {label}',
+  'searches.archive': 'Archiwizuj {label}',
+  'searches.restore': 'Przywróć {label}',
+  'searches.archivedSection': 'Zarchiwizowane',
+  'searches.archivedOn': 'zarchiwizowano {time}',
   'searches.last': 'ostatnie {time}',
   'searches.loginRequiredTitle': 'Zaloguj się, aby zacząć',
   'searches.loginRequiredBody':

@@ -25,6 +25,8 @@ const searchEntrySchema = z
     addedAt: z.string().min(1),
     /** Membership within the file's rooms (v2); absent in v1 exports. */
     roomId: z.string().min(1).nullable().optional(),
+    /** Archive time (v3, #35); absent in older exports. */
+    archivedAt: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -69,6 +71,7 @@ export class ImportService {
     const entries = parsed.data.searches.map((entry) => ({
       ...entry,
       roomId: entry.roomId ?? null,
+      archivedAt: entry.archivedAt ?? null,
     })) as unknown as ManagedSearch[];
     const exportedRooms = (parsed.data.rooms ?? []).map((room) => ({
       id: room.id,

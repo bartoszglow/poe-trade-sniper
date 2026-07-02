@@ -56,6 +56,12 @@ export interface ManagedSearch {
   addedAt: string;
   /** Room (named group) this search belongs to, or null = top level. */
   roomId: string | null;
+  /**
+   * ISO-8601 archive time, or null = active (#35). Archived searches run no
+   * detection and leave the layout/rooms; membership and every toggle are kept
+   * so a restore puts the search back exactly as it was.
+   */
+  archivedAt: string | null;
 }
 
 /** A named group of searches on the Searches view (one level deep — no nesting). */

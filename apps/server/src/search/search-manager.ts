@@ -64,6 +64,9 @@ export interface UpdateSearchOptions {
   autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
   enabled?: boolean;
+  /** Archive / restore (#35): archiving stops detection and removes the search
+   *  from the layout; every flag survives, so restore re-arms as it was. */
+  archived?: boolean;
 }
 
 export type HitSort = 'newest' | 'oldest' | 'name';
@@ -255,6 +258,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       filters: resolvedQuery,
       addedAt: new Date().toISOString(),
       roomId: null,
+      archivedAt: null,
     };
     this.database
       .insert(searches)
@@ -287,6 +291,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     if (options.autoBuy === true) this.assertAutoBuyAllowed(true);
     const wasEnabled = watcher.row.enabled;
     const enabled = options.enabled ?? wasEnabled;
+    const wasArchived = watcher.row.archivedAt !== null;
+    const archived = options.archived ?? wasArchived;
+    // The original archive time survives a redundant "archive again".
+    const archivedAt = archived ? (watcher.row.archivedAt ?? new Date().toISOString()) : null;
 
     watcher.row = {
       ...watcher.row,
@@ -295,6 +303,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       autoBuy,
       purchaseMode,
       enabled,
+      archivedAt,
     };
     this.database
       .update(searches)
@@ -304,26 +313,51 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         autoBuy: watcher.row.autoBuy,
         purchaseMode: watcher.row.purchaseMode,
         enabled: watcher.row.enabled,
+        archivedAt: watcher.row.archivedAt,
       })
       .where(eq(searches.id, searchId))
       .run();
 
-    if (!enabled && wasEnabled) {
-      // Per-search disable: stop detection but keep the search and its config.
+    if (archived && !wasArchived) {
+      // Archiving (#35): detection stops; flags/history/membership survive.
       this.stopEngines(watcher);
-      this.publishEngineStatus(watcher, 'stopped', 'paused');
-    } else if (enabled && !wasEnabled) {
-      // Re-enabled — start now, unless detection is globally paused (then it
-      // waits as PAUSED and comes up on the next global resume).
-      if (this.detectionPaused) {
+      this.publishEngineStatus(watcher, 'stopped', 'archived');
+    } else if (!archived && wasArchived) {
+      // Restoring: come back exactly as configured before the archive. The
+      // enabled check comes FIRST — a disabled restore is 'stopped' even under
+      // a global pause (it would otherwise wear 'paused' forever after resume,
+      // since the resume drip skips disabled watchers).
+      if (!watcher.row.enabled) {
+        this.publishEngineStatus(watcher, 'stopped', 'paused');
+      } else if (this.detectionPaused) {
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
       } else {
         this.startWatcher(watcher);
       }
-    } else if (options.purchaseMode !== undefined && enabled && !this.detectionPaused) {
-      // A purchase-mode change alters the executed query — restart detection.
-      this.stopEngines(watcher);
-      this.startWatcher(watcher);
+      // The row's persisted position went stale while archived (persistLayout
+      // never writes archived rows) — re-persist the canonical layout so the
+      // restored slot survives a restart instead of reshuffling the room.
+      const restoredLayout = this.currentLayout();
+      this.database.transaction((tx) => this.persistLayout(tx, restoredLayout));
+      this.syncRoomPositions(restoredLayout);
+    } else if (!archived) {
+      if (!enabled && wasEnabled) {
+        // Per-search disable: stop detection but keep the search and its config.
+        this.stopEngines(watcher);
+        this.publishEngineStatus(watcher, 'stopped', 'paused');
+      } else if (enabled && !wasEnabled) {
+        // Re-enabled — start now, unless detection is globally paused (then it
+        // waits as PAUSED and comes up on the next global resume).
+        if (this.detectionPaused) {
+          this.publishEngineStatus(watcher, 'paused', 'globally paused');
+        } else {
+          this.startWatcher(watcher);
+        }
+      } else if (options.purchaseMode !== undefined && enabled && !this.detectionPaused) {
+        // A purchase-mode change alters the executed query — restart detection.
+        this.stopEngines(watcher);
+        this.startWatcher(watcher);
+      }
     }
     this.publishSearchesChanged();
     return this.toRuntimeInfo(watcher);
@@ -386,7 +420,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     newWatcher.hitCount = watcher.hitCount;
     newWatcher.lastHitAt = watcher.lastHitAt;
     this.watchers.set(newRow.id, newWatcher);
-    if (this.detectionPaused) {
+    if (newRow.archivedAt !== null) {
+      // Re-pointed while archived: stays archived (createWatcher marked it).
+    } else if (this.detectionPaused) {
       this.publishEngineStatus(newWatcher, 'paused', 'globally paused');
     } else if (newRow.enabled) {
       this.startWatcher(newWatcher);
@@ -478,8 +514,12 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
    */
   setRoomEnabled(roomId: string, enabled: boolean): SearchesView {
     this.requireRoom(roomId);
+    // Archived members are invisible in the room — the master switch skips them.
     const changedMembers = [...this.watchers.values()].filter(
-      (watcher) => watcher.row.roomId === roomId && watcher.row.enabled !== enabled,
+      (watcher) =>
+        watcher.row.roomId === roomId &&
+        watcher.row.archivedAt === null &&
+        watcher.row.enabled !== enabled,
     );
     if (changedMembers.length === 0) return this.view();
     this.database.transaction((tx) => {
@@ -513,7 +553,13 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
    */
   deleteRoom(roomId: string, mode: RoomDeleteMode): SearchesView {
     this.requireRoom(roomId);
-    const members = [...this.watchers.values()].filter((watcher) => watcher.row.roomId === roomId);
+    const allMembers = [...this.watchers.values()].filter(
+      (watcher) => watcher.row.roomId === roomId,
+    );
+    // Archived members are invisible in the room's UI — `delete-searches` must
+    // never silently destroy them; they are RELEASED in both modes (#35).
+    const members = allMembers.filter((watcher) => watcher.row.archivedAt === null);
+    const archivedMembers = allMembers.filter((watcher) => watcher.row.archivedAt !== null);
     for (const member of members) {
       if (mode === 'delete-searches') {
         this.stopEngines(member);
@@ -523,6 +569,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         member.row = { ...member.row, roomId: null };
       }
     }
+    for (const member of archivedMembers) {
+      member.row = { ...member.row, roomId: null };
+    }
     this.rooms.delete(roomId);
     const layout = this.currentLayout();
     this.database.transaction((tx) => {
@@ -530,6 +579,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         for (const member of members) {
           tx.delete(searches).where(eq(searches.id, member.row.id)).run();
         }
+      }
+      for (const member of archivedMembers) {
+        tx.update(searches).set({ roomId: null }).where(eq(searches.id, member.row.id)).run();
       }
       tx.delete(rooms).where(eq(rooms.id, roomId)).run();
       this.persistLayout(tx, layout);
@@ -645,6 +697,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
           filters: entry.filters,
           addedAt: entry.addedAt,
           roomId: entry.roomId !== null ? (roomIdByExportedId.get(entry.roomId) ?? null) : null,
+          archivedAt: entry.archivedAt ?? null,
         };
         this.database
           .insert(searches)
@@ -652,7 +705,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
           .run();
         const watcher = this.createWatcher(row);
         this.watchers.set(row.id, watcher);
-        if (this.detectionPaused) {
+        if (row.archivedAt !== null) {
+          // Archived imports stay archived — createWatcher already marked them.
+        } else if (this.detectionPaused) {
           this.publishEngineStatus(watcher, 'paused', 'globally paused');
         } else if (row.enabled) {
           this.startWatcher(watcher);
@@ -769,7 +824,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.detectionPaused = paused;
     if (paused) {
       for (const watcher of this.watchers.values()) {
-        if (!watcher.row.enabled) continue;
+        // Archived searches are already stopped — a pause must not relabel them.
+        if (!watcher.row.enabled || watcher.row.archivedAt !== null) continue;
         this.stopEngines(watcher);
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
       }
@@ -799,7 +855,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // the reconnect gap. When ws is up, the search is served by push and is
       // skipped here (no double traffic; matches a browser tab).
       const pollWatchers = [...this.watchers.values()].filter(
-        (watcher) => watcher.row.enabled && watcher.pollEngine !== null && !watcher.wsConnected,
+        (watcher) =>
+          watcher.row.enabled &&
+          watcher.row.archivedAt === null &&
+          watcher.pollEngine !== null &&
+          !watcher.wsConnected,
       );
       if (pollWatchers.length === 0) return;
       const watcher = pollWatchers[this.roundRobinIndex % pollWatchers.length]!;
@@ -840,6 +900,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const pending = [...this.watchers.values()].filter(
       (watcher) =>
         watcher.row.enabled &&
+        watcher.row.archivedAt === null &&
         watcher.wsEngine === null &&
         watcher.pollEngine === null &&
         watcher.status !== 'stopped',
@@ -1119,12 +1180,15 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return room;
   }
 
-  /** Current flattened order + membership, as the layout algebra consumes it. */
+  /** Current flattened order + membership, as the layout algebra consumes it.
+   *  ACTIVE searches only — archived ones live outside the layout (#35). */
   private layoutSearchStates(): LayoutSearchState[] {
-    return [...this.watchers.values()].map((watcher) => ({
-      id: watcher.row.id,
-      roomId: watcher.row.roomId,
-    }));
+    return [...this.watchers.values()]
+      .filter((watcher) => watcher.row.archivedAt === null)
+      .map((watcher) => ({
+        id: watcher.row.id,
+        roomId: watcher.row.roomId,
+      }));
   }
 
   private currentLayout(): SearchLayoutEntry[] {
@@ -1168,6 +1232,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       watcher.row = { ...watcher.row, roomId: state.roomId };
       this.watchers.set(state.id, watcher);
     }
+    // Archived watchers live outside the layout (#35) — re-append them in their
+    // previous relative order so a reorder never drops them from the Map.
+    for (const [watcherId, watcher] of currentWatchers) {
+      if (!this.watchers.has(watcherId)) this.watchers.set(watcherId, watcher);
+    }
     const currentRooms = new Map(this.rooms);
     this.rooms.clear();
     for (const entry of layout) {
@@ -1187,9 +1256,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     });
   }
 
-  /** DB rows in flattened canonical order (bootstrap) — see onApplicationBootstrap. */
+  /** DB rows in flattened canonical order (bootstrap) — see onApplicationBootstrap.
+   *  Archived rows live outside the layout and append at the end (#35). */
   private rowsInFlattenedOrder(): Array<typeof searches.$inferSelect> {
-    const rows = this.database.select().from(searches).all();
+    const allRows = this.database.select().from(searches).all();
+    const rows = allRows.filter((row) => row.archivedAt === null);
+    const archivedRows = allRows
+      .filter((row) => row.archivedAt !== null)
+      .sort((first, second) => first.archivedAt!.localeCompare(second.archivedAt!));
     interface ScopedToken {
       position: number;
       addedAt: string;
@@ -1220,7 +1294,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         rows: memberTokens.flatMap((token) => token.rows),
       });
     }
-    return topLevelTokens.sort(byScope).flatMap((token) => token.rows);
+    return [...topLevelTokens.sort(byScope).flatMap((token) => token.rows), ...archivedRows];
   }
 
   /** Restore hitCount + lastHitAt for ALL watchers in one grouped query (PERF-6). */
@@ -1243,13 +1317,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   private createWatcher(row: ManagedSearch): Watcher {
+    const archived = row.archivedAt !== null;
     return {
       row,
       wsEngine: null,
       pollEngine: null,
       wsConnected: false,
-      status: row.enabled ? 'pending' : 'stopped',
-      statusDetail: row.enabled ? null : 'paused',
+      status: row.enabled && !archived ? 'pending' : 'stopped',
+      statusDetail: archived ? 'archived' : row.enabled ? null : 'paused',
       correlationId: randomUUID(),
       hitCount: 0,
       lastHitAt: null,
@@ -1270,6 +1345,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       addedAt: row.addedAt,
       // A stale membership (room row gone) self-heals to top-level.
       roomId: row.roomId !== null && this.rooms.has(row.roomId) ? row.roomId : null,
+      archivedAt: row.archivedAt,
     };
   }
 

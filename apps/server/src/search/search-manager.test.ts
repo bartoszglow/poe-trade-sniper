@@ -1185,6 +1185,138 @@ describe('SearchManager', () => {
     }
   });
 
+  it('archive stops detection, leaves the layout, and survives a reload (#35)', async () => {
+    const { manager, database, executeSearch } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001'] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+
+      const archived = manager.update('AbCdEf001', { archived: true });
+      expect(archived.archivedAt).not.toBeNull();
+      expect(archived.status).toBe('stopped');
+      expect(archived.enabled).toBe(true); // preserved for restore
+      expect(archived.roomId).toBe(roomId); // membership preserved for restore
+      // Out of the layout (the room shows empty) but still listed.
+      const view = manager.view();
+      expect(view.layout).toEqual([
+        { kind: 'room', id: roomId, searchIds: [] },
+        { kind: 'search', id: 'AbCdEf002' },
+      ]);
+      expect(view.searches.map((entry) => entry.id)).toContain('AbCdEf001');
+      // No polling for the archived search.
+      executeSearch.mockClear();
+      await manager.runSchedulerTick();
+      await manager.runSchedulerTick();
+      const tickedSearches = executeSearch.mock.calls.map(
+        (call) => (call as unknown as [{ searchId: string }])[0].searchId,
+      );
+      expect(tickedSearches).toEqual(['AbCdEf002', 'AbCdEf002']);
+      manager.onApplicationShutdown();
+
+      // Reload: still archived, still out of the layout, still listed.
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        { resolveQuery: vi.fn() } as unknown as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+        ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        const restoredView = reloaded.view();
+        expect(restoredView.layout).toEqual(view.layout);
+        const entry = restoredView.searches.find((search) => search.id === 'AbCdEf001');
+        expect(entry?.archivedAt).not.toBeNull();
+        expect(entry?.status).toBe('stopped');
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('restore re-arms detection and returns the search to its room (#35)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001'] }]);
+      manager.update('AbCdEf001', { archived: true });
+
+      const restored = manager.update('AbCdEf001', { archived: false });
+      expect(restored.archivedAt).toBeNull();
+      expect(restored.status).toBe('active');
+      expect(manager.view().layout).toEqual([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001'] },
+      ]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('deleting a room with delete-searches RELEASES its archived members (#35)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001', 'AbCdEf002'] }]);
+      manager.update('AbCdEf001', { archived: true });
+
+      // delete-searches destroys the VISIBLE member only; the archived one
+      // (invisible in the room UI) survives, released to no-room.
+      const view = manager.deleteRoom(roomId, 'delete-searches');
+      const survivors = view.searches.map((entry) => entry.id);
+      expect(survivors).toEqual(['AbCdEf001']);
+      expect(view.searches[0]?.roomId).toBeNull();
+      expect(view.searches[0]?.archivedAt).not.toBeNull();
+      const rows = database.$client.prepare('SELECT id, room_id FROM searches').all() as Array<{
+        id: string;
+        room_id: string | null;
+      }>;
+      expect(rows).toEqual([{ id: 'AbCdEf001', room_id: null }]);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('export/import round-trips the archived state without starting engines (#35)', async () => {
+    const source = createManager();
+    const target = createManager();
+    try {
+      await source.manager.add('AbCdEf001', {});
+      source.manager.update('AbCdEf001', { archived: true });
+      const exported = source.manager.exportSearches();
+      expect(exported[0]?.archivedAt).not.toBeNull();
+
+      target.executeSearch.mockClear();
+      const result = target.manager.importSearches(exported, [], 'skip');
+      expect(result.imported).toBe(1);
+      const imported = target.manager.list().find((entry) => entry.id === 'AbCdEf001');
+      expect(imported?.archivedAt).toBe(exported[0]?.archivedAt);
+      expect(imported?.status).toBe('stopped');
+      await target.manager.runSchedulerTick();
+      expect(target.executeSearch).not.toHaveBeenCalled();
+    } finally {
+      source.manager.onApplicationShutdown();
+      source.database.$client.close();
+      target.manager.onApplicationShutdown();
+      target.database.$client.close();
+    }
+  });
+
   it('export/import round-trips rooms — matched by name, membership remapped (#33)', async () => {
     const source = createManager();
     const target = createManager();

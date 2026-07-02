@@ -27,8 +27,12 @@ describe('ImportService', () => {
   it('accepts a valid v1 envelope and forwards the entries + mode to the manager', () => {
     const { service, importSearches } = makeService();
     expect(service.importSearches(validEnvelope, 'skip').imported).toBe(1);
-    // v1 entries carry no roomId → normalized to null; v1 has no rooms.
-    expect(importSearches).toHaveBeenCalledWith([{ ...validEntry, roomId: null }], [], 'skip');
+    // v1 entries carry no roomId/archivedAt → normalized to null; v1 has no rooms.
+    expect(importSearches).toHaveBeenCalledWith(
+      [{ ...validEntry, roomId: null, archivedAt: null }],
+      [],
+      'skip',
+    );
   });
 
   it('accepts a v2 envelope with rooms and remaps memberships through the manager (#33)', () => {
@@ -41,7 +45,7 @@ describe('ImportService', () => {
     };
     expect(service.importSearches(envelope, 'skip').imported).toBe(1);
     expect(importSearches).toHaveBeenCalledWith(
-      [{ ...validEntry, roomId: 'file-room-1' }],
+      [{ ...validEntry, roomId: 'file-room-1', archivedAt: null }],
       [{ id: 'file-room-1', name: 'Helmets', collapsed: true }],
       'skip',
     );

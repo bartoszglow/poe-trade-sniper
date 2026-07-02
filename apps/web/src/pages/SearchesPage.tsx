@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  Archive,
+  ArchiveRestore,
   ExternalLink,
   Folder,
   FolderPlus,
@@ -305,6 +307,7 @@ function SearchRow({
     enabled?: boolean;
     label?: string;
     input?: string;
+    archived?: boolean;
   }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
@@ -500,6 +503,14 @@ function SearchRow({
               <span className="text-ink-faint">{t(buyControl.note)}</span>
             ))}
         </span>
+        <IconButton
+          variant="ghost"
+          aria-label={t('searches.archive', { label: search.label })}
+          title={t('searches.archive', { label: search.label })}
+          onClick={() => void run(() => onUpdate({ archived: true }))}
+        >
+          <Archive className="h-4 w-4" />
+        </IconButton>
         {confirmingDelete ? (
           <Button variant="danger" onClick={() => void run(onRemove)}>
             {t('common.confirm')}
@@ -531,6 +542,88 @@ function SearchRow({
           <QueryCriteriaView query={search.filters} />
         </div>
       )}
+    </li>
+  );
+}
+
+/**
+ * One archived search (#35): greyed, outside the DnD layout, restore or delete
+ * only — every toggle and the room membership survive server-side for restore.
+ */
+function ArchivedSearchRow({
+  search,
+  highlighted,
+  onRestore,
+  onRemove,
+}: {
+  search: SearchRuntimeInfo;
+  /** The click-to-locate spotlight can target an archived search too. */
+  highlighted: boolean;
+  onRestore: () => Promise<void>;
+  onRemove: () => Promise<void>;
+}) {
+  const t = useT();
+  const tn = useTn();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  async function run(action: () => Promise<void>) {
+    setErrorMessage(null);
+    try {
+      await action();
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+    }
+  }
+
+  return (
+    <li
+      data-search-row={search.id}
+      className={`rounded-lg border px-4 py-2.5 transition-opacity ${
+        highlighted
+          ? 'border-gold/60 bg-gold/5 opacity-90'
+          : 'border-edge bg-surface-1 opacity-55 hover:opacity-85'
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <Archive className="h-4 w-4 shrink-0 text-ink-faint" />
+        <div className="min-w-0">
+          <span className="truncate font-medium text-ink">{search.label}</span>
+          <div className="mt-0.5 text-xs text-ink-faint">
+            {search.id} · {search.league} · {tn('searches.hitCount', search.hitCount)}
+            {search.archivedAt &&
+              ` · ${t('searches.archivedOn', {
+                time: new Date(search.archivedAt).toLocaleDateString(),
+              })}`}
+          </div>
+        </div>
+        <div className="flex-1" />
+        {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
+        <IconButton
+          variant="ghost"
+          aria-label={t('searches.restore', { label: search.label })}
+          title={t('searches.restore', { label: search.label })}
+          onClick={() => void run(onRestore)}
+        >
+          <ArchiveRestore className="h-4 w-4" />
+        </IconButton>
+        {confirmingDelete ? (
+          <Button variant="danger" onClick={() => void run(onRemove)}>
+            {t('common.confirm')}
+          </Button>
+        ) : (
+          <IconButton
+            variant="danger"
+            aria-label={t('searches.remove', { label: search.label })}
+            onClick={() => {
+              setConfirmingDelete(true);
+              setTimeout(() => setConfirmingDelete(false), 3000);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </IconButton>
+        )}
+      </div>
     </li>
   );
 }
@@ -823,6 +916,10 @@ export function SearchesPage() {
 
   const searchesById = new Map(searches.map((search) => [search.id, search]));
   const roomsById = new Map(rooms.map((room) => [room.id, room]));
+  // Archived searches (#35): greyed flat section at the bottom, newest first.
+  const archivedSearches = searches
+    .filter((search) => search.archivedAt !== null)
+    .sort((first, second) => second.archivedAt!.localeCompare(first.archivedAt!));
 
   function renderDragGhost(dndId: string) {
     const draggedRoomId = roomIdFromDndId(dndId);
@@ -965,6 +1062,24 @@ export function SearchesPage() {
                 never clipped by room borders, and the source row just dims. */}
             <DragOverlay>{activeDragId !== null && renderDragGhost(activeDragId)}</DragOverlay>
           </DndContext>
+          {archivedSearches.length > 0 && (
+            <section className="mt-2 flex flex-col gap-2">
+              <h2 className="text-xs font-semibold tracking-widest text-ink-faint uppercase">
+                {t('searches.archivedSection')} ({archivedSearches.length})
+              </h2>
+              <ul className="flex flex-col gap-2">
+                {archivedSearches.map((search) => (
+                  <ArchivedSearchRow
+                    key={search.id}
+                    search={search}
+                    highlighted={isSearchLit(search.id)}
+                    onRestore={() => update(search.id, { archived: false })}
+                    onRemove={() => remove(search.id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
         </>
       )}
     </section>

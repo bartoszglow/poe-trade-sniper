@@ -31,6 +31,8 @@ export interface UpdateSearchPayload {
   autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
   enabled?: boolean;
+  /** Archive / restore (#35) — archived searches keep everything for a restore. */
+  archived?: boolean;
 }
 
 /** Fetches the watched searches; refetches whenever SSE signals a change. */

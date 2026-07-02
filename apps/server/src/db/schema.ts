@@ -24,6 +24,10 @@ export const searches = sqliteTable('searches', {
   /** Room membership (#33). No FK — foreign_keys is OFF in this app; room deletion
    *  re-homes or removes members explicitly in code, inside one transaction. */
   roomId: text('room_id'),
+  /** ISO-8601 archive time (#35); null = active. Archived searches run no
+   *  detection, leave the layout/rooms (membership kept for restore) and sort
+   *  into the greyed bottom section. */
+  archivedAt: text('archived_at'),
 });
 
 /** Named groups of searches on the Searches view (#33). One level deep. */

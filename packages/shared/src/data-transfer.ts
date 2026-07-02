@@ -1,7 +1,7 @@
 import type { ManagedSearch } from './search.js';
 
 /** Bump when the search-export envelope shape changes incompatibly. */
-export const SEARCH_EXPORT_VERSION = 2;
+export const SEARCH_EXPORT_VERSION = 3; // v3: searches carry archivedAt (#35)
 
 /**
  * A room as exported: `id` only correlates memberships WITHIN the file; on

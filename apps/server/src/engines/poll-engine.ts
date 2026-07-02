@@ -48,6 +48,10 @@ export class PollEngine implements DetectionEngine {
     const { search, query, correlationId } = this.context;
 
     const execution = await this.tradeApi.executeSearch(search, query, correlationId);
+    // The engine may have been stopped (archive / disable / pause) while the
+    // search POST was in flight — a late status callback must not relabel a
+    // watcher that already published its terminal state.
+    if (!this.running) return;
     if (execution.rateLimited) {
       this.callbacks.onStatus('degraded', 'rate-limited — governor pausing');
       return;
