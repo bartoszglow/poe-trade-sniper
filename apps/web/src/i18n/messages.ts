@@ -386,6 +386,8 @@ export const EN = {
   'settings.clear': 'Clear session',
   'settings.confirmClear': 'Confirm clear',
   'settings.cleared': 'session cleared',
+  'settings.logout': 'Log out',
+  'settings.confirmLogout': 'Confirm log out',
   'settings.loginCard': 'Log in with Path of Exile',
   'settings.loginCardBody':
     'Opens the real pathofexile.com page in your Chrome — credentials go only to GGG; once you finish logging in there, the session is captured and the window closes itself.',
@@ -830,6 +832,8 @@ export const PL: Record<MessageKey, string> = {
   'settings.clear': 'Wyczyść sesję',
   'settings.confirmClear': 'Potwierdź czyszczenie',
   'settings.cleared': 'sesja wyczyszczona',
+  'settings.logout': 'Wyloguj',
+  'settings.confirmLogout': 'Potwierdź wylogowanie',
   'settings.loginCard': 'Logowanie przez Path of Exile',
   'settings.loginCardBody':
     'Otwiera prawdziwą stronę pathofexile.com w twoim Chrome — dane logowania trafiają wyłącznie do GGG; po zalogowaniu sesja zostaje przechwycona, a okno samo się zamyka.',

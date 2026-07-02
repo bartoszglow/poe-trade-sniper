@@ -296,6 +296,10 @@ export function SettingsPage() {
   const t = useT();
   const [language, setLanguage] = useLanguage();
   const { status, refresh } = useServerStatus();
+  // "Logged in" = a stored session that hasn't failed the probe (null = not yet
+  // probed → treat as logged in; the boot probe settles it in a few seconds).
+  // When logged in we hide the login/paste cards and offer logout instead.
+  const loggedIn = (status?.session.hasSession ?? false) && status?.session.probedValid !== false;
   const [poesessid, setPoesessid] = useState('');
   const [cfClearance, setCfClearance] = useState('');
   const [userAgent, setUserAgent] = useState('');
@@ -463,7 +467,10 @@ export function SettingsPage() {
                 });
               }}
             >
-              {t('settings.confirmClear')}
+              {/* Logout = removing the stored cookie locally; we deliberately do
+                  NOT hit GGG's logout (that would also log the operator out of
+                  their real browser and adds needless GGG traffic). */}
+              {loggedIn ? t('settings.confirmLogout') : t('settings.confirmClear')}
             </Button>
           ) : (
             <Button
@@ -474,75 +481,81 @@ export function SettingsPage() {
                 setTimeout(() => setConfirmingClear(false), 3000);
               }}
             >
-              {t('settings.clear')}
+              {loggedIn ? t('settings.logout') : t('settings.clear')}
             </Button>
           )}
         </div>
       </SettingsCard>
 
-      <SettingsCard title={t('settings.loginCard')}>
-        <p className="text-sm text-ink-faint">{t('settings.loginCardBody')}</p>
-        <div className="mt-3 flex items-center gap-3">
-          <Button
-            variant="primary"
-            disabled={loginState === 'waiting-login'}
-            onClick={startLoginCapture}
-          >
-            <LogIn className="h-4 w-4" />
-            {t('login.withPoe')}
-          </Button>
-          {loginState === 'waiting-login' && (
-            <>
-              <Badge tone="gold">{t('login.waiting')}</Badge>
-              <Button variant="ghost" onClick={cancelLoginCapture}>
-                {t('common.cancel')}
-              </Button>
-            </>
-          )}
-          {loginDetail && <span className="text-xs text-ink-faint">{loginDetail}</span>}
-        </div>
-      </SettingsCard>
-
-      <SettingsCard title={t('settings.pasteCard')}>
-        <p className="text-sm text-ink-faint">{t('settings.pasteCardBody')}</p>
-        <form onSubmit={pasteCookies} className="mt-3 flex flex-col gap-3">
-          <Field label="POESESSID" hint={t('settings.hintRequired')}>
-            <TextInput
-              type="password"
-              value={poesessid}
-              onChange={(changeEvent) => setPoesessid(changeEvent.target.value)}
-              autoComplete="off"
-              required
-            />
-          </Field>
-          <Field label="cf_clearance" hint={t('settings.hintCfClearance')}>
-            <TextInput
-              type="password"
-              value={cfClearance}
-              onChange={(changeEvent) => setCfClearance(changeEvent.target.value)}
-              autoComplete="off"
-            />
-          </Field>
-          <Field label="User-Agent" hint={t('settings.hintUserAgent')}>
-            <TextInput
-              value={userAgent}
-              onChange={(changeEvent) => setUserAgent(changeEvent.target.value)}
-              placeholder={t('settings.uaPlaceholder')}
-            />
-          </Field>
-          <div className="flex items-center gap-3">
-            <Button variant="primary" type="submit" disabled={busy || poesessid.trim() === ''}>
-              <KeyRound className="h-4 w-4" />
-              {t('settings.saveSession')}
+      {/* Login + cookie-paste only matter when NOT logged in — hide once a valid
+          session exists (the operator uses Log out above to switch accounts). */}
+      {!loggedIn && (
+        <SettingsCard title={t('settings.loginCard')}>
+          <p className="text-sm text-ink-faint">{t('settings.loginCardBody')}</p>
+          <div className="mt-3 flex items-center gap-3">
+            <Button
+              variant="primary"
+              disabled={loginState === 'waiting-login'}
+              onClick={startLoginCapture}
+            >
+              <LogIn className="h-4 w-4" />
+              {t('login.withPoe')}
             </Button>
-            {message && (
-              <span className={`text-sm ${message.tone === 'ok' ? 'text-ok' : 'text-danger'}`}>
-                {message.text}
-              </span>
+            {loginState === 'waiting-login' && (
+              <>
+                <Badge tone="gold">{t('login.waiting')}</Badge>
+                <Button variant="ghost" onClick={cancelLoginCapture}>
+                  {t('common.cancel')}
+                </Button>
+              </>
             )}
+            {loginDetail && <span className="text-xs text-ink-faint">{loginDetail}</span>}
           </div>
-        </form>
-      </SettingsCard>
+        </SettingsCard>
+      )}
+
+      {!loggedIn && (
+        <SettingsCard title={t('settings.pasteCard')}>
+          <p className="text-sm text-ink-faint">{t('settings.pasteCardBody')}</p>
+          <form onSubmit={pasteCookies} className="mt-3 flex flex-col gap-3">
+            <Field label="POESESSID" hint={t('settings.hintRequired')}>
+              <TextInput
+                type="password"
+                value={poesessid}
+                onChange={(changeEvent) => setPoesessid(changeEvent.target.value)}
+                autoComplete="off"
+                required
+              />
+            </Field>
+            <Field label="cf_clearance" hint={t('settings.hintCfClearance')}>
+              <TextInput
+                type="password"
+                value={cfClearance}
+                onChange={(changeEvent) => setCfClearance(changeEvent.target.value)}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="User-Agent" hint={t('settings.hintUserAgent')}>
+              <TextInput
+                value={userAgent}
+                onChange={(changeEvent) => setUserAgent(changeEvent.target.value)}
+                placeholder={t('settings.uaPlaceholder')}
+              />
+            </Field>
+            <div className="flex items-center gap-3">
+              <Button variant="primary" type="submit" disabled={busy || poesessid.trim() === ''}>
+                <KeyRound className="h-4 w-4" />
+                {t('settings.saveSession')}
+              </Button>
+              {message && (
+                <span className={`text-sm ${message.tone === 'ok' ? 'text-ok' : 'text-danger'}`}>
+                  {message.text}
+                </span>
+              )}
+            </div>
+          </form>
+        </SettingsCard>
+      )}
 
       <SettingsCard title={t('settings.alerts')}>
         <div className="flex items-center gap-3">
