@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ExternalLink,
@@ -70,6 +70,13 @@ import {
   roomIdFromDndId,
   roomDragId,
 } from '../lib/search-layout-dnd';
+import {
+  isRoomVisuallyCollapsed,
+  pruneSuppressedRooms,
+  readSuppressedRoomIds,
+  suppressRoomAutoExpand,
+  writeSuppressedRoomIds,
+} from '../lib/room-auto-expand';
 
 /** A search row glows for ~this long after one of its hits lands in the live feed. */
 const HIGHLIGHT_MS = 60_000;
@@ -604,15 +611,57 @@ export function SearchesPage() {
   const [justCreatedRoomId, setJustCreatedRoomId] = useState<string | null>(null);
 
   // Re-render periodically so the ~60s "just found" row highlight ages out.
+  // The tick SKIPS while the operator is mid-interaction — an active drag, or
+  // typing in a form field — because aging out a room's window folds it and
+  // unmounts its member rows (an open edit modal would lose its draft, drop
+  // targets would shift under the pointer). Aging resumes on the next tick
+  // after the interaction ends; highlights just linger a little longer.
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const dragInFlightRef = useRef(false);
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), HIGHLIGHT_TICK_MS);
+    const isOperatorMidInteraction = (): boolean => {
+      if (dragInFlightRef.current) return true;
+      const focused = document.activeElement;
+      return (
+        focused instanceof HTMLElement &&
+        (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA' || focused.isContentEditable)
+      );
+    };
+    const timer = setInterval(() => {
+      if (!isOperatorMidInteraction()) setNowMs(Date.now());
+    }, HIGHLIGHT_TICK_MS);
     return () => clearInterval(timer);
   }, []);
   const isHighlighted = (searchId: string): boolean => {
     const at = lastHitAtBySearchId[searchId];
     return at !== undefined && nowMs - new Date(at).getTime() < HIGHLIGHT_MS;
   };
+
+  // Variant-2 auto-expand (D-room-3): a collapsed room pops open while a member's
+  // hit highlight is fresh and folds back when it ages out. All client-side —
+  // the persisted `collapsed` never changes. Manually collapsing mid-window
+  // suppresses the pop-open until that window fully expires. The suppression
+  // set mirrors a session-scoped module store so a route change doesn't forget
+  // it (the highlight window itself lives in the app-root EventStreamProvider).
+  const [suppressedRoomIds, setSuppressedRoomIds] =
+    useState<ReadonlySet<string>>(readSuppressedRoomIds);
+  function suppressRoom(roomId: string): void {
+    setSuppressedRoomIds(suppressRoomAutoExpand(roomId));
+  }
+  // Freshness derives from the SERVER-CONFIRMED layout, not the optimistic drag
+  // preview — otherwise hovering a fresh search across a collapsed room would
+  // flip its membership mid-drag and flap the room open/shut under the pointer.
+  const freshRoomIds = new Set<string>();
+  for (const entry of syncedLayout) {
+    if (entry.kind !== 'room') continue;
+    if (entry.searchIds.some((searchId) => isHighlighted(searchId))) freshRoomIds.add(entry.id);
+  }
+  // Suppression ends with the window (adjust-during-render; null = no change).
+  const prunedSuppressed = pruneSuppressedRooms(suppressedRoomIds, freshRoomIds);
+  if (prunedSuppressed !== null) {
+    writeSuppressedRoomIds(prunedSuppressed);
+    setSuppressedRoomIds(prunedSuppressed);
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -625,6 +674,7 @@ export function SearchesPage() {
   const isRoomDragActive = activeDragId !== null && roomIdFromDndId(activeDragId) !== null;
 
   function handleDragStart(event: DragStartEvent): void {
+    dragInFlightRef.current = true;
     setActiveDragId(String(event.active.id));
   }
 
@@ -661,6 +711,7 @@ export function SearchesPage() {
 
   function handleDragEnd(event: DragEndEvent): void {
     const { active, over } = event;
+    dragInFlightRef.current = false;
     setActiveDragId(null);
     const activeId = String(active.id);
     let next = layoutState;
@@ -681,6 +732,7 @@ export function SearchesPage() {
   }
 
   function handleDragCancel(): void {
+    dragInFlightRef.current = false;
     setActiveDragId(null);
     setLayoutState(syncedLayout);
   }
@@ -789,14 +841,20 @@ export function SearchesPage() {
                   const members = entry.searchIds
                     .map((searchId) => searchesById.get(searchId))
                     .filter((search): search is SearchRuntimeInfo => search !== undefined);
+                  const visuallyCollapsed = isRoomVisuallyCollapsed({
+                    persistedCollapsed: room.collapsed,
+                    hasFreshHit: freshRoomIds.has(room.id),
+                    suppressed: suppressedRoomIds.has(room.id),
+                  });
                   return (
                     <RoomSection
                       key={room.id}
                       room={room}
                       members={members}
-                      highlighted={
-                        room.collapsed && members.some((member) => isHighlighted(member.id))
-                      }
+                      collapsed={visuallyCollapsed}
+                      // Keyed to the PERSISTED collapse: the header keeps glowing
+                      // for the whole window even while auto-expanded (D-room-3).
+                      highlighted={room.collapsed && freshRoomIds.has(room.id)}
                       startRenaming={justCreatedRoomId === room.id}
                       forceCollapsed={isRoomDragActive}
                       renderSearch={renderSearchRow}
@@ -804,7 +862,21 @@ export function SearchesPage() {
                         if (justCreatedRoomId === room.id) setJustCreatedRoomId(null);
                         return updateRoom(room.id, { name });
                       }}
-                      onToggleCollapsed={() => updateRoom(room.id, { collapsed: !room.collapsed })}
+                      onToggleCollapsed={() => {
+                        if (!visuallyCollapsed) {
+                          // Collapsing during a fresh window: suppress the
+                          // auto-expand for the rest of the window, or the room
+                          // would pop straight back open. Applies to BOTH an
+                          // auto-expanded room (persisted already collapsed →
+                          // local only, no server write) and a persisted-
+                          // expanded one (also PATCH the preference).
+                          if (freshRoomIds.has(room.id)) suppressRoom(room.id);
+                          return room.collapsed
+                            ? Promise.resolve()
+                            : updateRoom(room.id, { collapsed: true });
+                        }
+                        return updateRoom(room.id, { collapsed: false });
+                      }}
                       onDelete={(mode) => removeRoom(room.id, mode)}
                     />
                   );

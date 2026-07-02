@@ -23,6 +23,7 @@ import { TextInput } from './TextInput';
 export function RoomSection({
   room,
   members,
+  collapsed,
   highlighted,
   startRenaming = false,
   forceCollapsed = false,
@@ -33,14 +34,20 @@ export function RoomSection({
 }: {
   room: RoomInfo;
   members: SearchRuntimeInfo[];
-  /** Gold glow while collapsed and a hidden member just hit. */
+  /**
+   * The VISUAL collapse state, owned by the page — usually the persisted
+   * `room.collapsed`, but a fresh member hit auto-expands a collapsed room for
+   * the highlight window (D-room-3), so the two can differ.
+   */
+  collapsed: boolean;
+  /** Gold glow while a member's hit is fresh and the room is normally collapsed. */
   highlighted: boolean;
   /** Open the name editor immediately (right after creation). */
   startRenaming?: boolean;
   /**
-   * Render collapsed regardless of the persisted state — the page sets this
-   * while a ROOM block is being dragged, so every top-level slot is compact
-   * and easy to target. Purely visual; `room.collapsed` is untouched.
+   * Render collapsed regardless of anything else — the page sets this while a
+   * ROOM block is being dragged, so every top-level slot is compact and easy
+   * to target. Purely visual; `room.collapsed` is untouched.
    */
   forceCollapsed?: boolean;
   renderSearch: (search: SearchRuntimeInfo) => ReactNode;
@@ -82,7 +89,7 @@ export function RoomSection({
     void run(() => onRename(name));
   }
 
-  const CollapseIcon = room.collapsed ? ChevronRight : ChevronDown;
+  const CollapseIcon = collapsed ? ChevronRight : ChevronDown;
 
   return (
     <li
@@ -109,9 +116,9 @@ export function RoomSection({
         </button>
         <IconButton
           variant="ghost"
-          aria-label={room.collapsed ? t('rooms.expand') : t('rooms.collapse')}
-          title={room.collapsed ? t('rooms.expand') : t('rooms.collapse')}
-          aria-expanded={!room.collapsed}
+          aria-label={collapsed ? t('rooms.expand') : t('rooms.collapse')}
+          title={collapsed ? t('rooms.expand') : t('rooms.collapse')}
+          aria-expanded={!collapsed}
           onClick={() => void run(onToggleCollapsed)}
         >
           <CollapseIcon className="h-4 w-4" />
@@ -160,7 +167,7 @@ export function RoomSection({
           <Trash2 className="h-4 w-4" />
         </IconButton>
       </div>
-      {!room.collapsed && !forceCollapsed && (
+      {!collapsed && !forceCollapsed && (
         <SortableContext
           items={members.map((member) => member.id)}
           strategy={verticalListSortingStrategy}
