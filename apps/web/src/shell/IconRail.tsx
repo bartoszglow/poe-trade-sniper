@@ -18,14 +18,14 @@ export function IconRail() {
           title={t(entry.labelKey)}
           aria-label={t(entry.labelKey)}
           className={({ isActive }) =>
-            `flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
+            `flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
               isActive
                 ? 'bg-surface-3 text-gold-bright'
                 : 'text-ink-muted hover:bg-surface-2 hover:text-ink'
             }`
           }
         >
-          <entry.icon className="h-4.5 w-4.5" />
+          <entry.icon className="h-6 w-6" />
         </NavLink>
       ))}
     </nav>
