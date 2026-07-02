@@ -8,9 +8,8 @@ import { roomDragId, roomDropId } from '../lib/search-layout-dnd';
 import { useT, useTn } from '../i18n/i18n';
 import { ApiError } from '../lib/api';
 import { Badge } from './Badge';
-import { Button } from './Button';
+import { ConfirmDialog } from './ConfirmDialog';
 import { IconButton } from './IconButton';
-import { Modal } from './Modal';
 import { Switch } from './Switch';
 import { TextInput } from './TextInput';
 
@@ -180,13 +179,7 @@ export function RoomSection({
           variant="danger"
           aria-label={t('rooms.delete', { name: room.name })}
           title={t('rooms.delete', { name: room.name })}
-          onClick={() => {
-            if (members.length === 0) {
-              void run(() => onDelete('release'));
-            } else {
-              setConfirmingDelete(true);
-            }
-          }}
+          onClick={() => setConfirmingDelete(true)}
         >
           <Trash2 className="h-4 w-4" />
         </IconButton>
@@ -211,41 +204,39 @@ export function RoomSection({
           </ul>
         </SortableContext>
       )}
-      <Modal
+      <ConfirmDialog
         open={confirmingDelete}
-        label={t('rooms.deleteTitle')}
+        title={t('rooms.deleteTitle')}
+        body={
+          members.length === 0
+            ? t('rooms.deleteEmptyBody', { name: room.name })
+            : tn('rooms.deleteBody', members.length, { name: room.name })
+        }
         onClose={() => setConfirmingDelete(false)}
-      >
-        <div className="border-b border-edge px-4 py-2.5">
-          <h2 className="text-sm font-semibold text-ink">{t('rooms.deleteTitle')}</h2>
-        </div>
-        <p className="max-w-md p-4 text-sm text-ink-muted">
-          {tn('rooms.deleteBody', members.length, { name: room.name })}
-        </p>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-edge px-4 py-2.5">
-          <Button variant="ghost" onClick={() => setConfirmingDelete(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setConfirmingDelete(false);
-              void run(() => onDelete('release'));
-            }}
-          >
-            {t('rooms.deleteRelease')}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              setConfirmingDelete(false);
-              void run(() => onDelete('delete-searches'));
-            }}
-          >
-            {t('rooms.deleteWithSearches')}
-          </Button>
-        </div>
-      </Modal>
+        actions={
+          members.length === 0
+            ? [
+                {
+                  id: 'delete',
+                  label: t('common.delete'),
+                  onSelect: () => void run(() => onDelete('release')),
+                },
+              ]
+            : [
+                {
+                  id: 'release',
+                  label: t('rooms.deleteRelease'),
+                  variant: 'primary',
+                  onSelect: () => void run(() => onDelete('release')),
+                },
+                {
+                  id: 'delete-searches',
+                  label: t('rooms.deleteWithSearches'),
+                  onSelect: () => void run(() => onDelete('delete-searches')),
+                },
+              ]
+        }
+      />
     </li>
   );
 }

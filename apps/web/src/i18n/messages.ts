@@ -16,6 +16,7 @@ export const EN = {
   'common.close': 'Close',
   'common.save': 'Save',
   'common.confirm': 'Confirm',
+  'common.delete': 'Delete',
   'common.refresh': 'Refresh',
   'common.test': 'Test',
   'common.requestFailed': 'request failed',
@@ -271,6 +272,8 @@ export const EN = {
   'searches.remove': 'Remove {label}',
   'searches.archive': 'Archive {label}',
   'searches.restore': 'Restore {label}',
+  'searches.deleteConfirmTitle': 'Delete search',
+  'searches.deleteConfirmBody': 'Delete "{label}"? Its hit history goes with it.',
   'searches.archivedSection': 'Archived',
   'searches.archivedOn': 'archived {time}',
   'searches.last': 'last {time}',
@@ -291,6 +294,7 @@ export const EN = {
   'rooms.activeFor': 'Detection active for room {name}',
   'rooms.delete': 'Delete room {name}',
   'rooms.deleteTitle': 'Delete room',
+  'rooms.deleteEmptyBody': 'Delete the empty room "{name}"?',
   'rooms.deleteRelease': 'Move searches out',
   'rooms.deleteWithSearches': 'Delete searches too',
 
@@ -425,6 +429,7 @@ export type MessageKey = keyof typeof EN;
 export const PL: Record<MessageKey, string> = {
   // Common
   'common.cancel': 'Anuluj',
+  'common.delete': 'Usuń',
   'common.close': 'Zamknij',
   'common.save': 'Zapisz',
   'common.confirm': 'Potwierdź',
@@ -682,6 +687,8 @@ export const PL: Record<MessageKey, string> = {
   'searches.remove': 'Usuń {label}',
   'searches.archive': 'Archiwizuj {label}',
   'searches.restore': 'Przywróć {label}',
+  'searches.deleteConfirmTitle': 'Usuń wyszukiwanie',
+  'searches.deleteConfirmBody': 'Usunąć „{label}”? Historia trafień zniknie razem z nim.',
   'searches.archivedSection': 'Zarchiwizowane',
   'searches.archivedOn': 'zarchiwizowano {time}',
   'searches.last': 'ostatnie {time}',
@@ -702,6 +709,7 @@ export const PL: Record<MessageKey, string> = {
   'rooms.activeFor': 'Wykrywanie aktywne dla pokoju {name}',
   'rooms.delete': 'Usuń pokój {name}',
   'rooms.deleteTitle': 'Usuń pokój',
+  'rooms.deleteEmptyBody': 'Usunąć pusty pokój „{name}”?',
   'rooms.deleteRelease': 'Przenieś wyszukiwania na zewnątrz',
   'rooms.deleteWithSearches': 'Usuń też wyszukiwania',
 

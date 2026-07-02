@@ -46,6 +46,7 @@ import {
 } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Field } from '../components/Field';
 import { IconButton } from '../components/IconButton';
 import { Modal } from '../components/Modal';
@@ -210,6 +211,16 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
   return (
     <form
       onSubmit={(formEvent) => void submit(formEvent)}
+      onBlur={(blurEvent) => {
+        // Focus left the form for another element IN the app → tuck the form
+        // away (draft state survives — reopening shows it again). Alt-tabbing
+        // out (e.g. to copy the trade URL) keeps it open: relatedTarget is null
+        // then AND the document has lost focus, so we deliberately skip.
+        const focusMovedTo = blurEvent.relatedTarget as Node | null;
+        if (!blurEvent.currentTarget.contains(focusMovedTo) && document.hasFocus()) {
+          setCollapsed(true);
+        }
+      }}
       className="rounded-lg border border-edge bg-surface-1 p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -515,22 +526,22 @@ function SearchRow({
         >
           <Archive className="h-4 w-4" />
         </IconButton>
-        {confirmingDelete ? (
-          <Button variant="danger" onClick={() => void run(onRemove)}>
-            {t('common.confirm')}
-          </Button>
-        ) : (
-          <IconButton
-            variant="danger"
-            aria-label={t('searches.remove', { label: search.label })}
-            onClick={() => {
-              setConfirmingDelete(true);
-              setTimeout(() => setConfirmingDelete(false), 3000);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </IconButton>
-        )}
+        <IconButton
+          variant="danger"
+          aria-label={t('searches.remove', { label: search.label })}
+          onClick={() => setConfirmingDelete(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </IconButton>
+        <ConfirmDialog
+          open={confirmingDelete}
+          title={t('searches.deleteConfirmTitle')}
+          body={t('searches.deleteConfirmBody', { label: search.label })}
+          onClose={() => setConfirmingDelete(false)}
+          actions={[
+            { id: 'delete', label: t('common.delete'), onSelect: () => void run(onRemove) },
+          ]}
+        />
       </div>
       {/* Only surface the status detail when something is off — on the happy path the
           ACTIVE + WS/POLL badges (with their hover popovers) already say it, so the
@@ -611,22 +622,22 @@ function ArchivedSearchRow({
         >
           <ArchiveRestore className="h-4 w-4" />
         </IconButton>
-        {confirmingDelete ? (
-          <Button variant="danger" onClick={() => void run(onRemove)}>
-            {t('common.confirm')}
-          </Button>
-        ) : (
-          <IconButton
-            variant="danger"
-            aria-label={t('searches.remove', { label: search.label })}
-            onClick={() => {
-              setConfirmingDelete(true);
-              setTimeout(() => setConfirmingDelete(false), 3000);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </IconButton>
-        )}
+        <IconButton
+          variant="danger"
+          aria-label={t('searches.remove', { label: search.label })}
+          onClick={() => setConfirmingDelete(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </IconButton>
+        <ConfirmDialog
+          open={confirmingDelete}
+          title={t('searches.deleteConfirmTitle')}
+          body={t('searches.deleteConfirmBody', { label: search.label })}
+          onClose={() => setConfirmingDelete(false)}
+          actions={[
+            { id: 'delete', label: t('common.delete'), onSelect: () => void run(onRemove) },
+          ]}
+        />
       </div>
     </li>
   );
