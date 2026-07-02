@@ -1,7 +1,12 @@
 # 36 — First-run onboarding (welcome wizard + getting-started checklist)
 
-**Status: PLANNED, approved in-session** (2026-07-02). Mockup-first (user-facing UI):
-`docs/mockups/onboarding.html` (desktop + mobile) awaits approval before implementation.
+**Status: IMPLEMENTED** — `c4311c5`, 2026-07-02 (mockup `docs/mockups/onboarding.html`
+approved beforehand). Verify green (web 47, server 209, desktop 6). Wizard
+(`apps/web/src/shell/OnboardingWizard.tsx`, step registry, `lg`-breakpoint content,
+embedded real login with auto-advance) + `GettingStartedCard` on Searches (derived from
+live state, `lib/getting-started.ts` unit-tested) + "Show intro" in About & Settings.
+Flags: `sniper.onboardingDone`, `sniper.gettingStartedDismissed` (localStorage,
+change-event synced).
 
 Grounded in a 7-area app audit + first-run critic (workflow, 2026-07-02): there is no
 onboarding today; the de-facto first run is the dismissible `LoginOverlay`, and session
