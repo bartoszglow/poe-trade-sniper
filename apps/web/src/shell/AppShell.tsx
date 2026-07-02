@@ -9,12 +9,14 @@ import { SessionBanner } from './SessionBanner';
 import { UpdateBanner } from './UpdateBanner';
 import { IconRail } from './IconRail';
 import { HitsPanel } from './HitsPanel';
+import { PriceCheckPanel } from './PriceCheckPanel';
 import { StatusBar } from './StatusBar';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useHealth } from '../hooks/useHealth';
 import { useHitsPanelLayout } from '../hooks/useHitsPanelLayout';
 import { useOnboardingState } from '../hooks/useOnboardingState';
+import { usePriceCheck } from '../hooks/usePriceCheck';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
@@ -42,6 +44,12 @@ export function AppShell() {
   const hitsPanel = useHitsPanelLayout();
   const hitsPanelHidden = hitsPanel.hiddenAt !== null;
   const onboarding = useOnboardingState();
+  // Split the column only when the panel sink is enabled AND a check is present
+  // (result or in flight) — so price checks "appear" at the bottom on demand.
+  const { result: priceCheckResult, checking: priceCheckChecking } = usePriceCheck();
+  const priceCheckPanelVisible =
+    (status?.settings.priceCheckSinks.includes('panel') ?? false) &&
+    (priceCheckResult !== null || priceCheckChecking);
 
   // A drag previews the width by writing the CSS variable straight on the grid
   // node — no React re-render per pointer move (the whole app hangs off this
@@ -156,9 +164,23 @@ export function AppShell() {
               resetHitsPanelWidth();
             }}
           />
-          <div className="h-full min-h-0 overflow-hidden">
-            <HitsPanel onHide={() => storeHitsPanelHidden(true)} />
-          </div>
+          {/* When the price-check 'panel' sink is on AND a check is active, the
+              column splits: live hits on top, price check on the bottom half
+              (#37). Otherwise live hits gets the whole column. */}
+          {priceCheckPanelVisible ? (
+            <div className="grid h-full min-h-0 grid-rows-2">
+              <div className="min-h-0 overflow-hidden">
+                <HitsPanel onHide={() => storeHitsPanelHidden(true)} />
+              </div>
+              <div className="min-h-0 overflow-hidden border-t border-edge-strong">
+                <PriceCheckPanel />
+              </div>
+            </div>
+          ) : (
+            <div className="h-full min-h-0 overflow-hidden">
+              <HitsPanel onHide={() => storeHitsPanelHidden(true)} />
+            </div>
+          )}
         </aside>
       )}
 

@@ -10,12 +10,15 @@ import {
 } from 'lucide-react';
 import {
   PERMISSION_KINDS,
+  PRICE_CHECK_SINK_OPTIONS,
   describeState,
+  type AppSettings,
   type ImportResult,
   type PermissionKind,
   type PermissionSeverity,
   type PermissionState,
   type PermissionsStatus,
+  type PriceCheckSink,
   type SessionPublicStatus,
 } from '@poe-sniper/shared';
 import { Badge, type BadgeTone } from '../components/Badge';
@@ -27,6 +30,7 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useLoginCapture } from '../hooks/useLoginCapture';
+import { usePriceCheck } from '../hooks/usePriceCheck';
 import { setOnboardingDone } from '../lib/onboarding';
 import { setNetworkViewEnabled, useNetworkViewEnabled } from '../hooks/useNetworkView';
 import { LANGUAGES, useLanguage, useT, type Language } from '../i18n/i18n';
@@ -48,6 +52,98 @@ function SettingsCard({ title, children }: { title: string; children: ReactNode 
       <h2 className="text-sm font-semibold text-ink">{title}</h2>
       <div className="mt-3">{children}</div>
     </div>
+  );
+}
+
+/** Price-check settings (#37): hotkey, result-surface toggles, and a paste box
+ *  that also serves as the dev/web way to run a check without the game. */
+function PriceCheckCard({
+  settings,
+  onChanged,
+}: {
+  settings: AppSettings | undefined;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const { check, checking } = usePriceCheck();
+  const [hotkey, setHotkey] = useState(settings?.priceCheckHotkey ?? '');
+  const [pasteText, setPasteText] = useState('');
+  const sinks = settings?.priceCheckSinks ?? [];
+
+  function patch(body: Partial<AppSettings>): void {
+    void apiSend('PATCH', '/api/settings', body).then(onChanged);
+  }
+
+  function toggleSink(sink: PriceCheckSink, enabled: boolean): void {
+    const next = enabled ? [...new Set([...sinks, sink])] : sinks.filter((entry) => entry !== sink);
+    patch({ priceCheckSinks: next });
+  }
+
+  return (
+    <SettingsCard title={t('settings.priceCheck')}>
+      <p className="text-sm text-ink-faint">{t('settings.priceCheckDesc')}</p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Field label={t('settings.priceCheckHotkey')}>
+          <div className="flex items-center gap-2">
+            <TextInput
+              value={hotkey}
+              onChange={(changeEvent) => setHotkey(changeEvent.target.value)}
+              onBlur={() => {
+                const trimmed = hotkey.trim();
+                if (trimmed && trimmed !== settings?.priceCheckHotkey) {
+                  patch({ priceCheckHotkey: trimmed });
+                }
+              }}
+              placeholder="CommandOrControl+Shift+D"
+              className="w-64"
+            />
+          </div>
+        </Field>
+        <span className="text-xs text-ink-faint">{t('settings.priceCheckHotkeyHint')}</span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <span className="text-xs text-ink-muted">{t('settings.priceCheckSinks')}</span>
+        {PRICE_CHECK_SINK_OPTIONS.map((sink) => (
+          <span key={sink} className="flex items-center gap-1.5 text-xs text-ink-muted">
+            <Switch
+              checked={sinks.includes(sink)}
+              onChange={(enabled) => toggleSink(sink, enabled)}
+              label={t(
+                sink === 'panel'
+                  ? 'settings.priceCheckSinkPanel'
+                  : 'settings.priceCheckSinkOverlay',
+              )}
+            />
+            {t(
+              sink === 'panel' ? 'settings.priceCheckSinkPanel' : 'settings.priceCheckSinkOverlay',
+            )}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        <Field label={t('settings.priceCheckPaste')} hint={t('settings.priceCheckPasteHint')}>
+          <textarea
+            value={pasteText}
+            onChange={(changeEvent) => setPasteText(changeEvent.target.value)}
+            rows={4}
+            placeholder={t('settings.priceCheckPastePlaceholder')}
+            className="w-full rounded-md border border-edge bg-surface-2 px-2.5 py-1.5 font-mono text-xs text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none"
+          />
+        </Field>
+        <div className="mt-2">
+          <Button
+            variant="primary"
+            disabled={checking || pasteText.trim() === ''}
+            onClick={() => void check(pasteText)}
+          >
+            {checking ? t('priceCheck.checking') : t('settings.priceCheckRun')}
+          </Button>
+        </div>
+      </div>
+    </SettingsCard>
   );
 }
 
@@ -461,6 +557,8 @@ export function SettingsPage() {
           <span className="text-xs text-ink-faint">{t('settings.cursorHint')}</span>
         </div>
       </SettingsCard>
+
+      <PriceCheckCard settings={status?.settings} onChanged={refresh} />
 
       <SettingsCard title={t('settings.data')}>
         <p className="text-sm text-ink-faint">{t('settings.dataDesc')}</p>

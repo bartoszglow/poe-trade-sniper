@@ -153,6 +153,35 @@ export const EN = {
   'hitsPanel.show': 'Show live hits',
   'hitsPanel.resize': 'Drag to resize the live hits panel (double-click resets)',
 
+  // Price check (#37)
+  'priceCheck.title': 'Price check',
+  'priceCheck.empty':
+    'Hover an item in-game and press your price-check hotkey, or paste an item in Settings.',
+  'priceCheck.checking': 'checking…',
+  'priceCheck.clear': 'Clear the price check',
+  'priceCheck.estimate': 'Estimated value',
+  'priceCheck.noListings': 'No comparable listings found.',
+  'priceCheck.unknownItem': 'Unknown item',
+  'priceCheck.unmatched': '{count} mods ignored (not matched)',
+  'priceCheck.declineBudget':
+    'Rate-limit budget low — held back to protect detection. Try again shortly.',
+  'priceCheck.declineNoSession': 'No PoE session — log in to price rare items.',
+  'priceCheck.declineGuard': 'Safety guard tripped — trade queries are halted.',
+  'priceCheck.declineEmpty': "Couldn't read an item from that text.",
+  'settings.priceCheck': 'Price check',
+  'settings.priceCheckDesc':
+    'Hover an item in-game and press the hotkey to look up its price. Works in maps (unlike the in-game check).',
+  'settings.priceCheckHotkey': 'Hotkey',
+  'settings.priceCheckHotkeyHint': 'e.g. CommandOrControl+Shift+D (desktop app only)',
+  'settings.priceCheckSinks': 'Show results in:',
+  'settings.priceCheckSinkPanel': 'In-app panel',
+  'settings.priceCheckSinkOverlay': 'Game overlay',
+  'settings.priceCheckPaste': 'Test with pasted item text',
+  'settings.priceCheckPasteHint':
+    'Copy an item in-game (Ctrl+C) and paste it here to try the parser.',
+  'settings.priceCheckPastePlaceholder': 'Item Class: …\nRarity: …',
+  'settings.priceCheckRun': 'Check price',
+
   // First-run onboarding wizard (#36)
   'onboarding.next': 'Next',
   'onboarding.back': 'Back',
@@ -569,6 +598,35 @@ export const PL: Record<MessageKey, string> = {
   'hitsPanel.hide': 'Ukryj trafienia na żywo',
   'hitsPanel.show': 'Pokaż trafienia na żywo',
   'hitsPanel.resize': 'Przeciągnij, aby zmienić szerokość panelu (dwuklik przywraca domyślną)',
+
+  // Sprawdzanie ceny (#37)
+  'priceCheck.title': 'Wycena',
+  'priceCheck.empty':
+    'Najedź na przedmiot w grze i naciśnij skrót wyceny, albo wklej przedmiot w Ustawieniach.',
+  'priceCheck.checking': 'sprawdzam…',
+  'priceCheck.clear': 'Wyczyść wycenę',
+  'priceCheck.estimate': 'Szacowana wartość',
+  'priceCheck.noListings': 'Brak porównywalnych ofert.',
+  'priceCheck.unknownItem': 'Nieznany przedmiot',
+  'priceCheck.unmatched': 'pominięto {count} modów (bez dopasowania)',
+  'priceCheck.declineBudget':
+    'Niski budżet limitów — wstrzymano, aby chronić wykrywanie. Spróbuj za chwilę.',
+  'priceCheck.declineNoSession': 'Brak sesji PoE — zaloguj się, aby wyceniać rzadkie przedmioty.',
+  'priceCheck.declineGuard': 'Bezpiecznik zadziałał — zapytania do trade są wstrzymane.',
+  'priceCheck.declineEmpty': 'Nie udało się odczytać przedmiotu z tego tekstu.',
+  'settings.priceCheck': 'Wycena',
+  'settings.priceCheckDesc':
+    'Najedź na przedmiot w grze i naciśnij skrót, aby sprawdzić cenę. Działa na mapach (w przeciwieństwie do wbudowanej wyceny).',
+  'settings.priceCheckHotkey': 'Skrót',
+  'settings.priceCheckHotkeyHint': 'np. CommandOrControl+Shift+D (tylko aplikacja desktopowa)',
+  'settings.priceCheckSinks': 'Pokaż wyniki w:',
+  'settings.priceCheckSinkPanel': 'Panel w aplikacji',
+  'settings.priceCheckSinkOverlay': 'Nakładka w grze',
+  'settings.priceCheckPaste': 'Test na wklejonym tekście',
+  'settings.priceCheckPasteHint':
+    'Skopiuj przedmiot w grze (Ctrl+C) i wklej tutaj, aby przetestować parser.',
+  'settings.priceCheckPastePlaceholder': 'Item Class: …\nRarity: …',
+  'settings.priceCheckRun': 'Sprawdź cenę',
 
   // Wprowadzenie przy pierwszym uruchomieniu (#36)
   'onboarding.next': 'Dalej',

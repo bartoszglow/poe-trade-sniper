@@ -4,7 +4,11 @@ import type { AppSettings } from '@poe-sniper/shared';
 import { AppSettingsService } from './app-settings.service.js';
 
 const settingsPatchSchema = z
-  .object({ cursorMode: z.enum(['instant', 'smooth']).optional() })
+  .object({
+    cursorMode: z.enum(['instant', 'smooth']).optional(),
+    priceCheckHotkey: z.string().min(1).max(120).optional(),
+    priceCheckSinks: z.array(z.enum(['panel', 'overlay'])).optional(),
+  })
   .strict();
 
 /** Read + update user settings. Loopback-guarded app-wide; no secrets here. */

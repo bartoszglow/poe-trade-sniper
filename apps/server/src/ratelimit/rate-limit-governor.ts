@@ -94,6 +94,27 @@ export class RateLimitGovernor {
       policies: Object.fromEntries(this.policySnapshots),
     };
   }
+
+  /**
+   * Fraction of a policy's TIGHTEST bucket still free (0..1) — read-only, for
+   * budget-aware callers like the price checker (#37) that must yield to
+   * detection. 1 when the policy has no observed headers yet (nothing spent),
+   * 0 while globally paused. Never changes throttle behaviour — status only.
+   */
+  headroom(policyKey: string): number {
+    if (this.globalPauseUntilMs > Date.now()) return 0;
+    const snapshot = this.policySnapshots.get(policyKey);
+    if (!snapshot) return 1;
+    let tightest = 1;
+    for (let index = 0; index < snapshot.rules.length; index += 1) {
+      const rule = snapshot.rules[index];
+      const state = snapshot.states[index];
+      if (!rule || !state || rule.maxHits <= 0) continue;
+      const free = Math.max(0, (rule.maxHits - state.maxHits) / rule.maxHits);
+      tightest = Math.min(tightest, free);
+    }
+    return tightest;
+  }
 }
 
 function sleep(durationMs: number): Promise<void> {

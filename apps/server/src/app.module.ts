@@ -14,6 +14,7 @@ import { NetworkModule } from './network/network.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import type { DesktopPlatform } from './platform/ports.js';
+import { PriceCheckModule } from './price-check/price-check.module.js';
 import { RateLimitModule } from './ratelimit/ratelimit.module.js';
 import { SessionModule } from './session/session.module.js';
 import { SettingsModule } from './settings/settings.module.js';
@@ -63,6 +64,7 @@ export class AppModule {
         BuyAutomationModule,
         ActivityModule,
         ExportImportModule,
+        PriceCheckModule,
         ApiModule,
       ],
     };

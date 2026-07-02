@@ -1,11 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
-import type { AppSettings } from '@poe-sniper/shared';
+import { DEFAULT_APP_SETTINGS, type AppSettings } from '@poe-sniper/shared';
 import type { AppSettingsService } from './app-settings.service.js';
 import { SettingsController } from './settings.controller.js';
 
 function harness(): SettingsController {
-  let stored: AppSettings = { cursorMode: 'instant' };
+  let stored: AppSettings = { ...DEFAULT_APP_SETTINGS };
   const settings = {
     get: () => stored,
     update: (patch: Partial<AppSettings>) => {

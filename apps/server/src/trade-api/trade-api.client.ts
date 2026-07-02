@@ -28,6 +28,21 @@ export interface SearchExecution {
   rateLimited: boolean;
 }
 
+/** A price-check listing, straight from /fetch (unnormalized; #37). */
+export interface RawTradeListing {
+  price: { amount: number; currency: string } | null;
+  seller: string | null;
+  indexedAt: string | null;
+}
+
+interface RawTradeResult {
+  listing?: {
+    price?: { amount?: number; currency?: string } | null;
+    account?: { name?: string } | null;
+    indexed?: string | null;
+  } | null;
+}
+
 export class TradeApiError extends Error {
   constructor(
     readonly status: number,
@@ -277,6 +292,92 @@ export class TradeApiClient {
       }
     }
     return entries;
+  }
+
+  /**
+   * Raw GET of a trade2 data endpoint (`stats` / `items` / `static` / `filters`)
+   * for the price-check dictionary (#37). Uses the DATA policy (cheap, cached by
+   * the caller). Returns the parsed JSON as-is; the caller owns the shape.
+   */
+  async fetchTradeData(
+    dataset: 'stats' | 'items' | 'static' | 'filters',
+    correlationId: string,
+  ): Promise<unknown> {
+    const response = await this.request(
+      POLICY_DATA,
+      0,
+      `${this.config.POE_BASE_URL}/api/trade2/data/${dataset}`,
+      {},
+      correlationId,
+    );
+    if (!response.ok) {
+      throw new TradeApiError(response.status, `data/${dataset}: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Run an ad-hoc trade2 search for a price check (#37): POST the query, then
+   * fetch the top results as raw listing JSON (price/account/indexed only —
+   * NOT normalized like detection). Realm/league come from the ref. Returns
+   * `{ rateLimited }` when GGG 429s so the caller degrades instead of throwing.
+   */
+  async priceSearch(
+    realm: string,
+    league: string,
+    query: unknown,
+    limit: number,
+    correlationId: string,
+  ): Promise<{ listings: RawTradeListing[]; total: number; rateLimited: boolean }> {
+    const searchUrl = `${this.config.POE_BASE_URL}/api/trade2/search/${realm}/${encodeURIComponent(league)}`;
+    const searchResponse = await this.request(
+      POLICY_SEARCH,
+      0,
+      searchUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query),
+      },
+      correlationId,
+    );
+    if (searchResponse.status === 429) return { listings: [], total: 0, rateLimited: true };
+    if (!searchResponse.ok) {
+      throw new TradeApiError(searchResponse.status, `price search: HTTP ${searchResponse.status}`);
+    }
+    const searchPayload = (await searchResponse.json()) as {
+      id?: string;
+      result?: string[];
+      total?: number;
+    };
+    const ids = (searchPayload.result ?? []).slice(0, limit);
+    if (ids.length === 0 || !searchPayload.id) {
+      return { listings: [], total: searchPayload.total ?? 0, rateLimited: false };
+    }
+    const fetchUrl = `${this.config.POE_BASE_URL}/api/trade2/fetch/${ids.join(',')}?query=${searchPayload.id}&realm=${realm}`;
+    const fetchResponse = await this.request(
+      POLICY_FETCH,
+      this.config.FETCH_SPACING_MS,
+      fetchUrl,
+      {},
+      correlationId,
+    );
+    if (fetchResponse.status === 429) return { listings: [], total: 0, rateLimited: true };
+    if (!fetchResponse.ok) {
+      throw new TradeApiError(fetchResponse.status, `price fetch: HTTP ${fetchResponse.status}`);
+    }
+    const fetchPayload = (await fetchResponse.json()) as { result?: RawTradeResult[] };
+    const listings: RawTradeListing[] = (fetchPayload.result ?? []).map((entry) => ({
+      price: entry?.listing?.price
+        ? {
+            amount: entry.listing.price.amount ?? 0,
+            currency: entry.listing.price.currency ?? '',
+          }
+        : null,
+      seller: entry?.listing?.account?.name ?? null,
+      indexedAt: entry?.listing?.indexed ?? null,
+    }));
+    return { listings, total: searchPayload.total ?? listings.length, rateLimited: false };
   }
 
   /** Login probe: /my-account answers 200 only for a real logged-in session. */

@@ -37,6 +37,14 @@ export const envSchema = z.object({
   POE_BASE_URL: z.string().url().default('https://www.pathofexile.com'),
   /** League used when a search is added by bare id without an explicit league. */
   DEFAULT_LEAGUE: z.string().min(1).default('Standard'),
+  /** Realm for trade2 (poe2). */
+  DEFAULT_REALM: z.string().min(1).default('poe2'),
+  // --- Price check (#37) ---
+  /** Keep at least this fraction of the SEARCH budget free for detection — a
+   *  price check declines the live trade2 query below it (D-pc-2). */
+  PRICE_CHECK_MIN_SEARCH_HEADROOM: z.coerce.number().min(0).max(1).default(0.3),
+  /** Comparable listings fetched per rare-item price check. */
+  PRICE_CHECK_LISTING_LIMIT: z.coerce.number().int().min(1).max(20).default(10),
   /** Hard deadline for every outbound GGG call (AbortController). */
   OUTBOUND_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15_000),
   /**
