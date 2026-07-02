@@ -519,8 +519,10 @@ function SearchRow({
       </div>
       {/* Only surface the status detail when something is off — on the happy path the
           ACTIVE + WS/POLL badges (with their hover popovers) already say it, so the
-          raw "live websocket connected" line is redundant noise. */}
-      {search.statusDetail && search.status !== 'active' && (
+          raw "live websocket connected" line is redundant noise. Same for a global
+          pause: the paused badge + greyed toggles already say it on EVERY row, so
+          repeating "globally paused" per search is noise too. */}
+      {search.statusDetail && search.status !== 'active' && search.status !== 'paused' && (
         <div className="mt-1.5 text-xs text-ink-faint">{search.statusDetail}</div>
       )}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
