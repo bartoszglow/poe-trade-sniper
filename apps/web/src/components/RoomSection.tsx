@@ -196,7 +196,7 @@ export function RoomSection({
           items={members.map((member) => member.id)}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="flex flex-col gap-2 border-t border-edge p-3 pl-8">
+          <ul className="flex flex-col gap-2 border-t border-edge p-3">
             {members.map((member) => renderSearch(member))}
             {members.length === 0 && (
               <li
