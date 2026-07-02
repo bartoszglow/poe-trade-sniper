@@ -289,12 +289,16 @@ function SearchRow({
   search,
   buyControl,
   highlighted,
+  detectionPaused,
   onUpdate,
   onRemove,
 }: {
   search: SearchRuntimeInfo;
   buyControl: BuyControl;
   highlighted: boolean;
+  /** Global detection pause — TRAVEL/BUY are inert then, so they grey out
+   *  (still togglable: configuring while paused is fine, nothing fires). */
+  detectionPaused: boolean;
   onUpdate: (payload: {
     autoTravel?: boolean;
     autoBuy?: boolean;
@@ -457,7 +461,12 @@ function SearchRow({
           />
           {t('searches.activeToggle')}
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <span
+          className={`flex items-center gap-1.5 text-xs text-ink-muted transition-opacity ${
+            detectionPaused ? 'opacity-40' : ''
+          }`}
+          title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
+        >
           <Switch
             checked={search.autoTravel}
             onChange={(checked) => void run(() => onUpdate({ autoTravel: checked }))}
@@ -465,7 +474,12 @@ function SearchRow({
           />
           {t('searches.travelToggle')}
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <span
+          className={`flex items-center gap-1.5 text-xs text-ink-muted transition-opacity ${
+            detectionPaused ? 'opacity-40' : ''
+          }`}
+          title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
+        >
           <Switch
             checked={buyControl.checked}
             disabled={!buyControl.enabled}
@@ -828,6 +842,7 @@ export function SearchesPage() {
       key={search.id}
       search={search}
       highlighted={isSearchLit(search.id)}
+      detectionPaused={paused}
       buyControl={resolveBuyControl({
         isDesktop,
         isMac,
@@ -912,6 +927,7 @@ export function SearchesPage() {
                       highlighted={room.collapsed && freshRoomIds.has(room.id)}
                       startRenaming={justCreatedRoomId === room.id}
                       forceCollapsed={isRoomDragActive}
+                      detectionPaused={paused}
                       renderSearch={renderSearchRow}
                       onRename={(name) => {
                         if (justCreatedRoomId === room.id) setJustCreatedRoomId(null);

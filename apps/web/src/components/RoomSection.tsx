@@ -29,6 +29,7 @@ export function RoomSection({
   startRenaming = false,
   forceCollapsed = false,
   renderSearch,
+  detectionPaused = false,
   onRename,
   onToggleCollapsed,
   onSetEnabled,
@@ -55,6 +56,9 @@ export function RoomSection({
   renderSearch: (search: SearchRuntimeInfo) => ReactNode;
   onRename: (name: string) => Promise<void>;
   onToggleCollapsed: () => Promise<void>;
+  /** Global detection pause — the master switch shows the paused (info) tone,
+   *  mirroring the per-row ACTIVE switch. */
+  detectionPaused?: boolean;
   /** Master switch (D-room-1): sets `enabled` on EVERY member search. */
   onSetEnabled: (enabled: boolean) => Promise<void>;
   onDelete: (mode: RoomDeleteMode) => Promise<void>;
@@ -157,14 +161,18 @@ export function RoomSection({
         <div className="flex-1" />
         {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
         {/* Master switch: ON while ANY member detects; a click sets ALL members
-            to the opposite state (overwrites their individual toggles). */}
-        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+            to the opposite state (overwrites their individual toggles). The
+            info tone mirrors the per-row ACTIVE switch under a global pause. */}
+        <span
+          className="flex items-center gap-1.5 text-xs text-ink-muted"
+          title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
+        >
           <Switch
             checked={members.some((member) => member.enabled)}
             disabled={members.length === 0}
             onChange={(enabled) => void run(() => onSetEnabled(enabled))}
             label={t('rooms.activeFor', { name: room.name })}
-            tone="gold"
+            tone={detectionPaused ? 'info' : 'gold'}
           />
           {t('searches.activeToggle')}
         </span>
