@@ -302,7 +302,9 @@ describe('SearchManager', () => {
 
   it('enabling detection drips searches out one-by-one with a stagger gap (#31)', async () => {
     vi.useFakeTimers();
-    const { manager, database, wsEngines } = createManager(); // DETECTION_STAGGER_MS default 500
+    // Gap = max(DETECTION_STAGGER_MS 500, guard-safe 60s/12·1.2 = 6000) = 6000ms —
+    // the drip must stay under GUARD_MAX_WS_CONNECTS_PER_MINUTE, not just spread.
+    const { manager, database, wsEngines } = createManager();
     try {
       // Pause first so add() registers the searches without starting their engines.
       manager.setDetectionPaused(true);
@@ -311,15 +313,15 @@ describe('SearchManager', () => {
       await manager.add('AbCdEf203', {});
       expect(wsEngines).toHaveLength(0);
 
-      // Resume → the first start runs synchronously; the rest drip 500ms apart
+      // Resume → the first start runs synchronously; the rest drip 6s apart
       // instead of firing three ws-connects at once.
       manager.setDetectionPaused(false);
       expect(wsEngines).toHaveLength(1);
-      await vi.advanceTimersByTimeAsync(499);
+      await vi.advanceTimersByTimeAsync(5999);
       expect(wsEngines).toHaveLength(1); // still within the gap
       await vi.advanceTimersByTimeAsync(1);
       expect(wsEngines).toHaveLength(2);
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(6000);
       expect(wsEngines).toHaveLength(3);
     } finally {
       vi.useRealTimers();
@@ -1087,6 +1089,99 @@ describe('SearchManager', () => {
     } finally {
       context.manager.onApplicationShutdown();
       context.database.$client.close();
+    }
+  });
+
+  it('room master switch disables every member at once and persists (D-room-1)', async () => {
+    const { manager, database, executeSearch } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      await manager.add('AbCdEf003', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([
+        { kind: 'room', id: roomId, searchIds: ['AbCdEf001', 'AbCdEf002'] },
+        { kind: 'search', id: 'AbCdEf003' },
+      ]);
+
+      const view = manager.setRoomEnabled(roomId, false);
+      const memberStates = view.searches.filter((entry) => entry.roomId === roomId);
+      expect(memberStates.every((entry) => !entry.enabled && entry.status === 'stopped')).toBe(
+        true,
+      );
+      // The non-member is untouched.
+      expect(view.searches.find((entry) => entry.id === 'AbCdEf003')?.enabled).toBe(true);
+      // Persisted.
+      const rows = database.$client
+        .prepare('SELECT id, enabled FROM searches ORDER BY id')
+        .all() as Array<{ id: string; enabled: number }>;
+      expect(rows).toEqual([
+        { id: 'AbCdEf001', enabled: 0 },
+        { id: 'AbCdEf002', enabled: 0 },
+        { id: 'AbCdEf003', enabled: 1 },
+      ]);
+      // Disabled members poll no more.
+      executeSearch.mockClear();
+      await manager.runSchedulerTick();
+      await manager.runSchedulerTick();
+      const tickedSearches = executeSearch.mock.calls.map(
+        (call) => (call as unknown as [{ searchId: string }])[0].searchId,
+      );
+      expect(tickedSearches).toEqual(['AbCdEf003', 'AbCdEf003']);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('room master switch re-enables members through the stagger drip, not a burst (D-room-1)', async () => {
+    vi.useFakeTimers();
+    const { manager, database, wsEngines } = createManager(); // derived gap = 6000ms (guard-safe)
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      await manager.add('AbCdEf003', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001', 'AbCdEf002'] }]);
+      manager.setRoomEnabled(roomId, false);
+      const engineCountWhenOff = wsEngines.length;
+
+      // Re-enable: the first member starts synchronously, the second drips one
+      // guard-safe gap later — never two ws-connects in the same instant.
+      manager.setRoomEnabled(roomId, true);
+      expect(wsEngines.length).toBe(engineCountWhenOff + 1);
+      await vi.advanceTimersByTimeAsync(5999);
+      expect(wsEngines.length).toBe(engineCountWhenOff + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(wsEngines.length).toBe(engineCountWhenOff + 2);
+    } finally {
+      vi.useRealTimers();
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('room master switch under global pause marks members PAUSED without starting engines', async () => {
+    const { manager, database, wsEngines } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001'] }]);
+      manager.setRoomEnabled(roomId, false);
+      manager.setDetectionPaused(true);
+      const engineCountBefore = wsEngines.length;
+
+      const view = manager.setRoomEnabled(roomId, true);
+      const member = view.searches.find((entry) => entry.id === 'AbCdEf001')!;
+      expect(member.enabled).toBe(true);
+      expect(member.status).toBe('paused');
+      expect(wsEngines.length).toBe(engineCountBefore); // nothing started
+      // Global resume brings the member up.
+      manager.setDetectionPaused(false);
+      expect(manager.list().find((entry) => entry.id === 'AbCdEf001')?.status).toBe('active');
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
     }
   });
 

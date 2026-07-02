@@ -11,6 +11,7 @@ import { Badge } from './Badge';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
 import { Modal } from './Modal';
+import { Switch } from './Switch';
 import { TextInput } from './TextInput';
 
 /**
@@ -30,6 +31,7 @@ export function RoomSection({
   renderSearch,
   onRename,
   onToggleCollapsed,
+  onSetEnabled,
   onDelete,
 }: {
   room: RoomInfo;
@@ -53,6 +55,8 @@ export function RoomSection({
   renderSearch: (search: SearchRuntimeInfo) => ReactNode;
   onRename: (name: string) => Promise<void>;
   onToggleCollapsed: () => Promise<void>;
+  /** Master switch (D-room-1): sets `enabled` on EVERY member search. */
+  onSetEnabled: (enabled: boolean) => Promise<void>;
   onDelete: (mode: RoomDeleteMode) => Promise<void>;
 }) {
   const t = useT();
@@ -152,6 +156,18 @@ export function RoomSection({
         <Badge tone="neutral">{tn('rooms.memberCount', members.length)}</Badge>
         <div className="flex-1" />
         {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
+        {/* Master switch: ON while ANY member detects; a click sets ALL members
+            to the opposite state (overwrites their individual toggles). */}
+        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <Switch
+            checked={members.some((member) => member.enabled)}
+            disabled={members.length === 0}
+            onChange={(enabled) => void run(() => onSetEnabled(enabled))}
+            label={t('rooms.activeFor', { name: room.name })}
+            tone="gold"
+          />
+          {t('searches.activeToggle')}
+        </span>
         <IconButton
           variant="danger"
           aria-label={t('rooms.delete', { name: room.name })}

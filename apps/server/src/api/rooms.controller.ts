@@ -21,6 +21,8 @@ const updateRoomSchema = z
  */
 const deleteRoomQuerySchema = z.object({ mode: z.enum(['release', 'delete-searches']) });
 
+const setRoomEnabledSchema = z.object({ enabled: z.boolean() });
+
 /** Rooms: named groups of searches on the Searches view (#33). */
 @Controller()
 export class RoomsController {
@@ -36,6 +38,13 @@ export class RoomsController {
   update(@Param('id') roomId: string, @Body() body: unknown): SearchesView {
     const payload = parseOrBadRequest(updateRoomSchema, body);
     return this.searchManager.updateRoom(roomId, payload);
+  }
+
+  /** Master switch (D-room-1): sets `enabled` on every member search at once. */
+  @Post('rooms/:id/enabled')
+  setEnabled(@Param('id') roomId: string, @Body() body: unknown): SearchesView {
+    const { enabled } = parseOrBadRequest(setRoomEnabledSchema, body);
+    return this.searchManager.setRoomEnabled(roomId, enabled);
   }
 
   @Delete('rooms/:id')

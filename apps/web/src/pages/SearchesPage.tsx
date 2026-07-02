@@ -587,6 +587,7 @@ export function SearchesPage() {
     createRoom,
     updateRoom,
     removeRoom,
+    setRoomEnabled,
   } = useSearches();
   const { paused, setDetectionPaused } = useDetection();
   const { lastHitAtBySearchId } = useEventStream();
@@ -862,6 +863,7 @@ export function SearchesPage() {
                         if (justCreatedRoomId === room.id) setJustCreatedRoomId(null);
                         return updateRoom(room.id, { name });
                       }}
+                      onSetEnabled={(enabled) => setRoomEnabled(room.id, enabled)}
                       onToggleCollapsed={() => {
                         if (!visuallyCollapsed) {
                           // Collapsing during a fresh window: suppress the

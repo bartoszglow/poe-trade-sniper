@@ -30,7 +30,7 @@ import type {
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
-import { OutboundGuard } from '../guard/outbound-guard.js';
+import { GUARD_WINDOW_MS, OutboundGuard } from '../guard/outbound-guard.js';
 import { PermissionGateService } from '../permissions/permission-gate.service.js';
 import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
@@ -83,6 +83,10 @@ export interface HitQuery {
 
 /** Prune cadence — checking on every single hit would be wasted writes. */
 const PRUNE_EVERY_HITS = 100;
+
+/** Stagger-drip pacing vs the guard budget: 1.2 → drip uses ~5/6 of the
+ *  ws-connect ceiling, leaving the rest for organic reconnect churn. */
+const GUARD_STAGGER_HEADROOM_FACTOR = 1.2;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -464,6 +468,43 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
+   * Master enable/disable for a whole room (D-room-1): sets `enabled` on every
+   * member in one transaction. Disabling stops each member's engines at once
+   * (stopping is burst-safe). Enabling deliberately does NOT start N watchers
+   * directly — N simultaneous ws-connects would trip GGG's per-minute connect
+   * latch — it resets the members to PENDING and lets the existing staggered
+   * drip (startPendingWatchers, DETECTION_STAGGER_MS apart) bring them up.
+   * Overwrites each member's individual enabled state by design (master switch).
+   */
+  setRoomEnabled(roomId: string, enabled: boolean): SearchesView {
+    this.requireRoom(roomId);
+    const changedMembers = [...this.watchers.values()].filter(
+      (watcher) => watcher.row.roomId === roomId && watcher.row.enabled !== enabled,
+    );
+    if (changedMembers.length === 0) return this.view();
+    this.database.transaction((tx) => {
+      for (const watcher of changedMembers) {
+        tx.update(searches).set({ enabled }).where(eq(searches.id, watcher.row.id)).run();
+      }
+    });
+    for (const watcher of changedMembers) {
+      watcher.row = { ...watcher.row, enabled };
+      if (!enabled) {
+        this.stopEngines(watcher);
+        this.publishEngineStatus(watcher, 'stopped', 'paused');
+      } else if (this.detectionPaused) {
+        this.publishEngineStatus(watcher, 'paused', 'globally paused');
+      } else {
+        // PENDING (not an immediate start) → picked up by the stagger drip below.
+        this.publishEngineStatus(watcher, 'pending', null);
+      }
+    }
+    if (enabled && !this.detectionPaused) this.startPendingWatchers();
+    this.publishSearchesChanged();
+    return this.view();
+  }
+
+  /**
    * Delete a room with an operator-chosen fate for its members (D-room-2 — the
    * API forces the choice, there is no default). `release` keeps the members
    * exactly where they sat, now top-level; `delete-searches` tears each member
@@ -810,6 +851,23 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     });
   }
 
+  /**
+   * Gap between staggered watcher starts: at least DETECTION_STAGGER_MS, but
+   * never faster than the guard's ws-connect budget allows. Each start is a ws
+   * connect that counts against GUARD_MAX_WS_CONNECTS_PER_MINUTE — dripping at
+   * 500ms (120/min) against the default 12/min ceiling would let a single
+   * 13+-search enable (room master switch, global resume, bootstrap) trip the
+   * guard by itself. The headroom factor leaves ~1/6 of the budget for organic
+   * reconnect churn sharing the same window.
+   */
+  private detectionStaggerGapMs(): number {
+    const guardSafeGapMs = Math.ceil(
+      (GUARD_WINDOW_MS / this.config.GUARD_MAX_WS_CONNECTS_PER_MINUTE) *
+        GUARD_STAGGER_HEADROOM_FACTOR,
+    );
+    return Math.max(this.config.DETECTION_STAGGER_MS, guardSafeGapMs);
+  }
+
   private async startWatchersStaggered(pending: Watcher[]): Promise<void> {
     for (let index = 0; index < pending.length; index += 1) {
       const watcher = pending[index]!;
@@ -827,8 +885,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         continue;
       }
       this.startWatcher(watcher);
-      if (index < pending.length - 1 && this.config.DETECTION_STAGGER_MS > 0) {
-        await sleep(this.config.DETECTION_STAGGER_MS);
+      if (index < pending.length - 1) {
+        await sleep(this.detectionStaggerGapMs());
       }
     }
   }

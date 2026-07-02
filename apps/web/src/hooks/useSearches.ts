@@ -129,6 +129,15 @@ export function useSearches() {
     [refresh],
   );
 
+  /** Room master switch (D-room-1): sets `enabled` on every member at once. */
+  const setRoomEnabled = useCallback(
+    async (roomId: string, enabled: boolean) => {
+      await apiSend<SearchesView>('POST', `/api/rooms/${roomId}/enabled`, { enabled });
+      refresh();
+    },
+    [refresh],
+  );
+
   return {
     searches,
     rooms,
@@ -141,5 +150,6 @@ export function useSearches() {
     createRoom,
     updateRoom,
     removeRoom,
+    setRoomEnabled,
   };
 }

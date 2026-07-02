@@ -9,7 +9,10 @@ export interface GuardStatus {
   wsConnectsInLastMinute: number;
 }
 
-const WINDOW_MS = 60_000;
+/** The guard's rolling rate window — exported so pacing code (the detection
+ *  stagger drip) can derive a start rate that stays under the ceiling. */
+export const GUARD_WINDOW_MS = 60_000;
+const WINDOW_MS = GUARD_WINDOW_MS;
 
 /**
  * The runaway watchdog — the last line of defense against banning ourselves.
