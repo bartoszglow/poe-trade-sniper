@@ -42,10 +42,14 @@ interface HitCardProps {
   nowMs: number;
   /** macOS control permission present (desktop + granted) — gates manual Buy. */
   canBuy: boolean;
+  /** The source search's label; null when the search is gone (chip hidden). */
+  searchLabel: string | null;
   onTravel: () => void;
   onBuy: () => void;
   /** Re-resolve a fresh token server-side, then travel (for aged/failed hits). */
   onRetry: () => Promise<void>;
+  /** Spotlight the source search on the Searches view (#34 follow-up). */
+  onLocateSearch: () => void;
 }
 
 export function HitCard({
@@ -56,9 +60,11 @@ export function HitCard({
   stale = false,
   nowMs,
   canBuy,
+  searchLabel,
   onTravel,
   onBuy,
   onRetry,
+  onLocateSearch,
 }: HitCardProps) {
   const t = useT();
   const phase = travelState?.phase;
@@ -97,6 +103,24 @@ export function HitCard({
           {new Date(listing.detectedAt).toLocaleTimeString()}
         </span>
         <RarityName name={listing.itemName} rarity={listing.item?.rarity ?? null} />
+        {searchLabel !== null && (
+          <>
+            <div className="flex-1" />
+            {/* Source-search chip: shows where the hit came from; clicking it
+                spotlights that search on the Searches view. Shrinkable with a
+                floor so a long label + long item word can't overflow the card
+                at the panel's 320px minimum width. */}
+            <button
+              type="button"
+              onClick={onLocateSearch}
+              title={searchLabel}
+              aria-label={t('hitCard.locateSearch')}
+              className="min-w-12 max-w-36 shrink truncate rounded bg-surface-3 px-1.5 py-0.5 text-[0.6rem] text-ink-muted transition-colors hover:text-gold"
+            >
+              {searchLabel}
+            </button>
+          </>
+        )}
       </div>
       <div className="mt-1 flex items-center gap-2">
         <PriceTag price={listing.price} />

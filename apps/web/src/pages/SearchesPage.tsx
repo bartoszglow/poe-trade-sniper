@@ -77,9 +77,17 @@ import {
   suppressRoomAutoExpand,
   writeSuppressedRoomIds,
 } from '../lib/room-auto-expand';
+import {
+  SEARCH_HIGHLIGHT_MS,
+  clearSearchSpotlight,
+  isSpotlightFresh,
+} from '../lib/search-spotlight';
+import type { SearchSpotlight } from '../lib/search-spotlight';
+import { useSearchSpotlight } from '../hooks/useSearchSpotlight';
 
-/** A search row glows for ~this long after one of its hits lands in the live feed. */
-const HIGHLIGHT_MS = 60_000;
+/** A search row glows for ~this long after one of its hits lands in the live
+ *  feed — the shared constant also times the click-to-locate spotlight. */
+const HIGHLIGHT_MS = SEARCH_HIGHLIGHT_MS;
 const HIGHLIGHT_TICK_MS = 5_000;
 
 const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
@@ -337,6 +345,7 @@ function SearchRow({
   return (
     <li
       ref={setNodeRef}
+      data-search-row={search.id}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`rounded-lg border px-4 py-3 transition-colors ${
         isDragging
@@ -638,6 +647,16 @@ export function SearchesPage() {
     return at !== undefined && nowMs - new Date(at).getTime() < HIGHLIGHT_MS;
   };
 
+  // Click-to-locate spotlight: clicking a live hit's search chip glows the
+  // source row exactly like a fresh hit does (one at a time — a later click
+  // replaces it; see search-spotlight.ts). Feeds the same "lit" predicate, so
+  // a spotlighted member also auto-expands its collapsed room.
+  const spotlight = useSearchSpotlight();
+  const isSpotlighted = (searchId: string): boolean =>
+    spotlight !== null && spotlight.searchId === searchId && isSpotlightFresh(spotlight, nowMs);
+  const isSearchLit = (searchId: string): boolean =>
+    isHighlighted(searchId) || isSpotlighted(searchId);
+
   // Variant-2 auto-expand (D-room-3): a collapsed room pops open while a member's
   // hit highlight is fresh and folds back when it ages out. All client-side —
   // the persisted `collapsed` never changes. Manually collapsing mid-window
@@ -655,14 +674,49 @@ export function SearchesPage() {
   const freshRoomIds = new Set<string>();
   for (const entry of syncedLayout) {
     if (entry.kind !== 'room') continue;
-    if (entry.searchIds.some((searchId) => isHighlighted(searchId))) freshRoomIds.add(entry.id);
+    if (entry.searchIds.some((searchId) => isSearchLit(searchId))) freshRoomIds.add(entry.id);
   }
+  // The spotlit search's room, resolved ONCE from the server-confirmed layout —
+  // the suppression override and the chevron's clear-spotlight check must read
+  // the SAME source, or a stale optimistic layout (e.g. a failed reorder POST)
+  // lets them disagree and reopens the chevron fight.
+  const spotlitRoomId =
+    spotlight !== null && isSpotlightFresh(spotlight, nowMs)
+      ? (syncedLayout.find(
+          (entry) => entry.kind === 'room' && entry.searchIds.includes(spotlight.searchId),
+        )?.id ?? null)
+      : null;
+
   // Suppression ends with the window (adjust-during-render; null = no change).
-  const prunedSuppressed = pruneSuppressedRooms(suppressedRoomIds, freshRoomIds);
-  if (prunedSuppressed !== null) {
-    writeSuppressedRoomIds(prunedSuppressed);
-    setSuppressedRoomIds(prunedSuppressed);
+  let adjustedSuppressed = pruneSuppressedRooms(suppressedRoomIds, freshRoomIds);
+  // An explicit locate-click overrides a manual mid-window collapse — the
+  // operator asked to SEE this search, so its room must open. No fight with
+  // the chevron: collapsing the spotlit room dismisses the spotlight itself.
+  if (spotlitRoomId !== null && (adjustedSuppressed ?? suppressedRoomIds).has(spotlitRoomId)) {
+    const withoutSpotlitRoom = new Set(adjustedSuppressed ?? suppressedRoomIds);
+    withoutSpotlitRoom.delete(spotlitRoomId);
+    adjustedSuppressed = withoutSpotlitRoom;
   }
+  if (adjustedSuppressed !== null) {
+    writeSuppressedRoomIds(adjustedSuppressed);
+    setSuppressedRoomIds(adjustedSuppressed);
+  }
+
+  // Bring the spotlighted row into view once it exists. The click usually
+  // arrives from ANOTHER page: this component mounts with an empty layout and
+  // the rows only render when the fetch lands — hence the syncedLayout dep
+  // re-arms the effect until the row is actually in the DOM. The ref makes it
+  // scroll once per click; the freshness guard keeps a long-expired spotlight
+  // from scroll-jumping a later visit.
+  const scrolledSpotlightRef = useRef<SearchSpotlight | null>(null);
+  useEffect(() => {
+    if (spotlight === null || !isSpotlightFresh(spotlight, Date.now())) return;
+    if (scrolledSpotlightRef.current === spotlight) return;
+    const row = document.querySelector(`[data-search-row="${spotlight.searchId}"]`);
+    if (!row) return; // not rendered yet — the next syncedLayout change retries
+    scrolledSpotlightRef.current = spotlight;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [spotlight, syncedLayout]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -773,7 +827,7 @@ export function SearchesPage() {
     <SearchRow
       key={search.id}
       search={search}
-      highlighted={isHighlighted(search.id)}
+      highlighted={isSearchLit(search.id)}
       buyControl={resolveBuyControl({
         isDesktop,
         isMac,
@@ -873,6 +927,10 @@ export function SearchesPage() {
                           // local only, no server write) and a persisted-
                           // expanded one (also PATCH the preference).
                           if (freshRoomIds.has(room.id)) suppressRoom(room.id);
+                          // Collapsing the spotlit room dismisses the spotlight
+                          // (otherwise its suppression override would reopen it).
+                          // Same layout source as the override — see spotlitRoomId.
+                          if (spotlitRoomId === room.id) clearSearchSpotlight();
                           return room.collapsed
                             ? Promise.resolve()
                             : updateRoom(room.id, { collapsed: true });

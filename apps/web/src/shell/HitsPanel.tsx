@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Eraser, PanelRightClose, Zap } from 'lucide-react';
 import { offerKey, type Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
@@ -9,6 +10,7 @@ import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT } from '../i18n/i18n';
 import { apiSend } from '../lib/api';
+import { spotlightSearch } from '../lib/search-spotlight';
 
 /** Client-side mirror of the server's stale-token guard (240 s). */
 const TOKEN_FRESH_MS = 240_000;
@@ -19,6 +21,8 @@ const STALE_HIT_MS = 300_000;
 
 export function HitsPanel({ onHide }: { onHide: () => void }) {
   const t = useT();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { connected, liveHits, travelStateByListingId, buyStateByListingId, clearLiveHits } =
     useEventStream();
   const { searches } = useSearches();
@@ -74,6 +78,15 @@ export function HitsPanel({ onHide }: { onHide: () => void }) {
     }).catch(() => {
       // Failure surfaces as travel/buy events on the stream; nothing to do here.
     });
+  }
+
+  // Spotlight the hit's source search on the Searches view (#34 follow-up):
+  // navigates there and hands the highlight over via the one-slot spotlight
+  // store — a later click on another hit replaces it.
+  function locateSearch(listing: Listing): void {
+    spotlightSearch(listing.searchId);
+    // No duplicate history entry when the operator is already on Searches.
+    if (location.pathname !== '/') void navigate('/');
   }
 
   // Retry travel on an aged hit: the stored token is expired, so the server re-resolves a
@@ -146,9 +159,13 @@ export function HitsPanel({ onHide }: { onHide: () => void }) {
                 stale={nowMs - new Date(listing.detectedAt).getTime() > STALE_HIT_MS}
                 nowMs={nowMs}
                 canBuy={canBuy}
+                searchLabel={
+                  searches.find((search) => search.id === listing.searchId)?.label ?? null
+                }
                 onTravel={() => travel(listing)}
                 onBuy={() => buy(listing)}
                 onRetry={() => retry(listing)}
+                onLocateSearch={() => locateSearch(listing)}
               />
             ))}
           </div>

@@ -172,6 +172,7 @@ export const EN = {
   'hitCard.buyTitle': 'Travel to the seller, then move to the item (no click yet)',
   'hitCard.expired': 'expired',
   'hitCard.tokenExpired': 'token expired',
+  'hitCard.locateSearch': 'Show the source search',
   'common.ago': '{value} ago',
 
   // Searches page
@@ -521,6 +522,7 @@ export const PL: Record<MessageKey, string> = {
   'hitCard.buyTitle': 'Podróżuj do sprzedawcy i najedź na przedmiot (na razie bez kliknięcia)',
   'hitCard.expired': 'wygasł',
   'hitCard.tokenExpired': 'token wygasł',
+  'hitCard.locateSearch': 'Pokaż wyszukiwanie źródłowe',
   'common.ago': '{value} temu',
 
   // Searches page
