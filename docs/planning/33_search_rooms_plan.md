@@ -18,9 +18,17 @@ helmet). Rooms reorder like searches, searches drag into / out of rooms. One lev
 
 ## Decisions (approved)
 
-- **D-room-1** — room **master enable/disable switch is PARKED** (follow-up, see
-  [90_future_ideas](90_future_ideas.md)). MVP ships rooms pure: create / rename / collapse /
-  reorder / membership / delete.
+- **D-room-1** — room **master enable/disable switch**: parked at MVP, **implemented
+  2026-07-02 (`f7a6d23`)** on request. Header ACTIVE switch: ON while ANY member detects; a
+  click sets ALL members to the opposite state (overwrites individual toggles by design);
+  disabled on empty rooms. `POST /api/rooms/:id/enabled` → `SearchManager.setRoomEnabled`:
+  one transaction, disable stops engines immediately, enable resets members to PENDING and
+  goes through the staggered drip — never N direct ws-connects. The "stagger story" that
+  parked this originally: the drip gap is now **derived from the guard budget**
+  (`max(DETECTION_STAGGER_MS, GUARD_WINDOW_MS / GUARD_MAX_WS_CONNECTS_PER_MINUTE × 1.2)` =
+  6s with defaults) — at 500ms a single 13+-search enable would have tripped the safety
+  guard by itself (found by adversarial review; the mismatch predated this feature and also
+  affected global resume/bootstrap). Slower mass-starts show honestly as `pending` badges.
 - **D-room-2** — **deleting a room asks the operator**: either delete all member searches
   with it, or release them to the top level (inserted where the room was). Never a silent
   default; the dialog carries both actions.
