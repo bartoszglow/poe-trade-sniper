@@ -802,6 +802,29 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return watcher ? this.toRef(watcher.row) : null;
   }
 
+  /**
+   * The league the operator is actually playing, inferred from watched searches
+   * — the MOST COMMON league among them (archived included). Null when there
+   * are no searches. Used by the price checker (#37): a price check has no
+   * search context of its own, so it borrows the league the searches encode
+   * rather than a hardcoded default.
+   */
+  getPrimaryLeague(): string | null {
+    const counts = new Map<string, number>();
+    for (const watcher of this.watchers.values()) {
+      counts.set(watcher.row.league, (counts.get(watcher.row.league) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    let bestCount = 0;
+    for (const [league, count] of counts) {
+      if (count > bestCount) {
+        best = league;
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
   summary(): { total: number; byStatus: Record<string, number> } {
     const byStatus: Record<string, number> = {};
     for (const watcher of this.watchers.values()) {

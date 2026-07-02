@@ -59,7 +59,17 @@ function makeService(options: {
   );
   const tradeApi = { priceSearch } as unknown as TradeApiClient;
   const governor = { headroom: () => options.headroom } as unknown as RateLimitGovernor;
-  const service = new PriceCheckService(config, tradeData, poe2scout, tradeApi, governor);
+  const searchManager = {
+    getPrimaryLeague: () => 'Runes of Aldur',
+  } as unknown as import('../search/search-manager.js').SearchManager;
+  const service = new PriceCheckService(
+    config,
+    tradeData,
+    poe2scout,
+    tradeApi,
+    governor,
+    searchManager,
+  );
   return { service, priceSearch, poe2scout };
 }
 
@@ -95,13 +105,21 @@ describe('PriceCheckService', () => {
     expect(result.declineReason).toBe('budget-low');
   });
 
-  it('prices a fixed-value currency via poe2scout, no GGG traffic', async () => {
+  it('prices a fixed-value currency via poe2scout in the primary league, no GGG traffic', async () => {
     const { service, priceSearch, poe2scout } = makeService({ headroom: 0.05, poe2scoutPrice: 12 });
     const result = await service.check(CURRENCY_TEXT);
-    expect(poe2scout.priceByName).toHaveBeenCalledWith('Divine Orb');
+    // The league comes from the operator's searches, not a hardcoded default.
+    expect(poe2scout.priceByName).toHaveBeenCalledWith('Divine Orb', 'Runes of Aldur');
     expect(priceSearch).not.toHaveBeenCalled(); // aggregator path, budget irrelevant
     expect(result.kind).toBe('aggregate');
     expect(result.estimate).toEqual({ amount: 12, currency: 'exalted' });
+  });
+
+  it('a fixed-value item with no aggregator price says no-price-data (not "unreadable")', async () => {
+    const { service } = makeService({ headroom: 1, poe2scoutPrice: null });
+    const result = await service.check(CURRENCY_TEXT);
+    expect(result.kind).toBe('unavailable');
+    expect(result.declineReason).toBe('no-price-data');
   });
 
   it('a rate-limited trade2 response degrades to unavailable/budget-low', async () => {

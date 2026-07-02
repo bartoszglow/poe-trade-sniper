@@ -8,6 +8,7 @@ import type {
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
+import { SearchManager } from '../search/search-manager.js';
 import {
   GuardTrippedError,
   NoSessionError,
@@ -39,7 +40,14 @@ export class PriceCheckService {
     @Inject(Poe2ScoutClient) private readonly poe2scout: Poe2ScoutClient,
     @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
     @Inject(RateLimitGovernor) private readonly governor: RateLimitGovernor,
+    @Inject(SearchManager) private readonly searchManager: SearchManager,
   ) {}
+
+  /** The league to price in: the one the operator plays (from watched searches),
+   *  falling back to config. A price check has no search context of its own. */
+  private league(): string {
+    return this.searchManager.getPrimaryLeague() ?? this.config.DEFAULT_LEAGUE;
+  }
 
   async check(itemText: string): Promise<PriceCheckResult> {
     // A rare check spends BOTH a SEARCH and a FETCH slot (POST /search then
@@ -86,13 +94,18 @@ export class PriceCheckService {
 
     // Fixed-value items (currency/runes/uniques) → aggregator, zero GGG traffic.
     if (isFixedValueItem(parsed.rarity, parsed.itemClass) && (parsed.name ?? parsed.baseType)) {
-      const estimate = await this.poe2scout.priceByName((parsed.name ?? parsed.baseType)!);
+      const estimate = await this.poe2scout.priceByName(
+        (parsed.name ?? parsed.baseType)!,
+        this.league(),
+      );
+      // Priced OR "read fine but no price data" — never the misleading
+      // "couldn't read the item" note (the item WAS parsed).
       return {
         kind: estimate ? 'aggregate' : 'unavailable',
         item,
         estimate,
         listings: [],
-        declineReason: null,
+        declineReason: estimate ? null : 'no-price-data',
         searchHeadroom: headroom,
       };
     }
@@ -122,7 +135,7 @@ export class PriceCheckService {
     try {
       const result = await this.tradeApi.priceSearch(
         this.config.DEFAULT_REALM,
-        this.config.DEFAULT_LEAGUE,
+        this.league(),
         { query: built.query, sort: built.sort },
         this.config.PRICE_CHECK_LISTING_LIMIT,
         randomUUID(),

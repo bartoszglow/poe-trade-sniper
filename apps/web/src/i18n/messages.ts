@@ -169,6 +169,7 @@ export const EN = {
   'priceCheck.declineNoSession': 'No PoE session — log in to price rare items.',
   'priceCheck.declineGuard': 'Safety guard tripped — trade queries are halted.',
   'priceCheck.declineEmpty': "Couldn't read an item from that text.",
+  'priceCheck.declineNoData': 'No price data for this item yet.',
   'settings.priceCheck': 'Price check',
   'settings.priceCheckDesc':
     'Hover an item in-game and press the hotkey to look up its price. Works in maps (unlike the in-game check).',
@@ -626,6 +627,7 @@ export const PL: Record<MessageKey, string> = {
   'priceCheck.declineNoSession': 'Brak sesji PoE — zaloguj się, aby wyceniać rzadkie przedmioty.',
   'priceCheck.declineGuard': 'Bezpiecznik zadziałał — zapytania do trade są wstrzymane.',
   'priceCheck.declineEmpty': 'Nie udało się odczytać przedmiotu z tego tekstu.',
+  'priceCheck.declineNoData': 'Brak danych o cenie tego przedmiotu.',
   'settings.priceCheck': 'Wycena',
   'settings.priceCheckDesc':
     'Najedź na przedmiot w grze i naciśnij skrót, aby sprawdzić cenę. Działa na mapach (w przeciwieństwie do wbudowanej wyceny).',

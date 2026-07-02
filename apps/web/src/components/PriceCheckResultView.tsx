@@ -8,6 +8,7 @@ const DECLINE_KEY: Record<string, MessageKey> = {
   'budget-low': 'priceCheck.declineBudget',
   'no-session': 'priceCheck.declineNoSession',
   'guard-tripped': 'priceCheck.declineGuard',
+  'no-price-data': 'priceCheck.declineNoData',
 };
 
 /**

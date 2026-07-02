@@ -122,6 +122,35 @@ Served to the UI via cached `GET /api/leagues`.
   Before this fix, `explicitMods.map(cleanMarkup)` fed an object to
   `String.replace` and the uncaught throw crashed the whole server. (2026-06-23)
 
+## Data endpoints (`/api/trade2/data/*`) — price-check dictionary (#37)
+
+- `GET /api/trade2/data/{stats,items,static,filters}` are public JSON, the same
+  payloads the official trade site loads. `stats` → `{result:[{label, entries:
+[{id:'explicit.stat_…', text:'+# to maximum Life', type, option?:{options}}]}]}`;
+  `items` → `{result:[{id:category, entries:[{name?, type, text, flags?:{unique}}]}]}`
+  where a UNIQUE has `name` (+ `type`=base) and a plain BASE has only `type`.
+  Live-observed 2026-07-02 (poe2): 8206 stats, 3566 items (3102 bases + 464
+  uniques), 780 statics. Base coverage is complete — rare/magic base types like
+  "Gold Ring" resolve. `TradeDataService` caches this as the versioned
+  `TradeDictionary`.
+
+## poe2scout aggregator (`api.poe2scout.com/api`) — NON-GGG, off the budget (#37)
+
+- Base `https://api.poe2scout.com/api`. Realm `poe2`. Routes (verified 2026-07-03
+  via the live openapi.json): `GET /poe2/Leagues` → `[{Value, IsCurrent,
+DivinePrice, BaseCurrencyApiId}]` (base is `exalted`); `GET /poe2/Leagues/
+{League}/Items?search=&page=&perPage=` → `[{Name, Type, Text, CurrentPrice}]`
+  (uniques/bases, price in exalted); `GET /poe2/Leagues/{League}/Currencies/
+ByCategory?Category=currency&perPage=` → `{Items:[{Text, ApiId, CurrentPrice}]}`.
+  Prices are per-LEAGUE — the current temp league (e.g. "Runes of Aldur"), NOT
+  "Standard". Evidence 2026-07-03: Divine Orb = 737 exalted, Andvarius = 20
+  exalted in Runes of Aldur. Earlier guesses (`poe2scout.com/api/items/search`)
+  all 404'd — that was the bug behind "item not recognized" for currency/uniques.
+- **League for a price check** = the league the operator plays, taken from
+  watched searches (`SearchManager.getPrimaryLeague()`), NOT `DEFAULT_LEAGUE`
+  ('Standard'). Applies to BOTH the trade2 rare search and poe2scout, so both
+  price in the right league.
+
 ## Adding entries
 
 New discovery → add a row/bullet **with date + how it was observed** in the

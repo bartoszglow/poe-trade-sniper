@@ -3,11 +3,14 @@ import type { ListingPrice } from '@poe-sniper/shared';
 import { errorMessage } from '../util/error-message.js';
 import { FetchFunction, HTTP_FETCH } from '../trade-api/trade-api.client.js';
 
-const BASE_URL = 'https://poe2scout.com/api';
+/** The real poe2scout API base (verified 2026-07-03; see docs/integration). */
+const BASE_URL = 'https://api.poe2scout.com/api/poe2';
 /** Fixed-value prices barely move within a check session; cache generously. */
 const CACHE_TTL_MS = 15 * 60 * 1000;
 /** Bound the cache — insertion-order eviction keeps memory flat over a session. */
 const CACHE_MAX_ENTRIES = 500;
+/** Currency categories poe2scout groups fixed-value stackables under. */
+const CURRENCY_CATEGORIES = ['currency', 'fragments', 'runes', 'essences', 'omen', 'catalysts'];
 
 interface CacheEntry {
   at: number;
@@ -16,31 +19,35 @@ interface CacheEntry {
 
 /**
  * Fixed-value item prices from the poe2scout aggregator (#37, D-pc-4).
- * NON-GGG host — never touches the trade rate-limit budget, so currency/runes/
- * uniques cost nothing on the detection side. Best-effort: any failure returns
- * null and the caller shows an "unpriced" state rather than erroring.
+ * NON-GGG host — never touches the trade rate-limit budget. Uniques come from
+ * the `Items` search endpoint; currency/runes/essences from `Currencies`.
+ * Prices are in the league base currency (exalted). Best-effort: any failure
+ * returns null and the caller shows an "unpriced" state rather than erroring.
  */
 @Injectable()
 export class Poe2ScoutClient {
   private readonly logger = new Logger(Poe2ScoutClient.name);
   private readonly fetchFn: FetchFunction;
   private readonly cache = new Map<string, CacheEntry>();
+  /** Per-league currency name→price map, cached (the currency lists are small). */
+  private readonly currencyCache = new Map<string, { at: number; prices: Map<string, number> }>();
 
   constructor(@Optional() @Inject(HTTP_FETCH) fetchFn: FetchFunction | null) {
     this.fetchFn = fetchFn ?? fetch;
   }
 
   /**
-   * Best-effort price for a fixed-value item by name. Returns the aggregate in
-   * the poe2scout base currency (divine/exalted) or null when unknown/offline.
+   * Best-effort price for a fixed-value item by name, in the given league.
+   * Returns the aggregate in exalted, or null when unknown/offline.
    */
-  async priceByName(name: string): Promise<ListingPrice | null> {
-    const key = name.trim().toLowerCase();
+  async priceByName(name: string, league: string): Promise<ListingPrice | null> {
+    const trimmed = name.trim();
+    const key = `${league}::${trimmed.toLowerCase()}`;
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.price;
     let price: ListingPrice | null = null;
     try {
-      price = await this.lookup(key);
+      price = await this.lookup(trimmed, league);
     } catch (error) {
       this.logger.debug(`poe2scout lookup failed for "${name}": ${errorMessage(error)}`);
     }
@@ -52,22 +59,61 @@ export class Poe2ScoutClient {
     return price;
   }
 
-  private async lookup(name: string): Promise<ListingPrice | null> {
-    // poe2scout exposes per-category item lists; the items search endpoint takes
-    // a `search` param and returns entries with a currentPrice + currency.
-    // TODO(verify): confirm the exact poe2scout endpoint + response shape against
-    // the live API (docs/integration/api-notes.md). Best-effort by design — a
-    // shape mismatch returns null (item shows "unpriced"), never throws.
-    const url = `${BASE_URL}/items/search?search=${encodeURIComponent(name)}`;
+  private async lookup(name: string, league: string): Promise<ListingPrice | null> {
+    const currencyPrice = await this.currencyPrice(name, league);
+    if (currencyPrice !== null) return { amount: currencyPrice, currency: 'exalted' };
+    const itemPrice = await this.itemPrice(name, league);
+    if (itemPrice !== null) return { amount: itemPrice, currency: 'exalted' };
+    return null;
+  }
+
+  /** Unique/base price via the Items search endpoint (exact name match). */
+  private async itemPrice(name: string, league: string): Promise<number | null> {
+    const url = `${BASE_URL}/Leagues/${encodeURIComponent(league)}/Items?search=${encodeURIComponent(name)}&perPage=20&page=1`;
     const response = await this.fetchFn(url, { headers: { accept: 'application/json' } });
     if (!response.ok) return null;
-    const payload = (await response.json()) as {
-      items?: Array<{ name?: string; text?: string; currentPrice?: number; currency?: string }>;
-    };
-    const match = (payload.items ?? []).find(
-      (item) => (item.name ?? item.text ?? '').toLowerCase() === name,
+    const payload = (await response.json()) as
+      | Array<{ Name?: string; Text?: string; Type?: string; CurrentPrice?: number }>
+      | { Items?: Array<{ Name?: string; Text?: string; CurrentPrice?: number }> };
+    const items = Array.isArray(payload) ? payload : (payload.Items ?? []);
+    const target = name.toLowerCase();
+    const match = items.find(
+      (item) =>
+        (item.Name ?? '').toLowerCase() === target || (item.Text ?? '').toLowerCase() === target,
     );
-    if (!match || typeof match.currentPrice !== 'number') return null;
-    return { amount: match.currentPrice, currency: match.currency ?? 'exalted' };
+    return typeof match?.CurrentPrice === 'number' && match.CurrentPrice > 0
+      ? match.CurrentPrice
+      : null;
+  }
+
+  /** Currency price via the per-league currency map (cached across categories). */
+  private async currencyPrice(name: string, league: string): Promise<number | null> {
+    const map = await this.currencyMap(league);
+    return map.get(name.toLowerCase()) ?? null;
+  }
+
+  private async currencyMap(league: string): Promise<Map<string, number>> {
+    const cached = this.currencyCache.get(league);
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.prices;
+    const prices = new Map<string, number>();
+    for (const category of CURRENCY_CATEGORIES) {
+      try {
+        const url = `${BASE_URL}/Leagues/${encodeURIComponent(league)}/Currencies/ByCategory?Category=${category}&perPage=300&page=1`;
+        const response = await this.fetchFn(url, { headers: { accept: 'application/json' } });
+        if (!response.ok) continue;
+        const payload = (await response.json()) as {
+          Items?: Array<{ Text?: string; CurrentPrice?: number }>;
+        };
+        for (const item of payload.Items ?? []) {
+          if (typeof item.Text === 'string' && typeof item.CurrentPrice === 'number') {
+            prices.set(item.Text.toLowerCase(), item.CurrentPrice);
+          }
+        }
+      } catch (error) {
+        this.logger.debug(`poe2scout currency ${category} failed: ${errorMessage(error)}`);
+      }
+    }
+    this.currencyCache.set(league, { at: Date.now(), prices });
+    return prices;
   }
 }

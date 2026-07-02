@@ -38,8 +38,13 @@ export interface PriceCheckItem {
   unmatchedLines: string[];
 }
 
-/** Why the budget router declined a live trade2 query (honest UI state). */
-export type PriceCheckDeclineReason = 'budget-low' | 'no-session' | 'guard-tripped';
+/** Why a price check produced no priced result (honest UI state). */
+export type PriceCheckDeclineReason =
+  | 'budget-low'
+  | 'no-session'
+  | 'guard-tripped'
+  /** The item parsed fine but the aggregator had no price for it. */
+  | 'no-price-data';
 
 export interface PriceCheckResult {
   kind: PriceCheckKind;
