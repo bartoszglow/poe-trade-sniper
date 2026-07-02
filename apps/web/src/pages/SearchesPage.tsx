@@ -138,6 +138,23 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Any pointer-down OUTSIDE the expanded form tucks it away (click-outside,
+  // same pattern as Select) — focus-based blur alone misses the case where the
+  // form is expanded but no field has been focused yet. Draft state survives;
+  // reopening shows it again. Alt-tabbing out fires no in-page pointerdown, so
+  // copying the trade URL from another window keeps the form open.
+  useEffect(() => {
+    if (collapsed) return;
+    const onPointerDown = (pointerEvent: MouseEvent) => {
+      if (formRef.current && !formRef.current.contains(pointerEvent.target as Node)) {
+        setCollapsed(true);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [collapsed]);
 
   // The URL is the source of truth for league + purchase type (D-14).
   // Only a bare id needs a league — the resolve endpoint takes it in the path.
@@ -210,12 +227,10 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
 
   return (
     <form
+      ref={formRef}
       onSubmit={(formEvent) => void submit(formEvent)}
       onBlur={(blurEvent) => {
-        // Focus left the form for another element IN the app → tuck the form
-        // away (draft state survives — reopening shows it again). Alt-tabbing
-        // out (e.g. to copy the trade URL) keeps it open: relatedTarget is null
-        // then AND the document has lost focus, so we deliberately skip.
+        // Keyboard path: tabbing out of the form collapses it too.
         const focusMovedTo = blurEvent.relatedTarget as Node | null;
         if (!blurEvent.currentTarget.contains(focusMovedTo) && document.hasFocus()) {
           setCollapsed(true);
