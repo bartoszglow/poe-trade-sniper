@@ -111,3 +111,26 @@ a table + pruning), so it survives route changes but resets on reload. Every che
 here, the Settings bench, OR a desktop hotkey from anywhere) lands in the same history and
 the side panel. The single-result rendering is extracted to `PriceCheckResultView` and
 shared by the panel, the Settings bench and this view (3-instance extraction).
+
+## Bug fixes post-launch (2026-07-03)
+
+- **League was hardcoded `Standard`** — both trade2 rare search AND poe2scout queried the
+  wrong league. Now `SearchManager.getPrimaryLeague()` (most common league among watched
+  searches) → config fallback. This was why rares priced against the wrong league.
+- **poe2scout endpoints were wrong (404 → every fixed-value item unpriced, looked like
+  "unrecognized")**. Real API found via its openapi.json and documented in
+  `docs/integration/api-notes.md`: `api.poe2scout.com/api/poe2/Leagues/{League}/Items` +
+  `/Currencies/ByCategory`, prices in exalted, per-league. Verified live 2026-07-03.
+- Adversarial review (19 agents) earlier fixed the S2 `{query,sort}` envelope + 6 more.
+
+## Remaining / needs validation / parked
+
+- **NEEDS on-Mac + in-game hardware validation** (structure done, unproven): the desktop
+  synthetic Cmd+C under Wine + clipboard sync, and the click-through overlay over the game
+  (incl. Wine "fullscreen"). Same gap as buy-automation natives. Server+web validated via
+  the paste bench; rares can't be live-tested here (hard rule #8) — operator validates.
+- **Parked**: Tier-2 tier/roll analytics (game-file `pathofexile-dat` CDN pipeline);
+  item-text i18n (EN-only, D-pc-7); whisper-from-result; DB-persisted history (currently
+  session-local, capped 50); league fallback when the operator has zero searches (could use
+  poe2scout `Leagues` IsCurrent); magic-item base-type extraction (magic items price by
+  stats only today, base embedded in the affixed name and not extracted).

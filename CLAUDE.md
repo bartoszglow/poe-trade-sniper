@@ -52,3 +52,14 @@ validation: capture-stream non-black, CV thresholds, uiohook-for-synthetic.
 Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
 NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no
 decorator metadata).
+
+Operator-UX + tooling session (2026-07-02→03): shipped **#33 rooms** (named
+groups, DnD, master switch, auto-expand), **#34 live-hits panel** (resize/hide +
+click-to-locate spotlight), **#35 search archive/restore**, **#36 first-run
+onboarding** (wizard + checklist), **#37 price check** (clipboard→trade2/poe2scout,
+budget-gated, versioned dictionary, in-app panel + Price Checks nav view + desktop
+hotkey/overlay), plus login/logout UX, universal ConfirmDialog. Plans in
+`docs/planning/33–37`. **Still needs on-Mac hardware validation:** the price-check
+desktop layer (synthetic Cmd+C under Wine + click-through overlay) — same gap as
+the Buy-automation natives. Full pending list + parked items:
+memory `session-2026-07-state-and-pending`.
