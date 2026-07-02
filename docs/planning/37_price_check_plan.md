@@ -1,9 +1,23 @@
 # 37 — In-map price check (clipboard → trade2/poe2scout, panel + overlay)
 
-**Status: APPROVED, IN PROGRESS** (2026-07-02). Research: two workflow sweeps this session
-(tools landscape + league-data pipeline + macOS overlay mechanics) — see decisions below.
+**Status: PHASE A + B IMPLEMENTED** (2026-07-03). Server pipeline + comprehensive versioned
+dictionary + in-app panel = `2b77543`; desktop hotkey + click-through overlay = next commit.
+Verify green (server 34 files, web 7, desktop 2). **Desktop synthetic-copy + overlay NEED
+on-Mac + in-game validation** (same hardware gap as buy-automation native input). Research:
+two workflow sweeps (tools landscape + league-data pipeline + macOS overlay mechanics).
 Goal: the first usable PoE2 price check on macOS; works IN MAPS (the built-in Shift+Alt+click
 check works only in town — the gap this fills).
+
+## Comprehensive dictionary (operator request)
+
+The Tier-1 dictionary is a versioned, diffable `TradeDictionary`
+(`apps/server/src/price-check/dictionary-schema.ts`): `meta` (schemaVersion + dataVersion +
+realm/league + fetchedAt + per-dataset counts), `stats` (id/text/type/placeholders/options,
+`tiers?` reserved for Tier-2), `items` (key/name/baseType/category/flags, `properties?`
+reserved), `statics`. `DICTIONARY_SCHEMA_VERSION` forces a rebuild on shape change;
+`diffDictionary` keyed-diffs two snapshots (added/removed/changed per dataset) so every
+league refresh is auditable and logged, not a black-box overwrite; `needsRebuild` gates on
+schema + TTL. Grows to hold "a lot of data" without reshaping what's stored.
 
 ## How every serious tool does it (research, high confidence)
 
