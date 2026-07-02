@@ -4,6 +4,7 @@ import { AppBar } from './AppBar';
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { GuardBanner } from './GuardBanner';
 import { LoginOverlay } from './LoginOverlay';
+import { OnboardingWizard } from './OnboardingWizard';
 import { SessionBanner } from './SessionBanner';
 import { UpdateBanner } from './UpdateBanner';
 import { IconRail } from './IconRail';
@@ -13,6 +14,7 @@ import { ResizeHandle } from '../components/ResizeHandle';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useHealth } from '../hooks/useHealth';
 import { useHitsPanelLayout } from '../hooks/useHitsPanelLayout';
+import { useOnboardingState } from '../hooks/useOnboardingState';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
@@ -39,6 +41,7 @@ export function AppShell() {
   const networkViewEnabled = useNetworkViewEnabled();
   const hitsPanel = useHitsPanelLayout();
   const hitsPanelHidden = hitsPanel.hiddenAt !== null;
+  const onboarding = useOnboardingState();
 
   // A drag previews the width by writing the CSS variable straight on the grid
   // node — no React re-render per pointer move (the whole app hangs off this
@@ -159,12 +162,20 @@ export function AppShell() {
         </aside>
       )}
 
-      {needsLogin && !loginOverlayDismissed && (
-        <LoginOverlay
-          expired={status.session.hasSession}
-          onRefresh={refresh}
-          onClose={() => setLoginOverlayDismissed(true)}
-        />
+      {/* First run: the wizard ABSORBS the login overlay (#36) — it embeds the
+          same login flow and closing it counts as dismissing the overlay, so a
+          user who skipped login isn't immediately re-prompted. */}
+      {!onboarding.wizardDone ? (
+        <OnboardingWizard onClose={() => setLoginOverlayDismissed(true)} />
+      ) : (
+        needsLogin &&
+        !loginOverlayDismissed && (
+          <LoginOverlay
+            expired={status.session.hasSession}
+            onRefresh={refresh}
+            onClose={() => setLoginOverlayDismissed(true)}
+          />
+        )
       )}
 
       <footer className="col-span-full">

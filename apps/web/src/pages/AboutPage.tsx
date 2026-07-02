@@ -1,6 +1,7 @@
-import { HandHeart } from 'lucide-react';
+import { GraduationCap, HandHeart } from 'lucide-react';
 import { useHealth } from '../hooks/useHealth';
 import { useT } from '../i18n/i18n';
+import { setOnboardingDone } from '../lib/onboarding';
 import {
   AUTHOR_LINKS,
   AUTHOR_NAME,
@@ -117,6 +118,14 @@ export function AboutPage() {
       <section className="rounded-lg border border-edge bg-surface-1 p-4 text-xs text-ink-faint">
         <p>{t('about.version', { version: version ?? '—' })}</p>
         <p className="mt-1">{t('about.disclaimer')}</p>
+        <button
+          type="button"
+          onClick={() => setOnboardingDone(false)}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-edge bg-surface-2 px-3 py-1.5 text-sm text-ink transition-colors hover:border-edge-strong hover:text-gold-bright"
+        >
+          <GraduationCap className="h-4 w-4" />
+          {t('onboarding.showIntro')}
+        </button>
       </section>
     </div>
   );

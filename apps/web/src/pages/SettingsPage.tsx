@@ -1,5 +1,13 @@
 import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
-import { Download, KeyRound, LogIn, ShieldCheck, Upload, Volume2 } from 'lucide-react';
+import {
+  Download,
+  GraduationCap,
+  KeyRound,
+  LogIn,
+  ShieldCheck,
+  Upload,
+  Volume2,
+} from 'lucide-react';
 import {
   PERMISSION_KINDS,
   describeState,
@@ -19,6 +27,7 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useLoginCapture } from '../hooks/useLoginCapture';
+import { setOnboardingDone } from '../lib/onboarding';
 import { setNetworkViewEnabled, useNetworkViewEnabled } from '../hooks/useNetworkView';
 import { LANGUAGES, useLanguage, useT, type Language } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
@@ -268,7 +277,7 @@ export function SettingsPage() {
       <h1 className="text-lg font-semibold text-ink">{t('settings.title')}</h1>
 
       <SettingsCard title={t('settings.language')}>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Select
             ariaLabel={t('settings.language')}
             value={language}
@@ -277,6 +286,11 @@ export function SettingsPage() {
             className="w-40"
           />
           <span className="text-xs text-ink-faint">{t('settings.languageHint')}</span>
+          <div className="flex-1" />
+          <Button variant="ghost" onClick={() => setOnboardingDone(false)}>
+            <GraduationCap className="h-4 w-4" />
+            {t('onboarding.showIntro')}
+          </Button>
         </div>
       </SettingsCard>
 

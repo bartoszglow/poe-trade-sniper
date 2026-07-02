@@ -152,6 +152,64 @@ export const EN = {
   'hitsPanel.show': 'Show live hits',
   'hitsPanel.resize': 'Drag to resize the live hits panel (double-click resets)',
 
+  // First-run onboarding wizard (#36)
+  'onboarding.next': 'Next',
+  'onboarding.back': 'Back',
+  'onboarding.skipIntro': 'Skip intro',
+  'onboarding.finish': 'Start sniping',
+  'onboarding.showIntro': 'Show intro',
+  'onboarding.welcomeTitle': 'Win the listing before anyone else',
+  'onboarding.welcomeBody':
+    'PoE Trade Sniper watches your Path of Exile 2 trade searches live. The moment a matching item is listed you get an alert — and one click warps your character to the seller’s hideout.',
+  'onboarding.welcomeManual': 'You complete the trade yourself — the app never buys for you.',
+  'onboarding.welcomeModes': 'live WebSocket detection with an automatic polling fallback',
+  'onboarding.disclaimer':
+    'A community fan tool. Not affiliated with or endorsed by Grinding Gear Games. Use at your own risk.',
+  'onboarding.loginTitle': 'Connect your PoE session — required',
+  'onboarding.loginWhy':
+    'The app rides your own pathofexile.com session. Without it nothing works — detection and travel stay paused.',
+  'onboarding.loginChrome':
+    'A real Chrome window will open on the official pathofexile.com login page. Log in there — it closes by itself when done.',
+  'onboarding.loginMobile':
+    'Using a phone? The login window opens on the computer running the sniper. Alternatively paste your session cookie in Settings.',
+  'onboarding.loginPrivacy':
+    'Your password never touches this app — only the session cookie is captured, stored encrypted and locally. The only server ever contacted is pathofexile.com.',
+  'onboarding.loginSkip': 'Skip for now',
+  'onboarding.loginSkipWarning': 'skipping = the app stays inactive',
+  'onboarding.searchTitle': 'Build the search on the trade site, paste it here',
+  'onboarding.searchStepBuild': 'Build your whole search on the official PoE2 trade site',
+  'onboarding.searchStepBuildHint':
+    'pathofexile.com/trade2 — item, stats, price… everything is defined there, not in this app.',
+  'onboarding.searchStepInstant': 'Tick "Instant Buyout" in the trade-site filters',
+  'onboarding.searchStepInstantHint':
+    'required for Travel — only instant-buyout listings carry a hideout token.',
+  'onboarding.searchStepCopy':
+    'Copy the search URL from the address bar (or just the id at the end)',
+  'onboarding.searchStepPaste': 'Paste it into "Watch a search" — detection starts immediately',
+  'onboarding.searchTravelWarning':
+    'TRAVEL teleports your real character to the seller’s hideout. It is off by default and opt-in per search.',
+  'onboarding.legendActive': 'detection on',
+  'onboarding.legendTravel': 'auto-warp on hit',
+  'onboarding.legendBuy': 'macOS app only',
+  'onboarding.hitsTitle': 'Hits stream in live — act fast',
+  'onboarding.hitsBody':
+    'New listings appear instantly in the Live hits panel on the right. The travel window is short: hideout tokens die after ~4 minutes (the button turns into a re-check after that).',
+  'onboarding.hitsPanelHint':
+    'Drag the divider to resize the panel; hide it with the top-bar toggle. Hits and Activity in the left rail keep the full history.',
+  'onboarding.hitsMobileTitle': 'Your views',
+  'onboarding.hitsMobileBody':
+    'Searches — manage what is watched. Hits — history of every detection. Activity — what the automation did in-game.',
+  'onboarding.hitsMobileNote':
+    'Heads-up: the live-hits action panel (travel/buy) needs a desktop-width window (≥1024px). On this screen you can manage searches and browse history.',
+
+  // "Getting started" checklist (#36 phase 2)
+  'gettingStarted.title': 'Getting started',
+  'gettingStarted.stepSession': 'Connect your Path of Exile session',
+  'gettingStarted.stepSearch': 'Watch your first trade search',
+  'gettingStarted.stepSearchCta': 'Add one ↑',
+  'gettingStarted.stepHit': 'Wait for your first live hit',
+  'gettingStarted.stepHitPending': 'detection running…',
+
   // Hit card / travel
   'hitCard.queued': 'queued…',
   'hitCard.traveling': 'traveling…',
@@ -505,6 +563,63 @@ export const PL: Record<MessageKey, string> = {
   'hitsPanel.hide': 'Ukryj trafienia na żywo',
   'hitsPanel.show': 'Pokaż trafienia na żywo',
   'hitsPanel.resize': 'Przeciągnij, aby zmienić szerokość panelu (dwuklik przywraca domyślną)',
+
+  // Wprowadzenie przy pierwszym uruchomieniu (#36)
+  'onboarding.next': 'Dalej',
+  'onboarding.back': 'Wstecz',
+  'onboarding.skipIntro': 'Pomiń wprowadzenie',
+  'onboarding.finish': 'Zaczynamy',
+  'onboarding.showIntro': 'Pokaż wprowadzenie',
+  'onboarding.welcomeTitle': 'Wyprzedź innych kupujących',
+  'onboarding.welcomeBody':
+    'PoE Trade Sniper obserwuje Twoje wyszukiwania na trade Path of Exile 2 na żywo. Gdy tylko pojawi się pasujący przedmiot, dostajesz alert — a jedno kliknięcie teleportuje Twoją postać do kryjówki sprzedawcy.',
+  'onboarding.welcomeManual': 'Transakcję finalizujesz sam — aplikacja nigdy nie kupuje za Ciebie.',
+  'onboarding.welcomeModes': 'wykrywanie live przez WebSocket z automatycznym trybem zapasowym',
+  'onboarding.disclaimer':
+    'Nieoficjalne narzędzie społeczności. Niepowiązane z Grinding Gear Games. Używasz na własną odpowiedzialność.',
+  'onboarding.loginTitle': 'Połącz sesję PoE — wymagane',
+  'onboarding.loginWhy':
+    'Aplikacja korzysta z Twojej własnej sesji pathofexile.com. Bez niej nic nie działa — wykrywanie i podróże pozostają wstrzymane.',
+  'onboarding.loginChrome':
+    'Otworzy się prawdziwe okno Chrome z oficjalną stroną logowania pathofexile.com. Zaloguj się tam — okno zamknie się samo.',
+  'onboarding.loginMobile':
+    'Korzystasz z telefonu? Okno logowania otworzy się na komputerze, na którym działa sniper. Możesz też wkleić ciasteczko sesji w Ustawieniach.',
+  'onboarding.loginPrivacy':
+    'Twoje hasło nigdy nie trafia do tej aplikacji — przechwytywane jest tylko ciasteczko sesji, zapisywane lokalnie i zaszyfrowane. Jedyny serwer, z którym się łączymy, to pathofexile.com.',
+  'onboarding.loginSkip': 'Pomiń na razie',
+  'onboarding.loginSkipWarning': 'pominięcie = aplikacja pozostaje nieaktywna',
+  'onboarding.searchTitle': 'Zbuduj wyszukiwanie na stronie trade i wklej je tutaj',
+  'onboarding.searchStepBuild': 'Całe wyszukiwanie zbuduj na oficjalnej stronie trade PoE2',
+  'onboarding.searchStepBuildHint':
+    'pathofexile.com/trade2 — przedmiot, statystyki, cena… wszystko definiujesz tam, nie w tej aplikacji.',
+  'onboarding.searchStepInstant': 'Zaznacz „Zakup natychmiastowy" w filtrach na stronie trade',
+  'onboarding.searchStepInstantHint':
+    'wymagane dla Podróży — tylko oferty z natychmiastowym zakupem mają token kryjówki.',
+  'onboarding.searchStepCopy': 'Skopiuj URL wyszukiwania z paska adresu (albo samo id z końca)',
+  'onboarding.searchStepPaste': 'Wklej w „Obserwuj wyszukiwanie" — wykrywanie startuje od razu',
+  'onboarding.searchTravelWarning':
+    'TRAVEL teleportuje Twoją prawdziwą postać do kryjówki sprzedawcy. Domyślnie wyłączone, włączasz świadomie per wyszukiwanie.',
+  'onboarding.legendActive': 'wykrywanie włączone',
+  'onboarding.legendTravel': 'auto-teleport przy trafieniu',
+  'onboarding.legendBuy': 'tylko aplikacja macOS',
+  'onboarding.hitsTitle': 'Trafienia spływają na żywo — działaj szybko',
+  'onboarding.hitsBody':
+    'Nowe oferty pojawiają się natychmiast w panelu Trafienia na żywo po prawej. Okno na podróż jest krótkie: token kryjówki wygasa po ~4 minutach (potem przycisk zmienia się w ponowne sprawdzenie).',
+  'onboarding.hitsPanelHint':
+    'Przeciągnij krawędź, aby zmienić szerokość panelu; ukryj go przełącznikiem na górnym pasku. Pełna historia jest w widokach Trafienia i Aktywność.',
+  'onboarding.hitsMobileTitle': 'Twoje widoki',
+  'onboarding.hitsMobileBody':
+    'Wyszukiwania — zarządzanie obserwowanymi. Trafienia — historia każdej detekcji. Aktywność — co automatyzacja zrobiła w grze.',
+  'onboarding.hitsMobileNote':
+    'Uwaga: panel akcji na żywo (podróż/zakup) wymaga okna o szerokości desktopowej (≥1024px). Na tym ekranie zarządzasz wyszukiwaniami i przeglądasz historię.',
+
+  // Checklista „Pierwsze kroki" (#36 faza 2)
+  'gettingStarted.title': 'Pierwsze kroki',
+  'gettingStarted.stepSession': 'Połącz sesję Path of Exile',
+  'gettingStarted.stepSearch': 'Obserwuj pierwsze wyszukiwanie',
+  'gettingStarted.stepSearchCta': 'Dodaj ↑',
+  'gettingStarted.stepHit': 'Poczekaj na pierwsze trafienie',
+  'gettingStarted.stepHitPending': 'wykrywanie działa…',
 
   // Hit card / travel
   'hitCard.queued': 'w kolejce…',

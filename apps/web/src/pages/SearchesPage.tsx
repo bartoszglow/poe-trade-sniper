@@ -64,6 +64,10 @@ import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { resolveBuyControl, type BuyControl } from '../lib/resolve-buy-control';
 import { ApiError, apiSend } from '../lib/api';
+import { GettingStartedCard } from '../components/GettingStartedCard';
+import { deriveGettingStarted } from '../lib/getting-started';
+import { setGettingStartedDismissed } from '../lib/onboarding';
+import { useOnboardingState } from '../hooks/useOnboardingState';
 import {
   locateSearch,
   moveRoom,
@@ -914,6 +918,17 @@ export function SearchesPage() {
   const needsLogin =
     status !== null && (!status.session.hasSession || status.session.probedValid === false);
 
+  // "Getting started" checklist (#36) — derived from live state, shown until
+  // the funnel completes or the operator dismisses it.
+  const onboarding = useOnboardingState();
+  const gettingStarted = deriveGettingStarted({
+    hasValidSession: status !== null && !needsLogin,
+    searchCount: searches.length,
+    totalHitCount: searches.reduce((total, search) => total + search.hitCount, 0),
+  });
+  const showGettingStarted =
+    !needsLogin && loaded && !onboarding.checklistDismissed && !gettingStarted.allDone;
+
   const searchesById = new Map(searches.map((search) => [search.id, search]));
   const roomsById = new Map(rooms.map((room) => [room.id, room]));
   // Archived searches (#35): greyed flat section at the bottom, newest first.
@@ -978,6 +993,12 @@ export function SearchesPage() {
         <LoginRequired />
       ) : (
         <>
+          {showGettingStarted && (
+            <GettingStartedCard
+              progress={gettingStarted}
+              onDismiss={() => setGettingStartedDismissed(true)}
+            />
+          )}
           <AddSearchForm onAdd={add} />
           {loaded && searches.length === 0 && rooms.length === 0 && (
             <p className="text-sm text-ink-faint">{t('searches.empty')}</p>
