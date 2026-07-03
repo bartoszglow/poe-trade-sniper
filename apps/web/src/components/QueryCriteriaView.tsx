@@ -2,13 +2,14 @@ import { useMemo } from 'react';
 import { useStatsDictionary } from '../hooks/useStatsDictionary';
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
+import type { DetailRowData } from '../lib/detail-layout';
 import {
   filterLabel,
   parseQueryCriteria,
   type CriteriaRow,
   type ParsedCriteria,
 } from '../lib/query-criteria';
-import { DetailCard, DetailRow } from './DetailCard';
+import { DetailCard, DetailRows } from './DetailCard';
 
 /** Best-effort `status.option` labels (only `securable` is a verified mapping). */
 const STATUS_OPTION_LABELS: Record<string, string> = {
@@ -27,20 +28,15 @@ const GROUP_TITLE_KEYS: Record<string, MessageKey> = {
   trade_filters: 'criteria.group.trade',
 };
 
-function RowItems({ rows, disabledTag }: { rows: CriteriaRow[]; disabledTag: string }) {
-  return (
-    <>
-      {rows.map((row, index) => (
-        <DetailRow
-          key={`${row.label}-${index}`}
-          label={row.label}
-          value={row.value}
-          disabled={row.disabled}
-          disabledTag={disabledTag}
-        />
-      ))}
-    </>
-  );
+/** Map parsed criteria rows to the shared DetailRows model; a disabled group marks
+ *  all its rows disabled. Empty values collapse to label-only rows. */
+function toRows(rows: CriteriaRow[], disabledTag: string, groupDisabled = false): DetailRowData[] {
+  return rows.map((row) => ({
+    label: row.label,
+    value: row.value || undefined,
+    disabled: groupDisabled || row.disabled,
+    disabledTag,
+  }));
 }
 
 function hasAnyContent(criteria: ParsedCriteria): boolean {
@@ -75,40 +71,34 @@ export function QueryCriteriaView({ query }: { query: unknown }) {
     ? (STATUS_OPTION_LABELS[criteria.statusOption] ?? criteria.statusOption)
     : null;
 
+  const purchaseRows: DetailRowData[] = [];
+  if (statusLabel) {
+    purchaseRows.push({
+      label: statusLabel,
+      value: statusLabel !== criteria.statusOption ? `(${criteria.statusOption ?? ''})` : undefined,
+    });
+  }
+  if (criteria.price) {
+    purchaseRows.push({ label: t('criteria.price'), value: criteria.price, accent: true });
+  }
+
   return (
     <div className="grid grid-cols-1 gap-x-2 gap-y-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {criteria.itemRows.length > 0 && (
         <DetailCard title={t('criteria.item')}>
-          <RowItems rows={criteria.itemRows} disabledTag={disabledTag} />
+          <DetailRows rows={toRows(criteria.itemRows, disabledTag)} />
         </DetailCard>
       )}
 
-      {(statusLabel || criteria.price) && (
+      {purchaseRows.length > 0 && (
         <DetailCard title={t('criteria.purchase')}>
-          {statusLabel && (
-            <DetailRow
-              label={statusLabel}
-              value={
-                statusLabel !== criteria.statusOption
-                  ? `(${criteria.statusOption ?? ''})`
-                  : undefined
-              }
-            />
-          )}
-          {criteria.price && (
-            <DetailRow label={t('criteria.price')} value={criteria.price} accent />
-          )}
+          <DetailRows rows={purchaseRows} />
         </DetailCard>
       )}
 
       {criteria.statGroups.map((group, index) => (
         <DetailCard key={`stats-${index}`} title={`${t('criteria.stats')} · ${group.heading}`}>
-          <RowItems
-            rows={
-              group.disabled ? group.rows.map((row) => ({ ...row, disabled: true })) : group.rows
-            }
-            disabledTag={disabledTag}
-          />
+          <DetailRows rows={toRows(group.rows, disabledTag, group.disabled)} />
         </DetailCard>
       ))}
 
@@ -116,12 +106,7 @@ export function QueryCriteriaView({ query }: { query: unknown }) {
         const titleKey = GROUP_TITLE_KEYS[group.key];
         return (
           <DetailCard key={group.key} title={titleKey ? t(titleKey) : filterLabel(group.key)}>
-            <RowItems
-              rows={
-                group.disabled ? group.rows.map((row) => ({ ...row, disabled: true })) : group.rows
-              }
-              disabledTag={disabledTag}
-            />
+            <DetailRows rows={toRows(group.rows, disabledTag, group.disabled)} />
           </DetailCard>
         );
       })}

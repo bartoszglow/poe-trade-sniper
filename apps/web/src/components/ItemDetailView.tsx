@@ -1,19 +1,13 @@
 import type { ItemDetail, ItemProperty } from '@poe-sniper/shared';
 import { useT } from '../i18n/i18n';
-import { DetailCard, DetailRow } from './DetailCard';
+import type { DetailRowData } from '../lib/detail-layout';
+import { DetailCard, DetailRows } from './DetailCard';
 
-function PropertyRows({ properties }: { properties: ItemProperty[] }) {
-  return (
-    <>
-      {properties.map((property) => (
-        <DetailRow
-          key={property.label}
-          label={property.label}
-          value={property.value ?? undefined}
-        />
-      ))}
-    </>
-  );
+function propertyRows(properties: ItemProperty[]): DetailRowData[] {
+  return properties.map((property) => ({
+    label: property.label,
+    value: property.value ?? undefined,
+  }));
 }
 
 function ModLines({ mods, className }: { mods: string[]; className: string }) {
@@ -30,8 +24,9 @@ function ModLines({ mods, className }: { mods: string[]; className: string }) {
 
 /**
  * The normalized item payload, laid out as the same group cards as the search
- * criteria view (DetailCard grid) so the two read consistently. Mods keep their
- * trade-site coloring.
+ * criteria view (DetailCard + DetailRows) so the two read consistently — scalar
+ * groups pack into columns, longer ones drop to one-per-line, via the shared
+ * layout logic. Mods keep their trade-site coloring.
  */
 export function ItemDetailView({
   item,
@@ -50,6 +45,12 @@ export function ItemDetailView({
     item.runeMods.length > 0 ||
     item.craftedMods.length > 0;
 
+  const identityRows: DetailRowData[] = [];
+  if (item.baseType) identityRows.push({ label: t('item.base'), value: item.baseType });
+  if (item.itemLevel !== null) {
+    identityRows.push({ label: t('item.itemLevel'), value: String(item.itemLevel) });
+  }
+
   return (
     <div
       className={
@@ -60,23 +61,20 @@ export function ItemDetailView({
     >
       {hasIdentity && (
         <DetailCard title={t('item.title')}>
-          {item.baseType && <DetailRow label={t('item.base')} value={item.baseType} />}
-          {item.itemLevel !== null && (
-            <DetailRow label={t('item.itemLevel')} value={String(item.itemLevel)} />
-          )}
-          {item.corrupted && <div className="text-xs text-danger">{t('item.corrupted')}</div>}
+          <DetailRows rows={identityRows} />
+          {item.corrupted && <div className="mt-1 text-xs text-danger">{t('item.corrupted')}</div>}
         </DetailCard>
       )}
 
       {item.properties.length > 0 && (
         <DetailCard title={t('item.properties')}>
-          <PropertyRows properties={item.properties} />
+          <DetailRows rows={propertyRows(item.properties)} />
         </DetailCard>
       )}
 
       {item.requirements.length > 0 && (
         <DetailCard title={t('item.requirements')}>
-          <PropertyRows properties={item.requirements} />
+          <DetailRows rows={propertyRows(item.requirements)} />
         </DetailCard>
       )}
 
