@@ -20,10 +20,10 @@ describe('acceleratorFromKeyChord', () => {
         { isMac: false },
       ),
     ).toBe('CommandOrControl+Shift+D');
-    // meta alone is ignored off mac → no modifier → not committable
+    // meta is ignored off mac → no primary modifier, but the bare key still commits
     expect(
       acceleratorFromKeyChord({ ...base, code: 'KeyD', key: 'd', metaKey: true }, { isMac: false }),
-    ).toBeNull();
+    ).toBe('D');
   });
 
   it('keeps listening (null) on modifier-only presses', () => {
@@ -36,11 +36,21 @@ describe('acceleratorFromKeyChord', () => {
     expect(isModifierOnly({ ...base, code: 'MetaLeft', key: 'Meta' })).toBe(true);
   });
 
-  it('rejects a bare non-function key but allows a bare function key', () => {
-    expect(
-      acceleratorFromKeyChord({ ...base, code: 'KeyD', key: 'd' }, { isMac: true }),
-    ).toBeNull();
+  it('allows ANY bare single key (single-key hotkeys): function / letter / punctuation', () => {
     expect(acceleratorFromKeyChord({ ...base, code: 'F5', key: 'F5' }, { isMac: true })).toBe('F5');
+    expect(acceleratorFromKeyChord({ ...base, code: 'KeyD', key: 'd' }, { isMac: true })).toBe('D');
+    expect(acceleratorFromKeyChord({ ...base, code: 'Backquote', key: '`' }, { isMac: true })).toBe(
+      '`',
+    );
+  });
+
+  it('builds a larger 3-key combo', () => {
+    expect(
+      acceleratorFromKeyChord(
+        { ...base, code: 'KeyD', key: 'd', ctrlKey: true, altKey: true, shiftKey: true },
+        { isMac: false },
+      ),
+    ).toBe('CommandOrControl+Alt+Shift+D');
   });
 
   it('maps digits, arrows, and punctuation codes', () => {

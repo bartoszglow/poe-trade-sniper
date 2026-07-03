@@ -52,6 +52,14 @@ function stepTone(phase: string): string {
   return 'text-gold';
 }
 
+/** Timeline node border colour per phase (the vertical-timeline dots). */
+function stepNode(phase: string): string {
+  if (phase === 'success' || phase === 'moved' || phase === 'returned') return 'border-ok';
+  if (phase === 'failed' || phase === 'return-failed') return 'border-danger';
+  if (phase === 'aborted' || phase === 'unsupported') return 'border-edge-strong';
+  return 'border-gold';
+}
+
 interface ActivityFeedCardProps {
   entry: FeedEntry;
   nowMs: number;
@@ -261,19 +269,31 @@ export function ActivityFeedCard({
             </span>
           )}
         </div>
-        <ul className="flex flex-col gap-0.5 border-l border-edge pl-2">
-          {record.steps.map((step: ActivityStep, index) => (
-            <li key={index} className="flex items-baseline gap-2 text-xs">
-              <span className="w-12 shrink-0 text-ink-faint">{step.kind}</span>
-              <span className={stepTone(step.phase)}>{step.phase}</span>
-              {step.detail && <span className="truncate text-ink-faint">{step.detail}</span>}
-              <div className="flex-1" />
-              <span className="font-mono text-[0.6rem] text-ink-faint/70">
-                {new Date(step.at).toLocaleTimeString()}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <ol className="flex flex-col">
+          {record.steps.map((step: ActivityStep, index) => {
+            const last = index === record.steps.length - 1;
+            return (
+              <li key={index} className="flex gap-2.5">
+                {/* rail: a hollow phase-coloured node on a connector line */}
+                <div className="flex w-3 flex-none flex-col items-center">
+                  <span
+                    className={`mt-1 h-2.5 w-2.5 flex-none rounded-full border-2 bg-surface-1 ${stepNode(step.phase)}`}
+                  />
+                  {!last && <span className="w-0.5 flex-1 bg-edge" />}
+                </div>
+                <div className={`flex flex-1 items-baseline gap-2 text-xs ${last ? '' : 'pb-2.5'}`}>
+                  <span className="w-11 shrink-0 text-ink-faint">{step.kind}</span>
+                  <span className={stepTone(step.phase)}>{step.phase}</span>
+                  {step.detail && <span className="truncate text-ink-faint">{step.detail}</span>}
+                  <div className="flex-1" />
+                  <span className="font-mono text-[0.6rem] text-ink-faint/70">
+                    {new Date(step.at).toLocaleTimeString()}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     );
     if (!record.item) return actionColumn;

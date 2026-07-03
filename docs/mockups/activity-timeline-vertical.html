@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — vertical step timeline (activity #39)</title>
+<style>
+  :root {
+    --surface-0: #0b0a08; --surface-1: #141210; --surface-2: #1d1a16; --surface-3: #262219;
+    --edge: #2e2a22; --edge-strong: #443d2f;
+    --ink: #d6cfc2; --ink-muted: #8d8576; --ink-faint: #5d574c;
+    --gold: #c9a85c; --gold-bright: #e3c87e; --ok: #6fae6f; --warn: #c9974b;
+    --danger: #c25b4e; --info: #6f9ec2; --unique: #af6025; --magic: #8888ff;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #060505; color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; padding: 24px; }
+  h1 { font-size: 16px; color: var(--gold); margin-bottom: 4px; }
+  .hint { color: var(--ink-muted); font-size: 12px; margin-bottom: 20px; max-width: 720px; }
+  .frames { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .framewrap > .label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+
+  .card { position: relative; overflow: hidden; border: 1px solid var(--edge); border-radius: 10px; background: var(--surface-1); }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ok); }
+  .card.desktop { width: 700px; } .card.mobile { width: 350px; }
+  .cardpad { padding: 10px 14px 12px 16px; }
+  .toprow { display: flex; align-items: center; gap: 8px; }
+  .kicon { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 13px; background: var(--surface-3); border: 1px solid var(--edge); }
+  .name { font-weight: 600; color: var(--unique); }
+  .badge { font-size: 10px; border-radius: 5px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ok); }
+  .grow { flex: 1; } .time { font-size: 11px; color: var(--ink-faint); } .chev { color: var(--ink-faint); }
+  .chip { font-size: 11px; color: var(--ink-muted); background: var(--surface-3); border: 1px solid var(--edge); border-radius: 999px; padding: 1px 8px; }
+  .detwrap { margin-top: 9px; padding-top: 10px; border-top: 1px solid var(--edge); }
+  .cols { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }
+  .kv { font-size: 12px; color: var(--ink-muted); display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .kv b { color: var(--ink); font-weight: 500; } .kv .g { color: var(--gold-bright); font-family: ui-monospace, monospace; } .home { color: var(--ok); }
+
+  /* ===== vertical timeline (option-2 dots+connector, but vertical) ===== */
+  .vtl { list-style: none; }
+  .vstep { display: flex; gap: 10px; }
+  .rail { flex: none; width: 12px; display: flex; flex-direction: column; align-items: center; }
+  .node { margin-top: 3px; width: 10px; height: 10px; flex: none; border-radius: 50%; border: 2px solid var(--gold); background: var(--surface-1); }
+  .node.ok { border-color: var(--ok); } .node.fail { border-color: var(--danger); } .node.mute { border-color: var(--edge-strong); }
+  .conn { width: 2px; flex: 1; background: var(--edge); margin: 2px 0; }
+  .vstep:last-child .conn { display: none; }
+  .scont { flex: 1; display: flex; align-items: baseline; gap: 8px; padding-bottom: 10px; font-size: 12px; }
+  .vstep:last-child .scont { padding-bottom: 0; }
+  .scont .k { width: 44px; flex: none; color: var(--ink-faint); }
+  .scont .p.ok { color: var(--ok); } .scont .p.gold { color: var(--gold); } .scont .p.fail { color: var(--danger); }
+  .scont .d { color: var(--ink-faint); }
+  .scont .t { margin-left: auto; font: 10px ui-monospace, monospace; color: var(--ink-faint); }
+
+  /* item column (reverted DetailCard look) */
+  .idet { display: grid; gap: 8px; }
+  .dcard { border: 1px solid var(--edge); border-radius: 8px; background: var(--surface-2); padding: 8px 10px; }
+  .dcard .dt { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+  .drow { display: flex; justify-content: space-between; font-size: 12px; } .drow .l { color: var(--ink-muted); } .drow .v { color: var(--ink); }
+  .mod { font-size: 12px; } .mod.expl { color: var(--magic); } .mod.impl { color: var(--ink-muted); font-style: italic; }
+  .note { margin-top: 12px; font-size: 11px; color: var(--ink-faint); }
+</style>
+</head>
+<body>
+  <h1>Vertical step timeline — expanded auto-buy card (#39)</h1>
+  <p class="hint">The left column's step list restyled as a <b>vertical timeline</b>: hollow phase-colored nodes on a connector
+  line (the "option 2" look, rotated vertical). Right column keeps the item shown immediately. Node colour = phase
+  (green success · gold in-progress · red failure · muted aborted).</p>
+
+  <div class="frames">
+    <div class="framewrap">
+      <div class="label">Desktop (two columns)</div>
+      <div class="card desktop">
+        <div class="cardpad">
+          <div class="toprow">
+            <span class="kicon">🛒</span><span class="name">Andvarius</span><span class="badge">PLACED</span>
+            <span class="grow"></span><span class="chip">grubosze</span><span class="time">12m ago</span><span class="chev">▾</span>
+          </div>
+          <div class="detwrap">
+            <div class="cols">
+              <div>
+                <div class="kv"><span>listed <span class="g">20 exalted</span></span><span>seller <b>Xyzzy_PoE</b></span><span class="home">⌂ home</span></div>
+                <ul class="vtl">
+                  <li class="vstep"><div class="rail"><span class="node ok"></span><span class="conn"></span></div>
+                    <div class="scont"><span class="k">travel</span><span class="p ok">success</span><span class="t">12:01:02</span></div></li>
+                  <li class="vstep"><div class="rail"><span class="node gold"></span><span class="conn"></span></div>
+                    <div class="scont"><span class="k">buy</span><span class="p gold">item-located</span><span class="t">12:01:04</span></div></li>
+                  <li class="vstep"><div class="rail"><span class="node ok"></span><span class="conn"></span></div>
+                    <div class="scont"><span class="k">buy</span><span class="p ok">moved</span><span class="t">12:01:05</span></div></li>
+                  <li class="vstep"><div class="rail"><span class="node ok"></span><span class="conn"></span></div>
+                    <div class="scont"><span class="k">return</span><span class="p ok">returned</span><span class="t">12:01:08</span></div></li>
+                </ul>
+              </div>
+              <div>
+                <div class="idet">
+                  <div class="dcard"><div class="dt">Item</div><div class="drow"><span class="l">Base</span><span class="v">Gold Ring</span></div><div class="drow"><span class="l">Item level</span><span class="v">72</span></div></div>
+                  <div class="dcard"><div class="dt">Mods</div><div class="mod impl">+20% increased Rarity (implicit)</div><div class="mod expl">+31 to maximum Life</div><div class="mod expl">+18% to Fire Resistance</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="framewrap">
+      <div class="label">With a failure step</div>
+      <div class="card desktop" style="width:340px">
+        <div class="cardpad">
+          <div class="toprow"><span class="kicon">🛒</span><span class="name" style="color:var(--ink)">Heavy Belt</span><span class="badge" style="color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent)">TRAVEL FAILED</span><span class="grow"></span><span class="chev">▾</span></div>
+          <div class="detwrap">
+            <div class="kv"><span>listed <span class="g">40 ex</span></span></div>
+            <ul class="vtl">
+              <li class="vstep"><div class="rail"><span class="node fail"></span><span class="conn"></span></div>
+                <div class="scont"><span class="k">travel</span><span class="p fail">failed</span><span class="d">item no longer available</span><span class="t">:31</span></div></li>
+              <li class="vstep"><div class="rail"><span class="node mute"></span></div>
+                <div class="scont"><span class="k">buy</span><span class="p" style="color:var(--ink-faint)">aborted</span><span class="t">:31</span></div></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">On mobile the two columns stack (timeline above, item below), so the vertical timeline reads the same. Hits /
+  price-check cards are unaffected — only the auto-buy card has steps.</p>
+</body>
+</html>

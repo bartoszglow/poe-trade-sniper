@@ -69,13 +69,13 @@ function mainKeyFromCode(code: string): string | null {
   return named[code] ?? null;
 }
 
-const FUNCTION_KEY = /^F([1-9]|1[0-9]|2[0-4])$/;
-
 /**
  * Build an accelerator from a key chord, or null if it isn't a committable
- * shortcut yet: modifier-only presses, unbindable keys, and bare non-function
- * keys (a global shortcut needs a modifier, else it would fire on every keypress)
- * all return null so the recorder keeps listening.
+ * shortcut yet: modifier-only presses and unbindable keys keep the recorder
+ * listening. ANY single main key is allowed (a bare 'F5' or '`', or a larger combo
+ * like Ctrl+Shift+D) — the desktop matches it via a global observer gated on the
+ * game window being focused, so it neither fires outside the game nor is captured
+ * system-wide (unlike an Electron globalShortcut).
  */
 export function acceleratorFromKeyChord(
   chord: KeyChord,
@@ -88,7 +88,6 @@ export function acceleratorFromKeyChord(
   if (options.isMac ? chord.metaKey : chord.ctrlKey) modifiers.push('CommandOrControl');
   if (chord.altKey) modifiers.push('Alt');
   if (chord.shiftKey) modifiers.push('Shift');
-  if (modifiers.length === 0 && !FUNCTION_KEY.test(mainKey)) return null;
   return [...modifiers, mainKey].join('+');
 }
 
