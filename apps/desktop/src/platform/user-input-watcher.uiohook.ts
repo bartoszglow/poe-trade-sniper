@@ -1,5 +1,6 @@
 import { uIOhook } from 'uiohook-napi';
 import type { UserInputWatcher } from '@poe-sniper/server';
+import { acquireUiohook } from './uiohook-lifecycle.js';
 import { isWithinSyntheticGrace, isWithinSyntheticKeyGrace } from './synthetic-input-marker.js';
 
 /**
@@ -31,6 +32,7 @@ const KEY_GRACE_MS = 1_500;
 export function createUiohookUserInputWatcher(): UserInputWatcher {
   const listeners = new Set<() => void>();
   let started = false;
+  let releaseHook: (() => void) | null = null;
 
   const fire = (): void => {
     for (const listener of listeners) listener();
@@ -50,7 +52,7 @@ export function createUiohookUserInputWatcher(): UserInputWatcher {
         uIOhook.on('keydown', onKey);
         uIOhook.on('mousedown', fire);
         uIOhook.on('wheel', fire);
-        uIOhook.start();
+        releaseHook = acquireUiohook();
         started = true;
       }
       return () => {
@@ -60,7 +62,8 @@ export function createUiohookUserInputWatcher(): UserInputWatcher {
           uIOhook.off('keydown', onKey);
           uIOhook.off('mousedown', fire);
           uIOhook.off('wheel', fire);
-          uIOhook.stop();
+          releaseHook?.();
+          releaseHook = null;
           started = false;
         }
       };

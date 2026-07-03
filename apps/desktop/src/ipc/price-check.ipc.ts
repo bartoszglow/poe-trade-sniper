@@ -1,14 +1,17 @@
-import { BrowserWindow, clipboard, globalShortcut } from 'electron';
+import { BrowserWindow, clipboard } from 'electron';
 import type { DesktopPlatform } from '@poe-sniper/server';
 import { createPriceCheckOverlay } from '../overlay/price-check-overlay.js';
+import { createPriceCheckHotkeyListener } from './price-check-hotkey.uiohook.js';
 
 /**
  * Desktop price-check hotkey bridge (#37, phase B).
  *
- * On the configured global shortcut: synthesize the copy chord so the game
- * copies the hovered item (best-effort — a shell without native input skips
- * it and uses whatever is already on the clipboard), read the item text, POST
- * it ONCE to the loopback `/api/price-check`, then distribute the single result
+ * On the configured hotkey — matched by a game-focus-gated uiohook OBSERVER, so it
+ * fires ONLY while the game window is frontmost and never clashes with the operator's
+ * shortcuts in other apps (see price-check-hotkey.uiohook.ts): synthesize the copy
+ * chord so the game copies the hovered item (best-effort — a shell without native
+ * input skips it and uses whatever is already on the clipboard), read the item text,
+ * POST it ONCE to the loopback `/api/price-check`, then distribute the single result
  * to the enabled sinks — the in-app panel (main window) and/or the click-through
  * overlay. POSTing once matters: a rare-item check spends SEARCH budget, so we
  * never double-spend it across sinks.
@@ -95,7 +98,6 @@ export function registerPriceCheckIpc(options: {
   getMainWindow: () => BrowserWindow | null;
   apiBaseUrl: string;
 }): PriceCheckBridge {
-  let boundHotkey: string | null = null;
   let overlay: ReturnType<typeof createPriceCheckOverlay> | null = null;
   let inFlight = false;
 
@@ -128,20 +130,19 @@ export function registerPriceCheckIpc(options: {
     }
   }
 
+  // The hotkey is a game-focus-gated global OBSERVER (uiohook), not an Electron
+  // globalShortcut — so it never clashes with the operator's other-app shortcuts and
+  // a bare single key is safe (never captured system-wide). It fires only while the
+  // game window is frontmost.
+  const hotkeyListener = createPriceCheckHotkeyListener({
+    isMac: process.platform === 'darwin',
+    isGameFocused: () => options.platform.captureSource.isGameWindowFocused(),
+    onTrigger: () => void onTrigger(),
+  });
+
   async function refresh(): Promise<void> {
     const settings = await fetchSettings(options.apiBaseUrl);
-    const hotkey = settings?.priceCheckHotkey?.trim();
-    if (hotkey === boundHotkey) return;
-    if (boundHotkey) globalShortcut.unregister(boundHotkey);
-    boundHotkey = null;
-    if (!hotkey) return;
-    try {
-      const registered = globalShortcut.register(hotkey, () => void onTrigger());
-      if (registered) boundHotkey = hotkey;
-    } catch {
-      // An invalid accelerator string from settings — leave unbound; the user
-      // fixes it in Settings and the next refresh re-tries.
-    }
+    hotkeyListener.setHotkey(settings?.priceCheckHotkey?.trim() || null);
   }
 
   // Own the settings poll here so it's cleared on dispose (no leaked interval).
@@ -150,8 +151,7 @@ export function registerPriceCheckIpc(options: {
 
   function dispose(): void {
     clearInterval(pollTimer);
-    if (boundHotkey) globalShortcut.unregister(boundHotkey);
-    boundHotkey = null;
+    hotkeyListener.dispose();
     overlay?.destroy();
     overlay = null;
   }

@@ -192,7 +192,8 @@ export const EN = {
   'settings.priceCheckDesc':
     'Hover an item in-game and press the hotkey to look up its price. Works in maps (unlike the in-game check).',
   'settings.priceCheckHotkey': 'Hotkey',
-  'settings.priceCheckHotkeyHint': 'Click, then press the shortcut you want (desktop app only).',
+  'settings.priceCheckHotkeyHint':
+    'Click, then press the shortcut — a single key or a combo. Fires only while the game window is focused (desktop app only).',
   'settings.hotkeyRecord': 'Set shortcut',
   'settings.hotkeyRecording': 'Press keys… (Esc to cancel)',
   'settings.hotkeyNone': 'Not set',
@@ -675,7 +676,8 @@ export const PL: Record<MessageKey, string> = {
   'settings.priceCheckDesc':
     'Najedź na przedmiot w grze i naciśnij skrót, aby sprawdzić cenę. Działa na mapach (w przeciwieństwie do wbudowanej wyceny).',
   'settings.priceCheckHotkey': 'Skrót',
-  'settings.priceCheckHotkeyHint': 'Kliknij i naciśnij wybrany skrót (tylko aplikacja desktopowa).',
+  'settings.priceCheckHotkeyHint':
+    'Kliknij i naciśnij skrót — pojedynczy klawisz lub kombinację. Działa tylko gdy okno gry jest aktywne (tylko aplikacja desktopowa).',
   'settings.hotkeyRecord': 'Ustaw skrót',
   'settings.hotkeyRecording': 'Naciśnij klawisze… (Esc anuluje)',
   'settings.hotkeyNone': 'Nie ustawiono',
