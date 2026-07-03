@@ -58,6 +58,48 @@ status for verified mappings; unverified modes keep the resolved query as-is
 (observed: "Runes of Aldur", "HC Runes of Aldur", "Standard", "Hardcore").
 Served to the UI via cached `GET /api/leagues`.
 
+## Price-check buy whisper — `listing.whisper` (`TODO(verify)`)
+
+- The `/fetch` listing object is expected to carry a pre-templated buy whisper
+  string (`listing.whisper`, e.g. `@Seller Hi, I would like to buy your …`), the
+  same object the detection normalizer already reads `hideout_token` from. The
+  price-check path captures it (`RawTradeListing.whisper`) and the UI offers a
+  copy-to-clipboard so the operator can contact a comparable-listing seller. **Not
+  yet live-verified** (hard rule #8 forbids a live probe here) — marked
+  `TODO(verify)` in `trade-api.client.ts`; confirm the exact field name/shape from
+  a recorded fetch payload and update this note. Absent field → the copy button
+  simply doesn't render (null-safe). (2026-07-03)
+
+## Item-text i18n — localized labels + per-language dictionary (`TODO(verify)`)
+
+- The Ctrl+C parser is lexicon-driven (`item-language.ts`, #38 C): each language has a
+  `ParserLexicon` of localized section labels (`Item Class:` / `Rarity:` / `Item Level:` /
+  `Quality:`), status words (`Corrupted` / `Unidentified`), non-mod prefixes and domain
+  tags. **EN is the only VERIFIED lexicon.** Non-EN lexicons are stubs whose
+  `Item Class:` / `Rarity:` labels are seeded from public knowledge to drive language
+  DETECTION, but their full field labels/status words/domain tags + a per-language stat
+  dictionary are `TODO(verify)` — they need GGG's exact localized strings, which we can't
+  probe here (hard rules #2/#8). Detection falls back to EN, so an unknown language never
+  breaks a parse.
+- **Per-language dictionary host — unverified.** GGG is understood to serve localized trade
+  data on language subdomains (e.g. `de.pathofexile.com/api/trade2/data/stats`); this host
+  scheme is `TODO(verify)` and NOT yet wired into `TradeDataService` (EN host only). Enabling
+  a language for real matching = populate its lexicon + fetch its dictionary from the verified
+  host. (2026-07-03)
+
+## Tier-2 tier/roll data — game bundles via `pathofexile-dat` (`TODO(verify)`, on-machine)
+
+- Per-stat tier/roll ranges live in the game bundles, NOT the trade API. `data/tier-data.json`
+  (`{ dataVersion, stats: { [tradeStatId]: [{tier,min,max}, …] } }`) is generated ON-MACHINE by
+  `apps/server/scripts/build-tier-data.mjs` (fetches GGG's public patch CDN + decodes `.dat` via
+  `pathofexile-dat`) — it cannot run in the agent sandbox. Output lands in the gitignored `data/`
+  dir (a local artifact like the DB — NOT committed; ship as an extraResource when packaging), so
+  it is absent on a fresh checkout until generated. `TierDataService` loads that JSON when present
+  and annotates a matched stat's roll with its tier; absent/empty file →
+  tiers simply unavailable (core check unaffected). The hash→trade-stat-id mapping + base/ilvl
+  keying are `TODO(verify)` against live bundles (hard rule #2). Ranges are approximate until
+  keyed by base + ilvl. (2026-07-03)
+
 ## Tokens & instant buyout
 
 - Query filter `status: {option: "securable"}` = Instant Buyout listings.
@@ -149,7 +191,11 @@ ByCategory?Category=currency&perPage=` → `{Items:[{Text, ApiId, CurrentPrice}]
 - **League for a price check** = the league the operator plays, taken from
   watched searches (`SearchManager.getPrimaryLeague()`), NOT `DEFAULT_LEAGUE`
   ('Standard'). Applies to BOTH the trade2 rare search and poe2scout, so both
-  price in the right league.
+  price in the right league. **Fallback when there are NO searches** (2026-07-03):
+  `Poe2ScoutClient.currentLeague()` reads `GET /Leagues` and picks the entry with
+  `IsCurrent: true` (else the first), so a first-time user still prices against the
+  live temp league before adding any search; config `'Standard'` is only the last
+  resort.
 
 ## Adding entries
 
