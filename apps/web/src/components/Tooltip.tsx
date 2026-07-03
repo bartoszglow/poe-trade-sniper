@@ -13,9 +13,11 @@ interface TooltipProps {
   placement?: TooltipPlacement;
   /**
    * Whether the wrapper is itself a focus target. Default true (for non-interactive
-   * triggers like badges, so keyboard users can reveal the tip). Set false when the
-   * child is already focusable (a link/button) — `group-focus-within` still reveals
-   * the bubble from the child's own focus, and we avoid a redundant tab stop.
+   * triggers like badges: it becomes a tab stop AND the tip reveals on focus, for
+   * keyboard users). Set false when the child is already focusable (a link/button):
+   * no redundant tab stop, and — crucially — the tip reveals on HOVER ONLY, not
+   * focus, so an active nav link that keeps focus after a click doesn't pin the tip
+   * open while the pointer is elsewhere. The child's own aria-label covers a11y.
    */
   focusable?: boolean;
 }
@@ -38,6 +40,12 @@ export function Tooltip({
   placement = 'bottom',
   focusable = true,
 }: TooltipProps) {
+  // Reveal on hover always; on focus ONLY for a focusable (non-interactive) trigger —
+  // an interactive child (nav link) keeps focus after a click, and focus-reveal would
+  // then pin the tip open even with the pointer away.
+  const reveal = focusable
+    ? 'group-hover/tip:opacity-100 group-focus-within/tip:opacity-100'
+    : 'group-hover/tip:opacity-100';
   return (
     <span
       className={`group/tip relative inline-flex ${focusable ? 'cursor-help' : ''} ${className ?? ''}`}
@@ -49,8 +57,7 @@ export function Tooltip({
         className={`pointer-events-none absolute z-30 w-max max-w-[16rem] ${PLACEMENT_CLASSES[placement]}
                    rounded-md border border-edge bg-surface-2 px-2.5 py-1.5
                    text-xs font-normal normal-case tracking-normal text-ink shadow-lg
-                   opacity-0 transition-opacity duration-100
-                   group-hover/tip:opacity-100 group-focus-within/tip:opacity-100`}
+                   opacity-0 transition-opacity duration-100 ${reveal}`}
       >
         {content}
       </span>

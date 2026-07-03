@@ -153,7 +153,9 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
   const [previewQuery, setPreviewQuery] = useState<unknown>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Start COLLAPSED — the Searches view opens showing just the "add" CTA; the form
+  // expands on click (and tucks away again on click-outside / after a successful add).
+  const [collapsed, setCollapsed] = useState(true);
   const formRef = useRef<HTMLFormElement>(null);
 
   // Any pointer-down OUTSIDE the expanded form tucks it away (click-outside,
