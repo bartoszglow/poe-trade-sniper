@@ -29,18 +29,18 @@ export const NAV_ENTRIES: NavEntry[] = [
   { id: 'searches', path: '/', labelKey: 'nav.searches', icon: Crosshair, page: SearchesPage },
   { id: 'hits', path: '/hits', labelKey: 'nav.hits', icon: History, page: HitsPage },
   {
-    id: 'activity',
-    path: '/activity',
-    labelKey: 'nav.activity',
-    icon: ScrollText,
-    page: ActivityPage,
-  },
-  {
     id: 'price-checks',
     path: '/price-checks',
     labelKey: 'nav.priceChecks',
     icon: Coins,
     page: PriceChecksPage,
+  },
+  {
+    id: 'activity',
+    path: '/activity',
+    labelKey: 'nav.activity',
+    icon: ScrollText,
+    page: ActivityPage,
   },
   {
     id: 'network',
