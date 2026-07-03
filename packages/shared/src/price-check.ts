@@ -15,6 +15,9 @@ export interface PriceCheckListing {
   seller: string | null;
   /** ISO-8601 indexed/listed time when known. */
   indexedAt: string | null;
+  /** GGG's pre-templated "@seller Hi, I'd like to buy…" whisper, when present —
+   *  the UI offers a copy-to-clipboard so the operator can contact the seller. */
+  whisper: string | null;
 }
 
 /** A mod line the parser matched to a trade stat (used in the query). */
@@ -57,4 +60,73 @@ export interface PriceCheckResult {
   declineReason: PriceCheckDeclineReason | null;
   /** Live SEARCH-budget headroom 0..1 at query time — surfaced in the UI. */
   searchHeadroom: number;
+}
+
+/** One persisted recent price check (#17) — the durable backing of the view's history. */
+export interface PriceCheckHistoryEntry {
+  id: number;
+  /** ISO-8601 time the check ran. */
+  at: string;
+  result: PriceCheckResult;
+}
+
+// --- Interactive editor (#38 A): the editable, selectable price-check spec ---
+
+/** How the editor renders + how the server serializes an attribute filter. */
+export type FilterInputType = 'number-min' | 'bool' | 'option' | 'text';
+
+/**
+ * A dictionary-matched mod line, editable. `rolls` are the parsed values (shown);
+ * `min`/`max` are the trade2 stat-filter range the operator can edit. The set of
+ * stat filters is data-driven off the dictionary, so new GGG stats appear here
+ * automatically (no hardcoding).
+ */
+export interface PriceCheckStatFilter {
+  id: string;
+  kind: 'stat';
+  statId: string;
+  /** Stat template with `#` placeholders (display). */
+  text: string;
+  /** explicit / implicit / rune / … */
+  statType: string;
+  enabled: boolean;
+  rolls: number[];
+  min: number | null;
+  max: number | null;
+  /** Tier-2 (#38 B): the roll's tier + range, when tier data is loaded. */
+  tier?: { tier: number; min: number; max: number } | null;
+}
+
+/** An item-level attribute filter (ilvl/quality/corrupted/base type/…), from a
+ *  small stable registry — one entry per attribute, so new ones are additive. */
+export interface PriceCheckAttrFilter {
+  id: string;
+  kind: 'attr';
+  /** Registry key: 'itemLevel' | 'quality' | 'corrupted' | 'baseType' | … */
+  attr: string;
+  label: string;
+  enabled: boolean;
+  inputType: FilterInputType;
+  /** Current value (min for number-min, 'true'/'false' for bool, the base string, …). */
+  value: string | number | boolean | null;
+  options?: Array<{ value: string; label: string }>;
+}
+
+export type PriceCheckFilter = PriceCheckStatFilter | PriceCheckAttrFilter;
+
+/** The editable spec produced from a paste — the operator toggles/edits, then prices. */
+export interface PriceCheckDraft {
+  item: {
+    name: string | null;
+    baseType: string | null;
+    itemClass: string | null;
+    rarity: string | null;
+  };
+  league: string;
+  filters: PriceCheckFilter[];
+  /** Mod lines that matched no dictionary stat — shown greyed, not queryable. */
+  unmatched: string[];
+  /** True for fixed-value items (currency/unique): priced by the aggregator, so the
+   *  stat filters don't drive the query — the editor notes this. */
+  fixedValue: boolean;
 }
