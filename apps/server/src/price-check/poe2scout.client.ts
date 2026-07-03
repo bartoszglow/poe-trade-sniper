@@ -11,6 +11,9 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 /** Currency categories poe2scout groups fixed-value stackables under. */
 const CURRENCY_CATEGORIES = ['currency', 'fragments', 'runes', 'essences', 'omen', 'catalysts'];
+/** Deadline for every poe2scout fetch — a stalled upstream must degrade to null,
+ *  never hang the price-check handler (matches the trade-api OUTBOUND_TIMEOUT_MS). */
+const POE2SCOUT_TIMEOUT_MS = 15_000;
 
 interface CacheEntry {
   at: number;
@@ -31,6 +34,8 @@ export class Poe2ScoutClient {
   private readonly cache = new Map<string, CacheEntry>();
   /** Per-league currency name→price map, cached (the currency lists are small). */
   private readonly currencyCache = new Map<string, { at: number; prices: Map<string, number> }>();
+  /** The current temp league (IsCurrent), cached — rarely changes within a session. */
+  private currentLeagueCache: { at: number; league: string | null } | null = null;
 
   constructor(@Optional() @Inject(HTTP_FETCH) fetchFn: FetchFunction | null) {
     this.fetchFn = fetchFn ?? fetch;
@@ -59,6 +64,36 @@ export class Poe2ScoutClient {
     return price;
   }
 
+  /**
+   * The current temporary league per poe2scout (`IsCurrent`) — the fallback when
+   * the operator has no watched searches to infer a league from (#18), so a
+   * first-time user still prices against the live league, not config 'Standard'.
+   * Best-effort: returns null on any failure and the caller falls back to config.
+   */
+  async currentLeague(): Promise<string | null> {
+    if (this.currentLeagueCache && Date.now() - this.currentLeagueCache.at < CACHE_TTL_MS) {
+      return this.currentLeagueCache.league;
+    }
+    let league: string | null = null;
+    try {
+      const response = await this.fetchFn(`${BASE_URL}/Leagues`, {
+        headers: { accept: 'application/json' },
+      });
+      if (response.ok) {
+        const payload = (await response.json()) as
+          | Array<{ Value?: string; IsCurrent?: boolean }>
+          | { Items?: Array<{ Value?: string; IsCurrent?: boolean }> };
+        const leagues = Array.isArray(payload) ? payload : (payload.Items ?? []);
+        const current = leagues.find((entry) => entry.IsCurrent === true) ?? leagues[0];
+        league = typeof current?.Value === 'string' ? current.Value : null;
+      }
+    } catch (error) {
+      this.logger.debug(`poe2scout leagues failed: ${errorMessage(error)}`);
+    }
+    this.currentLeagueCache = { at: Date.now(), league };
+    return league;
+  }
+
   private async lookup(name: string, league: string): Promise<ListingPrice | null> {
     const currencyPrice = await this.currencyPrice(name, league);
     if (currencyPrice !== null) return { amount: currencyPrice, currency: 'exalted' };
@@ -70,7 +105,10 @@ export class Poe2ScoutClient {
   /** Unique/base price via the Items search endpoint (exact name match). */
   private async itemPrice(name: string, league: string): Promise<number | null> {
     const url = `${BASE_URL}/Leagues/${encodeURIComponent(league)}/Items?search=${encodeURIComponent(name)}&perPage=20&page=1`;
-    const response = await this.fetchFn(url, { headers: { accept: 'application/json' } });
+    const response = await this.fetchFn(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(POE2SCOUT_TIMEOUT_MS),
+    });
     if (!response.ok) return null;
     const payload = (await response.json()) as
       | Array<{ Name?: string; Text?: string; Type?: string; CurrentPrice?: number }>
@@ -99,7 +137,10 @@ export class Poe2ScoutClient {
     for (const category of CURRENCY_CATEGORIES) {
       try {
         const url = `${BASE_URL}/Leagues/${encodeURIComponent(league)}/Currencies/ByCategory?Category=${category}&perPage=300&page=1`;
-        const response = await this.fetchFn(url, { headers: { accept: 'application/json' } });
+        const response = await this.fetchFn(url, {
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(POE2SCOUT_TIMEOUT_MS),
+        });
         if (!response.ok) continue;
         const payload = (await response.json()) as {
           Items?: Array<{ Text?: string; CurrentPrice?: number }>;

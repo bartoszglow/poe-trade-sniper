@@ -7,7 +7,8 @@
  *    (roll − tolerance), so comparable-or-better items surface, cheapest first.
  * Corrupted state and a minimum item level are carried as misc filters.
  */
-import type { StatMatch } from './stat-matcher.js';
+/** Just the fields the query needs — satisfied by both StatMatch and MatchedStat. */
+type QueryStat = { statId: string; text: string; values: number[] };
 
 export interface QueryBuildInput {
   rarity: string | null;
@@ -16,7 +17,7 @@ export interface QueryBuildInput {
   itemLevel: number | null;
   quality: number | null;
   corrupted: boolean;
-  matchedStats: StatMatch[];
+  matchedStats: QueryStat[];
 }
 
 export interface BuiltQuery {
@@ -27,7 +28,10 @@ export interface BuiltQuery {
 /** Widen each roll DOWN by this fraction so equal-or-better items match. */
 const ROLL_TOLERANCE = 0.1;
 
-function statFilter(match: StatMatch): { id: string; value?: { min: number } } {
+function statFilter(match: { statId: string; values: number[] }): {
+  id: string;
+  value?: { min: number };
+} {
   if (match.values.length === 0) return { id: match.statId };
   const roll = Math.min(...match.values);
   // Floor a positive roll to (roll − 10%); leave non-positive rolls unbounded.

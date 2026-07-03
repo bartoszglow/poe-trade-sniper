@@ -1,0 +1,9 @@
+{
+  "dataVersion": "test",
+  "stats": {
+    "explicit.stat_life": [
+      { "tier": 1, "min": 61, "max": 80 },
+      { "tier": 2, "min": 52, "max": 60 }
+    ]
+  }
+}

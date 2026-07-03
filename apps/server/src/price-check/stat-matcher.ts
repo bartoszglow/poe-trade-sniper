@@ -29,6 +29,8 @@ export interface CompiledStat {
 export interface StatMatch {
   statId: string;
   text: string;
+  /** Dictionary stat type (explicit/implicit/rune/…) — used by the editor draft. */
+  type: string;
   values: number[];
 }
 
@@ -96,7 +98,7 @@ export function matchModLine(
       const match = stat.regex.exec(line.text);
       if (!match) continue;
       const values = match.slice(1).map(Number).filter(Number.isFinite);
-      return { statId: stat.id, text: stat.text, values };
+      return { statId: stat.id, text: stat.text, type: stat.type, values };
     }
     return null;
   };

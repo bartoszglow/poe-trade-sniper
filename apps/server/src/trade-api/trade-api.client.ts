@@ -33,6 +33,8 @@ export interface RawTradeListing {
   price: { amount: number; currency: string } | null;
   seller: string | null;
   indexedAt: string | null;
+  /** GGG's pre-templated buy whisper for this listing, when present. */
+  whisper: string | null;
 }
 
 interface RawTradeResult {
@@ -40,6 +42,9 @@ interface RawTradeResult {
     price?: { amount?: number; currency?: string } | null;
     account?: { name?: string } | null;
     indexed?: string | null;
+    // TODO(verify): observed on the /fetch listing object (same object we already
+    // read hideout_token from in the detection normalizer); confirm live shape.
+    whisper?: string | null;
   } | null;
 }
 
@@ -376,6 +381,7 @@ export class TradeApiClient {
         : null,
       seller: entry?.listing?.account?.name ?? null,
       indexedAt: entry?.listing?.indexed ?? null,
+      whisper: entry?.listing?.whisper ?? null,
     }));
     return { listings, total: searchPayload.total ?? listings.length, rateLimited: false };
   }

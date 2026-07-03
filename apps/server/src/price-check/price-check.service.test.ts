@@ -25,10 +25,23 @@ const CURRENCY_TEXT = [
   'Stack Size: 3/10',
 ].join('\n');
 
+const MAGIC_TEXT = [
+  'Item Class: Belts',
+  'Rarity: Magic',
+  'Sturdy Heavy Belt of the Whelpling',
+  '--------',
+  'Item Level: 40',
+].join('\n');
+
 function makeService(options: {
   headroom: number;
   priceSearch?: TradeApiClient['priceSearch'];
   poe2scoutPrice?: number | null;
+  /** null → operator has no searches (exercises the currentLeague fallback). */
+  primaryLeague?: string | null;
+  currentLeague?: string | null;
+  isKnownItemName?: boolean;
+  baseTypeMatch?: string | null;
 }) {
   const config = loadConfig({});
   const tradeData = {
@@ -43,7 +56,8 @@ function makeService(options: {
         },
       ]),
     ),
-    isKnownItemName: vi.fn(() => Promise.resolve(true)),
+    isKnownItemName: vi.fn(() => Promise.resolve(options.isKnownItemName ?? true)),
+    matchBaseType: vi.fn(() => Promise.resolve(options.baseTypeMatch ?? null)),
   } as unknown as TradeDataService;
   const poe2scout = {
     priceByName: vi.fn(() =>
@@ -53,6 +67,7 @@ function makeService(options: {
           : { amount: options.poe2scoutPrice, currency: 'exalted' },
       ),
     ),
+    currentLeague: vi.fn(() => Promise.resolve(options.currentLeague ?? null)),
   } as unknown as Poe2ScoutClient;
   const priceSearch = vi.fn(
     options.priceSearch ?? (() => Promise.resolve({ listings: [], total: 0, rateLimited: false })),
@@ -60,8 +75,12 @@ function makeService(options: {
   const tradeApi = { priceSearch } as unknown as TradeApiClient;
   const governor = { headroom: () => options.headroom } as unknown as RateLimitGovernor;
   const searchManager = {
-    getPrimaryLeague: () => 'Runes of Aldur',
+    getPrimaryLeague: () =>
+      options.primaryLeague === undefined ? 'Runes of Aldur' : options.primaryLeague,
   } as unknown as import('../search/search-manager.js').SearchManager;
+  const tierData = {
+    tierForRoll: () => null,
+  } as unknown as import('./tier-data.service.js').TierDataService;
   const service = new PriceCheckService(
     config,
     tradeData,
@@ -69,8 +88,9 @@ function makeService(options: {
     tradeApi,
     governor,
     searchManager,
+    tierData,
   );
-  return { service, priceSearch, poe2scout };
+  return { service, priceSearch, poe2scout, tradeData };
 }
 
 describe('PriceCheckService', () => {
@@ -79,7 +99,14 @@ describe('PriceCheckService', () => {
       headroom: 0.8,
       priceSearch: () =>
         Promise.resolve({
-          listings: [{ price: { amount: 5, currency: 'divine' }, seller: 'a', indexedAt: null }],
+          listings: [
+            {
+              price: { amount: 5, currency: 'divine' },
+              seller: 'a',
+              indexedAt: null,
+              whisper: '@a Hi, I would like to buy your Corpse Shell',
+            },
+          ],
           total: 1,
           rateLimited: false,
         }),
@@ -94,6 +121,8 @@ describe('PriceCheckService', () => {
     expect((passedQuery.query as { status: unknown }).status).toBeDefined();
     expect(result.kind).toBe('listings');
     expect(result.listings[0]?.price).toEqual({ amount: 5, currency: 'divine' });
+    // The buy whisper survives the mapping so the UI can offer copy-to-clipboard (#16).
+    expect(result.listings[0]?.whisper).toContain('buy your');
     expect(result.item.matchedStats.map((stat) => stat.statId)).toEqual(['explicit.stat_life']);
   });
 
@@ -137,5 +166,32 @@ describe('PriceCheckService', () => {
     const result = await service.check('\n\n');
     expect(priceSearch).not.toHaveBeenCalled();
     expect(result.kind).toBe('unavailable');
+  });
+
+  it('falls back to the poe2scout current league when there are no searches (#18)', async () => {
+    const { service, poe2scout } = makeService({
+      headroom: 0.05,
+      primaryLeague: null,
+      currentLeague: 'Runes of Aldur',
+      poe2scoutPrice: 12,
+    });
+    const result = await service.check(CURRENCY_TEXT);
+    expect(poe2scout.currentLeague).toHaveBeenCalled();
+    expect(poe2scout.priceByName).toHaveBeenCalledWith('Divine Orb', 'Runes of Aldur');
+    expect(result.kind).toBe('aggregate');
+  });
+
+  it('recovers a magic item base type from its affixed name, querying by type (#19)', async () => {
+    const { service, priceSearch, tradeData } = makeService({
+      headroom: 0.9,
+      isKnownItemName: false,
+      baseTypeMatch: 'Heavy Belt',
+    });
+    const result = await service.check(MAGIC_TEXT);
+    expect(tradeData.matchBaseType).toHaveBeenCalledWith('Sturdy Heavy Belt of the Whelpling');
+    expect(priceSearch).toHaveBeenCalledOnce();
+    const passed = priceSearch.mock.calls[0]![2] as { query: { type?: string } };
+    expect(passed.query.type).toBe('Heavy Belt');
+    expect(result.kind).toBe('listings');
   });
 });

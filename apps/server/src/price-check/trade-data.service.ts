@@ -38,6 +38,9 @@ export class TradeDataService {
   private dictionary: TradeDictionary | null = null;
   private compiled: CompiledStat[] | null = null;
   private itemKeys = new Set<string>();
+  /** Known base-type names, longest first — used to recover a magic item's base
+   *  from its affixed name (#19). */
+  private baseTypes: string[] = [];
   private loading: Promise<void> | null = null;
 
   constructor(
@@ -56,6 +59,26 @@ export class TradeDataService {
   async isKnownItemName(name: string): Promise<boolean> {
     await this.ensureLoaded();
     return this.itemKeys.has(name.trim().toLowerCase());
+  }
+
+  /**
+   * Recover a magic item's base type from its AFFIXED name (e.g. "Sturdy Heavy
+   * Belt of the Whelpling" → "Heavy Belt"). Magic items carry no separate base
+   * line, so we find the LONGEST known base type that appears as whole words in
+   * the name. Returns the dictionary-cased base, or null if none is recognized.
+   */
+  async matchBaseType(affixedName: string): Promise<string | null> {
+    await this.ensureLoaded();
+    const name = affixedName.trim();
+    if (!name) return null;
+    for (const base of this.baseTypes) {
+      if (new RegExp(`\\b${this.escapeRegExp(base)}\\b`, 'i').test(name)) return base;
+    }
+    return null;
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /** The current dictionary snapshot (metadata for the UI / diagnostics). */
@@ -112,6 +135,11 @@ export class TradeDataService {
     }));
     this.compiled = compileStats(statEntries);
     this.itemKeys = new Set(dictionary.items.map((item) => item.key));
+    // Base types only (not uniques), longest first, so the magic-base matcher
+    // prefers the most specific base ("Heavy Belt" over "Belt").
+    this.baseTypes = [
+      ...new Set(dictionary.items.filter((item) => !item.flags.unique).map((item) => item.name)),
+    ].sort((first, second) => second.length - first.length);
   }
 
   private async fetchFromGgg(): Promise<TradeDictionary> {

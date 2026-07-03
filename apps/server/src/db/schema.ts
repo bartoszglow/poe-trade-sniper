@@ -67,6 +67,22 @@ export const hits = sqliteTable(
 );
 
 /**
+ * Recent price checks (#37/#17): a durable, capped "recent lookups" log so the
+ * Price Checks view survives a restart. Not audit history — pruned to a rolling
+ * cap. No search FK: a price check has no search context of its own.
+ */
+export const priceCheckHistory = sqliteTable(
+  'price_check_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Full PriceCheckResult JSON — re-rendered by the shared PriceCheckResultView. */
+    result: text('result', { mode: 'json' }).notNull(),
+    checkedAt: text('checked_at').notNull(),
+  },
+  (table) => [index('price_check_history_checked_at').on(table.checkedAt)],
+);
+
+/**
  * Activity log — one travel→buy→return sequence the app performed (the operator
  * "Activity" timeline). The item is SNAPSHOTTED here (not a hits FK) so the record
  * survives hit-pruning and search deletion. Never stores the session/hideout token.

@@ -87,6 +87,7 @@ describe('compileStats + matchModLine', () => {
     expect(match).toEqual({
       statId: 'explicit.stat_life',
       text: '+# to maximum Life',
+      type: 'explicit',
       values: [25],
     });
   });

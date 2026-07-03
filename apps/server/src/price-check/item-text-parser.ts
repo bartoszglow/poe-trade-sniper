@@ -10,9 +10,12 @@
  * (Unidentified, Corrupted, Mirrored) and `Note:`/`Requirements:` blocks are
  * recognised so they never leak into the mod list.
  *
- * EN-only for now (D-pc-7). Unmatched-to-a-stat handling happens later; this
- * layer only SPLITS text into a structured item + candidate mod lines.
+ * Language-driven (#38 C): the localized section labels / status words / domain
+ * tags come from a `ParserLexicon` (default EN), so a new language is a lexicon
+ * entry, not a parser edit. Unmatched-to-a-stat handling happens later; this layer
+ * only SPLITS text into a structured item + candidate mod lines.
  */
+import { EN_LEXICON, type ParserLexicon } from './item-language.js';
 
 export type ModDomain =
   | 'explicit'
@@ -43,37 +46,6 @@ export interface ParsedItem {
 
 const SECTION_SEPARATOR = /^-+$/;
 
-/** Trailing ` (domain)` tag → its ModDomain, else null (plain explicit). */
-const DOMAIN_TAGS: Array<{ suffix: string; domain: ModDomain }> = [
-  { suffix: ' (implicit)', domain: 'implicit' },
-  { suffix: ' (rune)', domain: 'rune' },
-  { suffix: ' (enchant)', domain: 'enchant' },
-  { suffix: ' (fractured)', domain: 'fractured' },
-  { suffix: ' (crafted)', domain: 'crafted' },
-  { suffix: ' (desecrated)', domain: 'desecrated' },
-];
-
-/** Lines inside a mod section that are NOT modifiers (metadata / status). */
-const NON_MOD_PREFIXES = [
-  'Requirements:',
-  'Level:',
-  'Str:',
-  'Dex:',
-  'Int:',
-  'Sockets:',
-  'Item Level:',
-  'Quality:',
-  'Note:',
-  'Stack Size:',
-  'Rune sockets:',
-  'Corrupted',
-  'Mirrored',
-  'Unidentified',
-  'Waystone Tier:',
-  'Requires ',
-  'Allocated ',
-];
-
 function splitSections(itemText: string): string[][] {
   const sections: string[][] = [[]];
   for (const rawLine of itemText.split(/\r?\n/)) {
@@ -88,8 +60,8 @@ function splitSections(itemText: string): string[][] {
   return sections.filter((section) => section.length > 0);
 }
 
-function stripDomainTag(line: string): ParsedModLine | null {
-  for (const { suffix, domain } of DOMAIN_TAGS) {
+function stripDomainTag(line: string, lexicon: ParserLexicon): ParsedModLine {
+  for (const { suffix, domain } of lexicon.domainTags) {
     if (line.endsWith(suffix)) {
       return { text: line.slice(0, -suffix.length), domain };
     }
@@ -104,13 +76,14 @@ function fieldValue(line: string, prefix: string): string | null {
 /** Parse the header section (class / rarity / name / base type). */
 function parseHeader(
   section: string[],
+  lexicon: ParserLexicon,
 ): Pick<ParsedItem, 'itemClass' | 'rarity' | 'name' | 'baseType'> {
   let itemClass: string | null = null;
   let rarity: string | null = null;
   const nameLines: string[] = [];
   for (const line of section) {
-    const classValue = fieldValue(line, 'Item Class:');
-    const rarityValue = fieldValue(line, 'Rarity:');
+    const classValue = fieldValue(line, lexicon.itemClassLabel);
+    const rarityValue = fieldValue(line, lexicon.rarityLabel);
     if (classValue !== null) {
       itemClass = classValue;
       continue;
@@ -133,14 +106,16 @@ function parseHeader(
  *  real mod line never leads with a `Word…:`. */
 const PROPERTY_LINE = /^[A-Za-z][A-Za-z ]*:/;
 
-function isNonModLine(line: string): boolean {
-  if (NON_MOD_PREFIXES.some((prefix) => line === prefix || line.startsWith(prefix))) return true;
+function isNonModLine(line: string, lexicon: ParserLexicon): boolean {
+  if (lexicon.nonModPrefixes.some((prefix) => line === prefix || line.startsWith(prefix))) {
+    return true;
+  }
   return PROPERTY_LINE.test(line);
 }
 
-export function parseItemText(itemText: string): ParsedItem {
+export function parseItemText(itemText: string, lexicon: ParserLexicon = EN_LEXICON): ParsedItem {
   const sections = splitSections(itemText);
-  const header = parseHeader(sections[0] ?? []);
+  const header = parseHeader(sections[0] ?? [], lexicon);
 
   const item: ParsedItem = {
     ...header,
@@ -154,29 +129,28 @@ export function parseItemText(itemText: string): ParsedItem {
   // Every section AFTER the header can carry metadata, status flags, or mods.
   for (const section of sections.slice(1)) {
     for (const line of section) {
-      const itemLevelValue = fieldValue(line, 'Item Level:');
+      const itemLevelValue = fieldValue(line, lexicon.itemLevelLabel);
       if (itemLevelValue !== null) {
         const parsed = Number.parseInt(itemLevelValue, 10);
         if (Number.isFinite(parsed)) item.itemLevel = parsed;
         continue;
       }
-      const qualityValue = fieldValue(line, 'Quality:');
+      const qualityValue = fieldValue(line, lexicon.qualityLabel);
       if (qualityValue !== null) {
         const parsed = Number.parseInt(qualityValue.replace(/[+%]/g, ''), 10);
         if (Number.isFinite(parsed)) item.quality = parsed;
         continue;
       }
-      if (line === 'Corrupted') {
+      if (line === lexicon.corruptedWord) {
         item.corrupted = true;
         continue;
       }
-      if (line === 'Unidentified') {
+      if (line === lexicon.unidentifiedWord) {
         item.unidentified = true;
         continue;
       }
-      if (isNonModLine(line)) continue;
-      const modLine = stripDomainTag(line);
-      if (modLine) item.modLines.push(modLine);
+      if (isNonModLine(line, lexicon)) continue;
+      item.modLines.push(stripDomainTag(line, lexicon));
     }
   }
   return item;
