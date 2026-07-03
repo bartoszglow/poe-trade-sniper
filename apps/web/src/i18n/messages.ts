@@ -167,6 +167,12 @@ export const EN = {
   'engineStatusDesc.degraded': 'Degraded — running on the polling fallback after a problem.',
   'engineStatusDesc.stopped': 'Stopped — this search is turned off.',
   'engineStatusDesc.paused': 'Paused — detection is globally paused.',
+  'engineDetail.noSession': 'no PoE session — log in to connect the live socket',
+  'engineDetail.guardHalted': 'safety guard tripped — connections halted until reset',
+  'engineDetail.wsRateLimited': 'rate-limited by GGG — waiting to reconnect; detecting via poll',
+  'engineDetail.wsReconnecting': 'live connection dropped — reconnecting; detecting via poll',
+  'engineDetail.rateLimited': 'rate-limited — the governor is pausing requests',
+  'engineDetail.error': 'engine error — see the Network view for details',
 
   // Live hits panel
   'hitsPanel.title': 'Live hits',
@@ -668,6 +674,13 @@ export const PL: Record<MessageKey, string> = {
   'engineStatusDesc.degraded': 'Ograniczony — działa na trybie zapasowym (polling) po problemie.',
   'engineStatusDesc.stopped': 'Zatrzymany — ten search jest wyłączony.',
   'engineStatusDesc.paused': 'Wstrzymany — wykrywanie jest globalnie wstrzymane.',
+  'engineDetail.noSession': 'brak sesji PoE — zaloguj się, aby połączyć live socket',
+  'engineDetail.guardHalted': 'bezpiecznik zadziałał — połączenia wstrzymane do resetu',
+  'engineDetail.wsRateLimited':
+    'limit żądań GGG — czekam na ponowne połączenie; wykrywam przez poll',
+  'engineDetail.wsReconnecting': 'połączenie live zerwane — ponawiam; wykrywam przez poll',
+  'engineDetail.rateLimited': 'limit żądań — regulator wstrzymuje zapytania',
+  'engineDetail.error': 'błąd silnika — szczegóły w widoku Sieć',
 
   // Live hits panel
   'hitsPanel.title': 'Trafienia na żywo',

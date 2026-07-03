@@ -40,6 +40,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   tradeSearchPageUrl,
   type EngineStatus,
+  type EngineStatusDetailCode,
   type SearchLayoutEntry,
   type SearchPreview,
   type SearchRuntimeInfo,
@@ -140,6 +141,27 @@ const STATUS_SHOWS_DETAIL: Record<EngineStatus, boolean> = {
   stopped: false,
   paused: false,
 };
+
+/**
+ * Localized label for a degraded status's stable detail CODE. The server emits a
+ * code (EngineStatusDetailCode), never raw prose or a WS close code; an unmapped
+ * value (e.g. a legacy raw string) renders nothing rather than leaking to the user.
+ */
+const STATUS_DETAIL_KEYS: Partial<Record<EngineStatusDetailCode, MessageKey>> = {
+  'no-session': 'engineDetail.noSession',
+  'guard-halted': 'engineDetail.guardHalted',
+  'ws-rate-limited': 'engineDetail.wsRateLimited',
+  'ws-reconnecting': 'engineDetail.wsReconnecting',
+  'rate-limited': 'engineDetail.rateLimited',
+  error: 'engineDetail.error',
+};
+
+/** The localized detail key for a search's status, or null when nothing should show
+ *  (the status hides its detail, or the value isn't a known code — never raw text). */
+function statusDetailKey(status: EngineStatus, detail: string | null): MessageKey | null {
+  if (!detail || !STATUS_SHOWS_DETAIL[status]) return null;
+  return STATUS_DETAIL_KEYS[detail as EngineStatusDetailCode] ?? null;
+}
 
 function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promise<void> }) {
   const t = useT();
@@ -413,6 +435,8 @@ function SearchRow({
     }
   }
 
+  const detailKey = statusDetailKey(search.status, search.statusDetail);
+
   return (
     <li
       ref={setNodeRef}
@@ -593,11 +617,9 @@ function SearchRow({
         />
       </div>
       {/* Surface the status detail only when it adds something the badge doesn't
-          (see STATUS_SHOWS_DETAIL) — active/paused/stopped are already fully said by
-          the badge, so their detail line is redundant noise. */}
-      {search.statusDetail && STATUS_SHOWS_DETAIL[search.status] && (
-        <div className="mt-1.5 text-xs text-ink-faint">{search.statusDetail}</div>
-      )}
+          (see statusDetailKey / STATUS_SHOWS_DETAIL) — active/paused/stopped are
+          already fully said by the badge, and a raw/unmapped detail is never shown. */}
+      {detailKey && <div className="mt-1.5 text-xs text-ink-faint">{t(detailKey)}</div>}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
       {criteriaOpen && (
         <div className="mt-2 border-t border-edge pt-3">

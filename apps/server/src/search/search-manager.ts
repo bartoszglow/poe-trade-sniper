@@ -919,7 +919,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       try {
         await (watcher.pollEngine as PollEngine).tick();
       } catch (error) {
-        this.publishEngineStatus(watcher, 'degraded', errorMessage(error));
+        // Raw reason to the logs only; the UI status carries a localized 'error' code.
+        this.logger.warn(`poll tick failed: ${errorMessage(error)}`);
+        this.publishEngineStatus(watcher, 'degraded', 'error');
       }
     } finally {
       this.tickInFlight = false;
@@ -931,7 +933,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     for (const watcher of this.watchers.values()) {
       if (watcher.wsEngine || watcher.pollEngine) {
         this.stopEngines(watcher);
-        this.publishEngineStatus(watcher, 'degraded', 'safety guard tripped — detection halted');
+        this.publishEngineStatus(watcher, 'degraded', 'guard-halted');
       }
     }
   }

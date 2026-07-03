@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import WebSocket from 'ws';
-import type { NetworkOutcome, SessionState } from '@poe-sniper/shared';
+import type { EngineStatusDetailCode, NetworkOutcome, SessionState } from '@poe-sniper/shared';
 import type { AppConfig } from '../config/env.js';
 import { errorMessage } from '../util/error-message.js';
 import type { NetworkLog } from '../network/network-log.service.js';
@@ -25,8 +25,7 @@ type WsConfig = Pick<
  * poll engine covers detection, so the operator can see WS is waiting to reconnect
  * (poll normally owns the displayed status). Keep it a stable constant.
  */
-export const WS_RATE_LIMITED_DETAIL =
-  'live socket rate-limited by GGG (1013) — waiting to reconnect; detecting via poll';
+export const WS_RATE_LIMITED_DETAIL: EngineStatusDetailCode = 'ws-rate-limited';
 
 /** The slice of the safety guard the engine needs (kept narrow for tests). */
 export interface WsConnectGate {
@@ -106,7 +105,7 @@ export class WsEngine implements DetectionEngine {
     if (!session) {
       // Keep retrying — the session may load shortly after boot (boot probe).
       // Poll coverage in the SearchManager handles detection meanwhile.
-      this.callbacks.onStatus('degraded', 'no session for live websocket');
+      this.callbacks.onStatus('degraded', 'no-session');
       this.recordWs('ws-closed', null, 'no session — retrying');
       this.scheduleReconnect(this.config.WS_RECONNECT_LADDER_MS[0] ?? 1_000);
       return;
@@ -114,7 +113,7 @@ export class WsEngine implements DetectionEngine {
     if (!this.connectGate.allowWsConnect(this.context.search.searchId)) {
       // No retry timer on purpose: the guard stays tripped until the operator
       // resets it; the SearchManager restarts engines afterwards.
-      this.callbacks.onStatus('degraded', 'safety guard tripped — ws connections halted');
+      this.callbacks.onStatus('degraded', 'guard-halted');
       this.recordWs('ws-closed', null, 'safety guard tripped');
       return;
     }
@@ -186,10 +185,9 @@ export class WsEngine implements DetectionEngine {
         // under poll coverage, and we stop the fast-retry churn (wait ~5 min).
         this.callbacks?.onStatus('degraded', WS_RATE_LIMITED_DETAIL);
       } else {
-        this.callbacks?.onStatus(
-          'degraded',
-          `live connection lost (code ${code}) — reconnecting in ${Math.round(delayMs / 1000)}s`,
-        );
+        // The close code + delay stay in the Network view (recordWs below); the UI
+        // status shows a localized "reconnecting", never a raw close code.
+        this.callbacks?.onStatus('degraded', 'ws-reconnecting');
       }
       this.recordWs('ws-closed', code, `reconnecting in ${Math.round(delayMs / 1000)}s`);
       this.scheduleReconnect(delayMs);

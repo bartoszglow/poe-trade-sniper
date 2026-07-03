@@ -53,7 +53,7 @@ export class PollEngine implements DetectionEngine {
     // watcher that already published its terminal state.
     if (!this.running) return;
     if (execution.rateLimited) {
-      this.callbacks.onStatus('degraded', 'rate-limited — governor pausing');
+      this.callbacks.onStatus('degraded', 'rate-limited');
       return;
     }
 

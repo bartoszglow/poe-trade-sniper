@@ -509,7 +509,7 @@ describe('SearchManager', () => {
       expect(manager.list()[0]?.engine).toBe('ws');
 
       // ws drops (engine keeps reconnecting on its own) → poll covers the gap.
-      wsEngines[0]?.callbacks?.onStatus('degraded', 'live connection lost (code 1013)');
+      wsEngines[0]?.callbacks?.onStatus('degraded', 'ws-reconnecting');
       expect(manager.list()[0]?.engine).toBe('poll');
       executeSearch.mockClear();
       await manager.runSchedulerTick();

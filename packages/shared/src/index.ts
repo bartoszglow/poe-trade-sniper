@@ -1,6 +1,7 @@
 export * from './search.js';
 export * from './trade-url.js';
 export * from './travel-failure.js';
+export * from './engine-status-detail.js';
 export * from './item.js';
 export * from './offer.js';
 export * from './session.js';
