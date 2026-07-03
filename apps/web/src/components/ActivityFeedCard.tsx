@@ -269,24 +269,28 @@ export function ActivityFeedCard({
             </span>
           )}
         </div>
-        <ol className="flex flex-col">
+        <ol className="mt-1 flex flex-col">
           {record.steps.map((step: ActivityStep, index) => {
             const last = index === record.steps.length - 1;
             return (
-              <li key={index} className="flex gap-2.5">
-                {/* rail: a hollow phase-coloured node on a connector line */}
-                <div className="flex w-3 flex-none flex-col items-center">
+              <li key={index} className="flex gap-3">
+                {/* rail: a hollow phase-coloured node sitting on a continuous
+                    connector line — the node has no top offset so each item's line
+                    meets the next item's node with no gap. */}
+                <div className="flex flex-none flex-col items-center">
                   <span
-                    className={`mt-1 h-2.5 w-2.5 flex-none rounded-full border-2 bg-surface-1 ${stepNode(step.phase)}`}
+                    className={`h-3 w-3 flex-none rounded-full border-2 bg-surface-1 ${stepNode(step.phase)}`}
                   />
-                  {!last && <span className="w-0.5 flex-1 bg-edge" />}
+                  {!last && <span className="w-0.5 flex-1 bg-edge-strong" />}
                 </div>
-                <div className={`flex flex-1 items-baseline gap-2 text-xs ${last ? '' : 'pb-2.5'}`}>
-                  <span className="w-11 shrink-0 text-ink-faint">{step.kind}</span>
+                <div
+                  className={`flex flex-1 items-baseline gap-2.5 text-[0.8rem] ${last ? 'pb-0.5' : 'pb-4'}`}
+                >
+                  <span className="w-12 shrink-0 text-ink-faint">{step.kind}</span>
                   <span className={stepTone(step.phase)}>{step.phase}</span>
                   {step.detail && <span className="truncate text-ink-faint">{step.detail}</span>}
                   <div className="flex-1" />
-                  <span className="font-mono text-[0.6rem] text-ink-faint/70">
+                  <span className="font-mono text-[0.65rem] text-ink-faint/70">
                     {new Date(step.at).toLocaleTimeString()}
                   </span>
                 </div>
