@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import type { PriceCheckResult } from '@poe-sniper/shared';
 import { PriceTag } from './PriceTag';
 import { useT } from '../i18n/i18n';
@@ -27,6 +28,17 @@ export function PriceCheckResultView({
 }) {
   const t = useT();
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  function copyWhisper(whisper: string, index: number): void {
+    void navigator.clipboard?.writeText(whisper).then(() => {
+      setCopiedIndex(index);
+      window.setTimeout(
+        () => setCopiedIndex((current) => (current === index ? null : current)),
+        1500,
+      );
+    });
+  }
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -59,6 +71,22 @@ export function PriceCheckResultView({
                 <PriceTag price={listing.price} />
                 {listing.seller && (
                   <span className="truncate text-xs text-ink-faint">{listing.seller}</span>
+                )}
+                <div className="flex-1" />
+                {listing.whisper && (
+                  <button
+                    type="button"
+                    onClick={() => copyWhisper(listing.whisper!, index)}
+                    aria-label={t('priceCheck.copyWhisper')}
+                    title={t('priceCheck.copyWhisper')}
+                    className="shrink-0 text-ink-faint transition-colors hover:text-ink"
+                  >
+                    {copiedIndex === index ? (
+                      <Check className="h-3.5 w-3.5 text-gold-bright" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
                 )}
               </div>
             ))}

@@ -42,6 +42,7 @@ export interface ServerStatus {
   permissions: PermissionsStatus;
   capabilities: { canCapture: boolean; canControl: boolean };
   settings: AppSettings;
+  onboarding: { firstHitReceived: boolean };
 }
 
 const POLL_INTERVAL_MS = 10_000;

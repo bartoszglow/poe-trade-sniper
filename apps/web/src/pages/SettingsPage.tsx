@@ -9,6 +9,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import {
+  DEFAULT_PRICE_CHECK_HOTKEY,
   PERMISSION_KINDS,
   PRICE_CHECK_SINK_OPTIONS,
   describeState,
@@ -24,6 +25,7 @@ import {
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
+import { HotkeyRecorder } from '../components/HotkeyRecorder';
 import { PriceCheckResultView } from '../components/PriceCheckResultView';
 import { Select } from '../components/Select';
 import { Slider } from '../components/Slider';
@@ -67,7 +69,6 @@ function PriceCheckCard({
 }) {
   const t = useT();
   const { check, checking, result, error } = usePriceCheck();
-  const [hotkey, setHotkey] = useState(settings?.priceCheckHotkey ?? '');
   const [pasteText, setPasteText] = useState('');
   const sinks = settings?.priceCheckSinks ?? [];
 
@@ -86,20 +87,11 @@ function PriceCheckCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Field label={t('settings.priceCheckHotkey')}>
-          <div className="flex items-center gap-2">
-            <TextInput
-              value={hotkey}
-              onChange={(changeEvent) => setHotkey(changeEvent.target.value)}
-              onBlur={() => {
-                const trimmed = hotkey.trim();
-                if (trimmed && trimmed !== settings?.priceCheckHotkey) {
-                  patch({ priceCheckHotkey: trimmed });
-                }
-              }}
-              placeholder="CommandOrControl+Shift+D"
-              className="w-64"
-            />
-          </div>
+          <HotkeyRecorder
+            value={settings?.priceCheckHotkey ?? DEFAULT_PRICE_CHECK_HOTKEY}
+            defaultValue={DEFAULT_PRICE_CHECK_HOTKEY}
+            onChange={(accelerator) => patch({ priceCheckHotkey: accelerator })}
+          />
         </Field>
         <span className="text-xs text-ink-faint">{t('settings.priceCheckHotkeyHint')}</span>
       </div>

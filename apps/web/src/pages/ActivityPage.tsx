@@ -38,7 +38,7 @@ export function ActivityPage() {
   }, []);
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3 p-4">
+    <section className="flex max-w-3xl flex-col gap-3">
       <h1 className="text-lg font-semibold text-ink">{t('activity.title')}</h1>
       {records.length === 0 ? (
         <p className="text-sm text-ink-faint">{t('activity.empty')}</p>

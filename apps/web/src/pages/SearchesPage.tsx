@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive,
@@ -123,6 +123,22 @@ const STATUS_DESC_KEYS: Record<EngineStatus, MessageKey> = {
   degraded: 'engineStatusDesc.degraded',
   stopped: 'engineStatusDesc.stopped',
   paused: 'engineStatusDesc.paused',
+};
+
+/**
+ * Whether a status's detail line adds anything beyond its badge. active / paused /
+ * stopped are fully described by the badge itself, so their detail ("paused",
+ * "live websocket connected") is just noise; degraded / connecting / pending carry
+ * a real reason worth surfacing. Exhaustive on purpose — a new EngineStatus won't
+ * compile until it declares its intent here.
+ */
+const STATUS_SHOWS_DETAIL: Record<EngineStatus, boolean> = {
+  pending: true,
+  connecting: true,
+  active: false,
+  degraded: true,
+  stopped: false,
+  paused: false,
 };
 
 function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promise<void> }) {
@@ -324,6 +340,7 @@ function SearchRow({
   detectionPaused,
   onUpdate,
   onRemove,
+  onCriteriaOpenChange,
 }: {
   search: SearchRuntimeInfo;
   buyControl: BuyControl;
@@ -340,11 +357,20 @@ function SearchRow({
     archived?: boolean;
   }) => Promise<void>;
   onRemove: () => Promise<void>;
+  /** Report criteria-panel open/close up to the page so an open panel keeps its
+   *  auto-expanded room from folding out from under it (D-room-3). */
+  onCriteriaOpenChange?: (searchId: string, open: boolean) => void;
 }) {
   const t = useT();
   const tn = useTn();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [criteriaOpen, setCriteriaOpen] = useState(false);
+  // Keep the page's open-panel registry in sync — including on unmount (a manual
+  // room collapse destroys this row), so a closed/gone panel never wedges the guard.
+  useEffect(() => {
+    onCriteriaOpenChange?.(search.id, criteriaOpen);
+    return () => onCriteriaOpenChange?.(search.id, false);
+  }, [criteriaOpen, search.id, onCriteriaOpenChange]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState(search.label);
@@ -558,12 +584,10 @@ function SearchRow({
           ]}
         />
       </div>
-      {/* Only surface the status detail when something is off — on the happy path the
-          ACTIVE + WS/POLL badges (with their hover popovers) already say it, so the
-          raw "live websocket connected" line is redundant noise. Same for a global
-          pause: the paused badge + greyed toggles already say it on EVERY row, so
-          repeating "globally paused" per search is noise too. */}
-      {search.statusDetail && search.status !== 'active' && search.status !== 'paused' && (
+      {/* Surface the status detail only when it adds something the badge doesn't
+          (see STATUS_SHOWS_DETAIL) — active/paused/stopped are already fully said by
+          the badge, so their detail line is redundant noise. */}
+      {search.statusDetail && STATUS_SHOWS_DETAIL[search.status] && (
         <div className="mt-1.5 text-xs text-ink-faint">{search.statusDetail}</div>
       )}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
@@ -767,9 +791,19 @@ export function SearchesPage() {
   // after the interaction ends; highlights just linger a little longer.
   const [nowMs, setNowMs] = useState(() => Date.now());
   const dragInFlightRef = useRef(false);
+  // Searches whose criteria panel is open. An OPEN panel inside an auto-expanded
+  // room must keep that room from folding when its hit-highlight window ages out
+  // (D-room-3) — otherwise the member row unmounts and the panel snaps shut under
+  // the operator. Reported up from each SearchRow (open + on unmount).
+  const openCriteriaIdsRef = useRef<Set<string>>(new Set());
+  const reportCriteriaOpen = useCallback((searchId: string, open: boolean): void => {
+    if (open) openCriteriaIdsRef.current.add(searchId);
+    else openCriteriaIdsRef.current.delete(searchId);
+  }, []);
   useEffect(() => {
     const isOperatorMidInteraction = (): boolean => {
       if (dragInFlightRef.current) return true;
+      if (openCriteriaIdsRef.current.size > 0) return true;
       const focused = document.activeElement;
       return (
         focused instanceof HTMLElement &&
@@ -866,6 +900,16 @@ export function SearchesPage() {
   /** The id being dragged — drives the DragOverlay ghost + compact-rooms mode. */
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const isRoomDragActive = activeDragId !== null && roomIdFromDndId(activeDragId) !== null;
+  // The room a dragged SEARCH is currently hovering (its `room:<id>`/`roomdrop:<id>`
+  // block) — used to force-expand a collapsed room so the operator can drop BETWEEN
+  // its members, not just append (#14).
+  const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null);
+  const activeDragSearchId =
+    activeDragId !== null && roomIdFromDndId(activeDragId) === null ? activeDragId : null;
+  const activeSearchRoomId =
+    activeDragSearchId !== null
+      ? (locateSearch(layoutState, activeDragSearchId)?.roomId ?? null)
+      : null;
 
   function handleDragStart(event: DragStartEvent): void {
     dragInFlightRef.current = true;
@@ -883,6 +927,8 @@ export function SearchesPage() {
     const activeLocation = locateSearch(layoutState, activeId);
     if (!activeLocation) return;
     const overRoomId = roomIdFromDndId(overId);
+    // Track the hovered room (null when over a bare search) so it force-expands.
+    setDragOverRoomId(overRoomId);
     if (overRoomId !== null) {
       // Over a room block / its empty drop zone → append (works collapsed too).
       if (activeLocation.roomId === overRoomId) return;
@@ -907,6 +953,7 @@ export function SearchesPage() {
     const { active, over } = event;
     dragInFlightRef.current = false;
     setActiveDragId(null);
+    setDragOverRoomId(null);
     const activeId = String(active.id);
     let next = layoutState;
     if (over) {
@@ -928,6 +975,7 @@ export function SearchesPage() {
   function handleDragCancel(): void {
     dragInFlightRef.current = false;
     setActiveDragId(null);
+    setDragOverRoomId(null);
     setLayoutState(syncedLayout);
   }
 
@@ -950,7 +998,7 @@ export function SearchesPage() {
   const gettingStarted = deriveGettingStarted({
     hasValidSession: status !== null && !needsLogin,
     searchCount: searches.length,
-    totalHitCount: searches.reduce((total, search) => total + search.hitCount, 0),
+    firstHitReceived: status?.onboarding.firstHitReceived ?? false,
   });
   const showGettingStarted =
     !needsLogin && loaded && !onboarding.checklistDismissed && !gettingStarted.allDone;
@@ -977,12 +1025,15 @@ export function SearchesPage() {
     return search ? <SearchDragGhost label={search.label} /> : null;
   }
 
-  const renderSearchRow = (search: SearchRuntimeInfo) => (
+  // `extraPaused` grays a row's TRAVEL/BUY like a global pause does — the page
+  // passes it for members of a room whose master switch is OFF, so an inactive
+  // room's items read as paused, matching the global detection toggle (#15).
+  const renderSearchRow = (search: SearchRuntimeInfo, extraPaused = false) => (
     <SearchRow
       key={search.id}
       search={search}
       highlighted={isSearchLit(search.id)}
-      detectionPaused={paused}
+      detectionPaused={paused || extraPaused}
       buyControl={resolveBuyControl({
         isDesktop,
         isMac,
@@ -991,6 +1042,7 @@ export function SearchesPage() {
       })}
       onUpdate={(payload) => update(search.id, payload)}
       onRemove={() => remove(search.id)}
+      onCriteriaOpenChange={reportCriteriaOpen}
     />
   );
 
@@ -1062,19 +1114,29 @@ export function SearchesPage() {
                     hasFreshHit: freshRoomIds.has(room.id),
                     suppressed: suppressedRoomIds.has(room.id),
                   });
+                  // Master switch OFF (no member enabled) → its items read as paused
+                  // (grayed TRAVEL/BUY), mirroring the global detection pause (#15).
+                  const roomInactive =
+                    members.length > 0 && !members.some((member) => member.enabled);
+                  // Force-expand while a search is dragged over/into this room so the
+                  // operator can drop BETWEEN its members, not just append (#14). A
+                  // collapsed room unmounts its members, so it must open first.
+                  const dragExpanded =
+                    activeDragSearchId !== null &&
+                    (room.id === activeSearchRoomId || room.id === dragOverRoomId);
                   return (
                     <RoomSection
                       key={room.id}
                       room={room}
                       members={members}
-                      collapsed={visuallyCollapsed}
+                      collapsed={dragExpanded ? false : visuallyCollapsed}
                       // Keyed to the PERSISTED collapse: the header keeps glowing
                       // for the whole window even while auto-expanded (D-room-3).
                       highlighted={room.collapsed && freshRoomIds.has(room.id)}
                       startRenaming={justCreatedRoomId === room.id}
                       forceCollapsed={isRoomDragActive}
                       detectionPaused={paused}
-                      renderSearch={renderSearchRow}
+                      renderSearch={(member) => renderSearchRow(member, roomInactive)}
                       onRename={(name) => {
                         if (justCreatedRoomId === room.id) setJustCreatedRoomId(null);
                         return updateRoom(room.id, { name });

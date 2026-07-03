@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Coins, Eraser } from 'lucide-react';
+import type { PriceCheckDraft } from '@poe-sniper/shared';
 import { Button } from '../components/Button';
+import { PriceCheckEditor } from '../components/PriceCheckEditor';
 import { PriceCheckResultView } from '../components/PriceCheckResultView';
 import { usePriceCheck } from '../hooks/usePriceCheck';
 import { useT } from '../i18n/i18n';
@@ -10,15 +12,17 @@ import { formatRelativeMagnitude } from '../lib/relative-time';
 const TICK_MS = 5_000;
 
 /**
- * Price Checks view (#37): a paste-an-item box to look up a price, plus the
- * recent-checks history (session-local, newest first) — a full nav view, the
- * price-check counterpart to the Hits view. Every check (paste, or a desktop
- * hotkey from anywhere) lands here.
+ * Price Checks view (#37/#38): paste an item → an editable draft (pick which
+ * stats/attributes to price and tweak their values) → price it. The recent-checks
+ * history (durable, newest first) sits below. A desktop hotkey still lands its
+ * one-shot result straight in the history.
  */
 export function PriceChecksPage() {
   const t = useT();
-  const { history, checking, error, check, clearHistory } = usePriceCheck();
+  const { history, checking, error, parse, priceDraft, clearHistory } = usePriceCheck();
   const [pasteText, setPasteText] = useState('');
+  const [draft, setDraft] = useState<PriceCheckDraft | null>(null);
+  const [parsing, setParsing] = useState(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -26,9 +30,22 @@ export function PriceChecksPage() {
     return () => clearInterval(timer);
   }, []);
 
-  async function runCheck(): Promise<void> {
-    await check(pasteText);
-    setPasteText('');
+  async function runParse(): Promise<void> {
+    setParsing(true);
+    const next = await parse(pasteText);
+    setParsing(false);
+    if (next) setDraft(next);
+  }
+
+  async function runPrice(): Promise<void> {
+    if (!draft) return;
+    // Only clear on success — a transient failure keeps the edited draft + source
+    // text so the operator can retry without redoing every filter edit.
+    const priced = await priceDraft(draft);
+    if (priced) {
+      setDraft(null);
+      setPasteText('');
+    }
   }
 
   return (
@@ -58,14 +75,23 @@ export function PriceChecksPage() {
         <div className="mt-2 flex items-center gap-3">
           <Button
             variant="primary"
-            disabled={checking || pasteText.trim() === ''}
-            onClick={() => void runCheck()}
+            disabled={parsing || pasteText.trim() === ''}
+            onClick={() => void runParse()}
           >
-            {checking ? t('priceCheck.checking') : t('priceChecks.check')}
+            {parsing ? t('priceCheck.checking') : t('priceChecks.parseEdit')}
           </Button>
           {error && <span className="text-sm text-danger">{t('common.requestFailed')}</span>}
         </div>
       </div>
+
+      {draft && (
+        <PriceCheckEditor
+          draft={draft}
+          onChange={setDraft}
+          onPrice={() => void runPrice()}
+          pricing={checking}
+        />
+      )}
 
       {history.length === 0 ? (
         <p className="text-sm text-ink-faint">{t('priceChecks.empty')}</p>

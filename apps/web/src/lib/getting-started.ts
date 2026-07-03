@@ -15,12 +15,16 @@ export function deriveGettingStarted(input: {
   hasValidSession: boolean;
   /** Watched searches, archived included — the user has been through the flow. */
   searchCount: number;
-  /** Persisted detections across all searches (survives restarts). */
-  totalHitCount: number;
+  /**
+   * The durable server signal that a hit was EVER received (survives deleting the
+   * search that produced it) — not a live sum over current searches, so pruning
+   * searches never regresses this step (#20).
+   */
+  firstHitReceived: boolean;
 }): GettingStartedProgress {
   const sessionConnected = input.hasValidSession;
   const firstSearchAdded = input.searchCount > 0;
-  const firstHitReceived = input.totalHitCount > 0;
+  const firstHitReceived = input.firstHitReceived;
   return {
     sessionConnected,
     firstSearchAdded,
