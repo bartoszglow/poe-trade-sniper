@@ -48,7 +48,7 @@ import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Field } from '../components/Field';
-import { IconButton } from '../components/IconButton';
+import { IconButton, IconLink } from '../components/IconButton';
 import { Modal } from '../components/Modal';
 import { QueryCriteriaView } from '../components/QueryCriteriaView';
 import { RoomSection } from '../components/RoomSection';
@@ -473,16 +473,16 @@ function SearchRow({
             >
               <Pencil className="h-3 w-3" />
             </IconButton>
-            <a
+            <IconLink
+              variant="ghost"
               href={tradeSearchPageUrl(search.realm, search.league, search.id)}
               target="_blank"
               rel="noreferrer"
               aria-label={t('searches.openOnTradeSite')}
               title={t('searches.openOnTradeSite')}
-              className="shrink-0 text-ink-faint transition-colors hover:text-ink"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+              <ExternalLink className="h-3 w-3" />
+            </IconLink>
             <Tooltip content={t(STATUS_DESC_KEYS[search.status])}>
               <Badge tone={STATUS_TONES[search.status]}>
                 {t(STATUS_LABEL_KEYS[search.status])}
