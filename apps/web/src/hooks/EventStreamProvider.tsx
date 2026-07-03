@@ -191,7 +191,11 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
             translateStatic('notify.buyMovedBody'),
           );
         } else if (event.phase === 'failed' || event.phase === 'aborted') {
-          showSystemNotification(translateStatic('notify.buyFailed', { item }), event.detail ?? '');
+          // Never surface the raw failure `detail` — a localized generic body instead.
+          showSystemNotification(
+            translateStatic('notify.buyFailed', { item }),
+            translateStatic('notify.buyFailedBody'),
+          );
         }
       }
       setState((previous) => reduceEvent(previous, event));

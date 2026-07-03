@@ -67,6 +67,22 @@ export const EN = {
   'activity.outcome.aborted': 'Aborted',
   'activity.outcome.unsupported': 'Unsupported',
   'activity.outcome.failed': 'Failed',
+  'activity.step.travel': 'travel',
+  'activity.step.buy': 'buy',
+  'activity.step.return': 'return',
+  'activity.phase.queued': 'queued',
+  'activity.phase.started': 'started',
+  'activity.phase.success': 'arrived',
+  'activity.phase.failed': 'failed',
+  'activity.phase.windowFound': 'window found',
+  'activity.phase.itemLocated': 'item located',
+  'activity.phase.moved': 'cursor placed',
+  'activity.phase.returning': 'returning',
+  'activity.phase.returned': 'returned home',
+  'activity.phase.returnFailed': 'return failed',
+  'activity.phase.aborted': 'aborted',
+  'activity.phase.unsupported': 'unsupported',
+  'activity.phase.unknown': 'in progress',
 
   // Network (developer) view
   'network.title': 'Network',
@@ -489,6 +505,7 @@ export const EN = {
   'notify.buyMoved': 'Buy ready — cursor on {item}',
   'notify.buyMovedBody': 'Review and confirm the purchase yourself (no auto-click).',
   'notify.buyFailed': 'Buy failed — {item}',
+  'notify.buyFailedBody': 'See the Activity view for details.',
 } as const;
 
 export type MessageKey = keyof typeof EN;
@@ -550,6 +567,22 @@ export const PL: Record<MessageKey, string> = {
   'activity.outcome.aborted': 'Przerwano',
   'activity.outcome.unsupported': 'Nieobsługiwane',
   'activity.outcome.failed': 'Nieudane',
+  'activity.step.travel': 'podróż',
+  'activity.step.buy': 'zakup',
+  'activity.step.return': 'powrót',
+  'activity.phase.queued': 'w kolejce',
+  'activity.phase.started': 'rozpoczęto',
+  'activity.phase.success': 'dotarto',
+  'activity.phase.failed': 'nieudane',
+  'activity.phase.windowFound': 'znaleziono okno',
+  'activity.phase.itemLocated': 'znaleziono przedmiot',
+  'activity.phase.moved': 'kursor na miejscu',
+  'activity.phase.returning': 'powrót',
+  'activity.phase.returned': 'wrócono do kryjówki',
+  'activity.phase.returnFailed': 'powrót nieudany',
+  'activity.phase.aborted': 'przerwano',
+  'activity.phase.unsupported': 'nieobsługiwane',
+  'activity.phase.unknown': 'w toku',
 
   // Network (developer) view
   'network.title': 'Sieć',
@@ -971,6 +1004,7 @@ export const PL: Record<MessageKey, string> = {
   'notify.buyMoved': 'Zakup gotowy — kursor na {item}',
   'notify.buyMovedBody': 'Sprawdź i potwierdź zakup samodzielnie (bez auto-kliknięcia).',
   'notify.buyFailed': 'Zakup nieudany — {item}',
+  'notify.buyFailedBody': 'Szczegóły w widoku Aktywność.',
 };
 
 // --- Pluralised phrases (Intl.PluralRules categories) ---

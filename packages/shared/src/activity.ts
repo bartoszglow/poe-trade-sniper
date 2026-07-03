@@ -1,4 +1,5 @@
 import type { ItemDetail, ListingPrice } from './item.js';
+import type { TravelFailureReason } from './travel-failure.js';
 
 /** Which sub-action of a travel sequence a step belongs to. */
 export type ActivityStepKind = 'travel' | 'buy' | 'return';
@@ -6,13 +7,20 @@ export type ActivityStepKind = 'travel' | 'buy' | 'return';
 /**
  * One atomic step within an activity — a single travel/buy/return event, with the
  * raw phase (e.g. travel 'success', buy 'item-located'/'moved'/'failed', return
- * 'returned') plus its time and detail/reason.
+ * 'returned') plus its time.
+ *
+ * `detail` is a free-form diagnostic string (raw GGG/HTTP text) kept ONLY for logs —
+ * the UI must NEVER render it (hard rule: translate errors, never show raw). For a
+ * failed travel, `reason` carries the stable enum the UI localizes instead.
  */
 export interface ActivityStep {
   kind: ActivityStepKind;
   phase: string;
   at: string;
   detail: string | null;
+  /** Set on a failed travel step (mirrors TravelEvent.reason) so the timeline can
+   *  show the same localized label as live hits rather than the raw `detail`. */
+  reason?: TravelFailureReason | null;
 }
 
 /**

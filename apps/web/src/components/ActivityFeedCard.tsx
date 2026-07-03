@@ -8,10 +8,11 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import type { ActivityOutcome, ActivityStep } from '@poe-sniper/shared';
+import type { ActivityOutcome, ActivityStep, ActivityStepKind } from '@poe-sniper/shared';
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { formatRelativeMagnitude } from '../lib/relative-time';
+import { travelFailureDisplay } from '../lib/travel-failure-display';
 import type { FeedEntry, FeedKind } from '../hooks/useActivityFeed';
 import { Badge, type BadgeTone } from './Badge';
 import { ItemDetailView } from './ItemDetailView';
@@ -58,6 +59,45 @@ function stepNode(phase: string): string {
   if (phase === 'failed' || phase === 'return-failed') return 'border-danger';
   if (phase === 'aborted' || phase === 'unsupported') return 'border-edge-strong';
   return 'border-gold';
+}
+
+/** Step sub-action → localized label (travel / buy / return). */
+const STEP_KIND_KEY: Record<ActivityStepKind, MessageKey> = {
+  travel: 'activity.step.travel',
+  buy: 'activity.step.buy',
+  return: 'activity.step.return',
+};
+
+/** Step phase token → localized label. Covers every travel/buy phase (registry, not a
+ *  chain); an unmapped phase falls back to a neutral label — never the raw token. */
+const STEP_PHASE_KEY: Record<string, MessageKey> = {
+  queued: 'activity.phase.queued',
+  started: 'activity.phase.started',
+  success: 'activity.phase.success',
+  failed: 'activity.phase.failed',
+  'window-found': 'activity.phase.windowFound',
+  'item-located': 'activity.phase.itemLocated',
+  moved: 'activity.phase.moved',
+  returning: 'activity.phase.returning',
+  returned: 'activity.phase.returned',
+  'return-failed': 'activity.phase.returnFailed',
+  aborted: 'activity.phase.aborted',
+  unsupported: 'activity.phase.unsupported',
+};
+
+/**
+ * A timeline step → its localized label + tone. A failed travel reuses the SHARED
+ * travel-failure display (same friendly label as live hits, e.g. "no longer available"),
+ * so the raw server `detail` is never shown; every other phase maps through STEP_PHASE_KEY.
+ */
+function stepPhaseDisplay(step: ActivityStep): { key: MessageKey; tone: string } {
+  if (step.kind === 'travel' && step.phase === 'failed') {
+    return travelFailureDisplay(step.reason);
+  }
+  return {
+    key: STEP_PHASE_KEY[step.phase] ?? 'activity.phase.unknown',
+    tone: stepTone(step.phase),
+  };
 }
 
 interface ActivityFeedCardProps {
@@ -272,6 +312,7 @@ export function ActivityFeedCard({
         <ol className="mt-1 flex flex-col">
           {record.steps.map((step: ActivityStep, index) => {
             const last = index === record.steps.length - 1;
+            const phaseDisplay = stepPhaseDisplay(step);
             return (
               <li key={index} className="flex gap-3">
                 {/* rail: a hollow phase-coloured node sitting on a continuous
@@ -286,9 +327,10 @@ export function ActivityFeedCard({
                 <div
                   className={`flex flex-1 items-baseline gap-2.5 text-[0.8rem] ${last ? 'pb-0.5' : 'pb-4'}`}
                 >
-                  <span className="w-12 shrink-0 text-ink-faint">{step.kind}</span>
-                  <span className={stepTone(step.phase)}>{step.phase}</span>
-                  {step.detail && <span className="truncate text-ink-faint">{step.detail}</span>}
+                  <span className="w-12 shrink-0 text-ink-faint">
+                    {t(STEP_KIND_KEY[step.kind])}
+                  </span>
+                  <span className={phaseDisplay.tone}>{t(phaseDisplay.key)}</span>
                   <div className="flex-1" />
                   <span className="font-mono text-[0.65rem] text-ink-faint/70">
                     {new Date(step.at).toLocaleTimeString()}
@@ -302,7 +344,7 @@ export function ActivityFeedCard({
     );
     if (!record.item) return actionColumn;
     return (
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-4 lg:grid-cols-2">
         {actionColumn}
         <ItemDetailView item={record.item} columns="single" />
       </div>

@@ -84,14 +84,28 @@ export class ActivityService implements OnApplicationBootstrap, OnApplicationShu
         finishedAt: null,
         outcome: 'in-progress',
         returnedHome: null,
-        steps: [{ kind: 'travel', phase: event.phase, at: event.at, detail: event.detail }],
+        steps: [
+          {
+            kind: 'travel',
+            phase: event.phase,
+            at: event.at,
+            detail: event.detail,
+            reason: event.reason,
+          },
+        ],
       };
       this.openByListing.set(event.listingId, record);
       this.persist(record);
       return;
     }
     if (!open) return;
-    open.steps.push({ kind: 'travel', phase: event.phase, at: event.at, detail: event.detail });
+    open.steps.push({
+      kind: 'travel',
+      phase: event.phase,
+      at: event.at,
+      detail: event.detail,
+      reason: event.reason,
+    });
     if (event.phase === 'failed') {
       open.outcome = 'travel-failed';
       open.finishedAt = event.at;
