@@ -48,8 +48,14 @@ export const EN = {
   'about.disclaimer':
     'A community fan tool. Not affiliated with or endorsed by Grinding Gear Games.',
   'activity.title': 'Activity',
-  'activity.empty': 'No actions yet.',
+  'activity.empty': 'Nothing here yet — hits, price checks and auto-buys will show up.',
   'activity.details': 'Item details',
+  'activity.seller': 'seller',
+  'activity.listed': 'listed',
+  'activity.cheapest': 'cheapest',
+  'activity.kind.hit': 'Hits',
+  'activity.kind.priceCheck': 'Price checks',
+  'activity.kind.buy': 'Auto-buy',
   'activity.returnedHome': 'Returned to hideout',
   'activity.home': 'home',
   'activity.notHome': 'no return',
@@ -290,6 +296,8 @@ export const EN = {
   'hitCard.tokenExpired': 'token expired',
   'hitCard.locateSearch': 'Show the source search',
   'common.ago': '{value} ago',
+  'common.expand': 'Expand',
+  'common.collapse': 'Collapse',
 
   // Searches page
   'searches.title': 'Searches',
@@ -522,8 +530,14 @@ export const PL: Record<MessageKey, string> = {
   'about.disclaimer':
     'Narzędzie fanowskie. Niepowiązane z Grinding Gear Games ani przez nich wspierane.',
   'activity.title': 'Aktywność',
-  'activity.empty': 'Brak akcji.',
+  'activity.empty': 'Jeszcze nic tu nie ma — trafienia, wyceny i auto-zakupy pojawią się tutaj.',
   'activity.details': 'Szczegóły przedmiotu',
+  'activity.seller': 'sprzedawca',
+  'activity.listed': 'wystawiono',
+  'activity.cheapest': 'najtaniej',
+  'activity.kind.hit': 'Trafienia',
+  'activity.kind.priceCheck': 'Wyceny',
+  'activity.kind.buy': 'Auto-zakup',
   'activity.returnedHome': 'Powrót do hideoutu',
   'activity.home': 'w hideout',
   'activity.notHome': 'brak powrotu',
@@ -763,6 +777,8 @@ export const PL: Record<MessageKey, string> = {
   'hitCard.tokenExpired': 'token wygasł',
   'hitCard.locateSearch': 'Pokaż wyszukiwanie źródłowe',
   'common.ago': '{value} temu',
+  'common.expand': 'Rozwiń',
+  'common.collapse': 'Zwiń',
 
   // Searches page
   'searches.title': 'Wyszukiwania',
