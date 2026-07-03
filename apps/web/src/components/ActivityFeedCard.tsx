@@ -239,27 +239,30 @@ export function ActivityFeedCard({
         </div>
       );
     }
-    // activity
-    return (
+    // activity — left column = the action (data + step timeline); right column = the
+    // item, shown immediately (no second toggle). Two columns on wide screens fill the
+    // width; they stack below `lg`. No item → the action spans the full width.
+    const record = entry.record;
+    const actionColumn = (
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
           <span>
-            {t('activity.listed')} <PriceTag price={entry.record.price} />
+            {t('activity.listed')} <PriceTag price={record.price} />
           </span>
-          {entry.record.seller && (
+          {record.seller && (
             <span>
-              {t('activity.seller')} <span className="text-ink">{entry.record.seller}</span>
+              {t('activity.seller')} <span className="text-ink">{record.seller}</span>
             </span>
           )}
-          <Badge tone="neutral">{entry.record.source}</Badge>
-          {entry.record.returnedHome !== null && (
-            <span className={entry.record.returnedHome ? 'text-ok' : 'text-danger'}>
-              {entry.record.returnedHome ? `⌂ ${t('activity.home')}` : `⌂ ${t('activity.notHome')}`}
+          <Badge tone="neutral">{record.source}</Badge>
+          {record.returnedHome !== null && (
+            <span className={record.returnedHome ? 'text-ok' : 'text-danger'}>
+              {record.returnedHome ? `⌂ ${t('activity.home')}` : `⌂ ${t('activity.notHome')}`}
             </span>
           )}
         </div>
         <ul className="flex flex-col gap-0.5 border-l border-edge pl-2">
-          {entry.record.steps.map((step: ActivityStep, index) => (
+          {record.steps.map((step: ActivityStep, index) => (
             <li key={index} className="flex items-baseline gap-2 text-xs">
               <span className="w-12 shrink-0 text-ink-faint">{step.kind}</span>
               <span className={stepTone(step.phase)}>{step.phase}</span>
@@ -271,7 +274,13 @@ export function ActivityFeedCard({
             </li>
           ))}
         </ul>
-        {itemDetailToggle()}
+      </div>
+    );
+    if (!record.item) return actionColumn;
+    return (
+      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        {actionColumn}
+        <ItemDetailView item={record.item} columns="single" />
       </div>
     );
   }

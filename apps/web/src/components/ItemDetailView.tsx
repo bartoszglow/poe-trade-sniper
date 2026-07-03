@@ -33,7 +33,15 @@ function ModLines({ mods, className }: { mods: string[]; className: string }) {
  * criteria view (DetailCard grid) so the two read consistently. Mods keep their
  * trade-site coloring.
  */
-export function ItemDetailView({ item }: { item: ItemDetail }) {
+export function ItemDetailView({
+  item,
+  columns = 'auto',
+}: {
+  item: ItemDetail;
+  /** 'auto' = responsive multi-column grid (default); 'single' = always one column,
+   *  for use inside a narrow container (e.g. the Activity card's right column). */
+  columns?: 'auto' | 'single';
+}) {
   const t = useT();
   const hasIdentity = Boolean(item.baseType) || item.itemLevel !== null || item.corrupted;
   const hasMods =
@@ -43,7 +51,13 @@ export function ItemDetailView({ item }: { item: ItemDetail }) {
     item.craftedMods.length > 0;
 
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+    <div
+      className={
+        columns === 'single'
+          ? 'grid grid-cols-1 gap-2'
+          : 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3'
+      }
+    >
       {hasIdentity && (
         <DetailCard title={t('item.title')}>
           {item.baseType && <DetailRow label={t('item.base')} value={item.baseType} />}
