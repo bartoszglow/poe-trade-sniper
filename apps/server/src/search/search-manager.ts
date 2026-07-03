@@ -37,6 +37,7 @@ import type { SniperDatabase } from '../db/migrate.js';
 import { hits, rooms, searches } from '../db/schema.js';
 import type { DetectionEngine, EngineContext } from '../engines/detection-engine.js';
 import { PollEngine } from '../engines/poll-engine.js';
+import { WS_RATE_LIMITED_DETAIL } from '../engines/ws-engine.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { applyPurchaseMode } from '../trade-api/purchase-mode.js';
 import {
@@ -110,6 +111,9 @@ interface Watcher {
   pollEngine: DetectionEngine | null;
   /** True while the ws socket is open — gates poll coverage and the display kind. */
   wsConnected: boolean;
+  /** True while ws is in the 1013 rate-limit backoff — surfaced to the operator
+   *  even under poll coverage (poll normally owns the display). */
+  wsRateLimited: boolean;
   status: EngineStatus;
   statusDetail: string | null;
   correlationId: string;
@@ -145,6 +149,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   /** True while a staggered start-drip is in flight — keeps overlapping ticks/resumes from double-starting. */
   private startingWatchers = false;
   private hitsSincePrune = 0;
+  /** Durable "the operator has ever received a hit" — seeded lazily from the hits
+   *  table (orphaned rows survive a search delete) and latched on the first fresh
+   *  hit. Backs the onboarding checklist so deleting a search can't regress it (#20). */
+  private everReceivedHit = false;
   /** Global pause: every enabled search halts as PAUSED until resumed. */
   private detectionPaused = false;
 
@@ -414,12 +422,20 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     });
 
     this.stopEngines(watcher);
-    this.watchers.delete(searchId);
     const newWatcher = this.createWatcher(newRow);
     newWatcher.correlationId = correlationId;
     newWatcher.hitCount = watcher.hitCount;
     newWatcher.lastHitAt = watcher.lastHitAt;
-    this.watchers.set(newRow.id, newWatcher);
+    // Re-point IN PLACE: the watchers Map's insertion order IS the displayed list
+    // order (layoutSearchStates/list iterate its values) and the poll rotation, so a
+    // naive delete + set would drop the edited search to the BOTTOM of its room /
+    // the top level. Rebuild the Map substituting the new id at the old slot so
+    // editing a search's query never reorders it (its DB position is carried on newRow).
+    const reordered = [...this.watchers.entries()].map((entry) =>
+      entry[0] === searchId ? ([newRow.id, newWatcher] as [string, Watcher]) : entry,
+    );
+    this.watchers.clear();
+    for (const [key, value] of reordered) this.watchers.set(key, value);
     if (newRow.archivedAt !== null) {
       // Re-pointed while archived: stays archived (createWatcher marked it).
     } else if (this.detectionPaused) {
@@ -833,6 +849,19 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return { total: this.watchers.size, byStatus };
   }
 
+  /**
+   * Whether ANY hit was ever recorded (onboarding checklist, #20). Reads a durable
+   * signal — a single row in the hits table, which survives deleting the search
+   * that produced it — so the "first hit" step never regresses when the operator
+   * prunes searches. Monotonic + cached: once true it stays true for the session.
+   */
+  hasEverReceivedHit(): boolean {
+    if (this.everReceivedHit) return true;
+    this.everReceivedHit =
+      this.database.select({ id: hits.id }).from(hits).limit(1).all().length > 0;
+    return this.everReceivedHit;
+  }
+
   isDetectionPaused(): boolean {
     return this.detectionPaused;
   }
@@ -1005,6 +1034,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     };
 
     watcher.wsConnected = false;
+    watcher.wsRateLimited = false;
     const wsFactory = this.wsFactory();
     if (wsFactory) {
       const ws = wsFactory.create();
@@ -1022,12 +1052,15 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private onWsStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
     if (status === 'active') {
       watcher.wsConnected = true;
+      watcher.wsRateLimited = false;
       this.stopPollCoverage(watcher);
       this.publishEngineStatus(watcher, 'active', detail);
       return;
     }
     // connecting / degraded — ws is not serving; poll must cover the gap.
+    const wasRateLimited = watcher.wsRateLimited;
     watcher.wsConnected = false;
+    watcher.wsRateLimited = detail === WS_RATE_LIMITED_DETAIL;
     if (!watcher.pollEngine && watcher.row.enabled) {
       const { query } = applyPurchaseMode(watcher.row.filters, watcher.row.purchaseMode);
       this.startPollCoverage(watcher, {
@@ -1036,9 +1069,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         correlationId: watcher.correlationId,
       });
     }
-    // While poll covers, the poll engine owns the displayed status; only surface
-    // the ws detail when there is no poll coverage at all.
-    if (!watcher.pollEngine) {
+    // Publish when: no poll (ws owns the display), OR entering the 1013 wait (surface
+    // it over poll), OR just LEFT the 1013 wait — clear the stale message even though
+    // poll still covers, since poll emits no status on steady ticks so nothing else
+    // would refresh the display.
+    if (!watcher.pollEngine || watcher.wsRateLimited || wasRateLimited) {
       this.publishEngineStatus(watcher, status, detail);
     }
   }
@@ -1046,6 +1081,13 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private onPollStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
     // ws push wins the display when connected; ignore poll chatter then.
     if (watcher.wsConnected) return;
+    // During the WS 1013 wait, keep showing "waiting to reconnect; detecting via poll"
+    // ONLY while poll is actually healthy — let a poll degradation/stop through so a
+    // real coverage gap surfaces instead of hiding behind the reassuring message.
+    if (watcher.wsRateLimited && status === 'active') {
+      this.publishEngineStatus(watcher, 'degraded', WS_RATE_LIMITED_DETAIL);
+      return;
+    }
     this.publishEngineStatus(watcher, status, detail);
   }
 
@@ -1107,6 +1149,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         }
       });
       // Bookkeeping + domain events only after the writes commit.
+      this.everReceivedHit = true;
       for (const listing of fresh) {
         watcher.hitCount += 1;
         watcher.lastHitAt = listing.detectedAt;
@@ -1346,6 +1389,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       wsEngine: null,
       pollEngine: null,
       wsConnected: false,
+      wsRateLimited: false,
       status: row.enabled && !archived ? 'pending' : 'stopped',
       statusDetail: archived ? 'archived' : row.enabled ? null : 'paused',
       correlationId: randomUUID(),

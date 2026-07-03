@@ -20,6 +20,8 @@ interface StatusResponse {
   capabilities: { canCapture: boolean; canControl: boolean };
   /** User-tunable settings (cursor mode, …) — drives the Settings UI off the poll. */
   settings: AppSettings;
+  /** First-run funnel signals (durable, survive a search delete). */
+  onboarding: { firstHitReceived: boolean };
 }
 
 @Controller('status')
@@ -46,6 +48,7 @@ export class StatusController {
       permissions: this.permissions.status(),
       capabilities: { canCapture: this.gate.canCapture(), canControl: this.gate.canControl() },
       settings: this.settings.get(),
+      onboarding: { firstHitReceived: this.searchManager.hasEverReceivedHit() },
     };
   }
 }

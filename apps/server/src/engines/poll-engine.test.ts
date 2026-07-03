@@ -120,14 +120,17 @@ describe('parseLiveMessage', () => {
 
 describe('reconnectDelayForClose', () => {
   const ladder = [1_000, 5_000, 20_000, 60_000];
+  const RATE_LIMIT_BACKOFF = 300_000;
 
-  it('1013 (Try Again Later) jumps straight to the top rung', () => {
-    expect(reconnectDelayForClose(1013, ladder, 0)).toBe(60_000);
+  it('1013 (Try Again Later) waits the dedicated rate-limit backoff, not the ladder', () => {
+    expect(reconnectDelayForClose(1013, ladder, 0, RATE_LIMIT_BACKOFF)).toBe(300_000);
+    // Independent of the attempt index — it's a fixed cool-off, not a ladder climb.
+    expect(reconnectDelayForClose(1013, ladder, 3, RATE_LIMIT_BACKOFF)).toBe(300_000);
   });
 
-  it('other codes follow the ladder', () => {
-    expect(reconnectDelayForClose(1006, ladder, 0)).toBe(1_000);
-    expect(reconnectDelayForClose(1006, ladder, 2)).toBe(20_000);
+  it('other codes follow the ladder (rate-limit backoff ignored)', () => {
+    expect(reconnectDelayForClose(1006, ladder, 0, RATE_LIMIT_BACKOFF)).toBe(1_000);
+    expect(reconnectDelayForClose(1006, ladder, 2, RATE_LIMIT_BACKOFF)).toBe(20_000);
   });
 });
 

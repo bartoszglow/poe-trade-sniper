@@ -37,16 +37,18 @@ export function reconnectDelayFromLadder(ladderMs: number[], attemptIndex: numbe
 
 /**
  * Close-code-aware delay: 1013 ("Try Again Later") is the server explicitly
- * asking for backoff — jump straight to the ladder's top rung instead of
- * climbing through the fast ones.
+ * rate-limiting our live sockets — back off for the dedicated (long) window
+ * instead of retrying on the fast ladder, which would just sustain the 1013.
+ * Poll coverage keeps detection alive during the wait.
  */
 export function reconnectDelayForClose(
   closeCode: number,
   ladderMs: number[],
   attemptIndex: number,
+  rateLimitBackoffMs: number,
 ): number {
   if (closeCode === 1013) {
-    return ladderMs[ladderMs.length - 1] ?? 60_000;
+    return rateLimitBackoffMs;
   }
   return reconnectDelayFromLadder(ladderMs, attemptIndex);
 }

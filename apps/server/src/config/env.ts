@@ -45,6 +45,8 @@ export const envSchema = z.object({
   PRICE_CHECK_MIN_SEARCH_HEADROOM: z.coerce.number().min(0).max(1).default(0.3),
   /** Comparable listings fetched per rare-item price check. */
   PRICE_CHECK_LISTING_LIMIT: z.coerce.number().int().min(1).max(20).default(10),
+  /** Rolling cap on the persisted price-check history (#17) — "recent", not audit. */
+  PRICE_CHECK_HISTORY_MAX: z.coerce.number().int().min(10).default(100),
   /** Hard deadline for every outbound GGG call (AbortController). */
   OUTBOUND_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15_000),
   /**
@@ -121,6 +123,19 @@ export const envSchema = z.object({
    * loop can't keep retrying at the fastest rung.
    */
   WS_STABLE_CONNECTION_MS: z.coerce.number().int().min(5_000).default(60_000),
+  /**
+   * On a 1013 "Try Again Later" close, GGG is explicitly rate-limiting our live
+   * sockets — stop hammering and wait this long before ONE retry (poll covers
+   * detection meanwhile). Retrying on the fast ladder just sustains the 1013.
+   */
+  WS_RATE_LIMIT_BACKOFF_MS: z.coerce.number().int().min(30_000).default(300_000),
+  /**
+   * Proportional jitter added to every ws reconnect delay (0..1 of the delay), so
+   * a synchronized mass close (a fleet-wide 1013) doesn't resync all searches into
+   * one reconnect burst that re-trips the limit. Scales with the delay: fast
+   * ladder retries stay fast, long backoffs spread out.
+   */
+  WS_RECONNECT_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.25),
 
   // --- in-app login capture (web mode, D-12) ---
   /** Real Chrome binary used for the login window. */

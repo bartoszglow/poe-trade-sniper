@@ -14,8 +14,19 @@ type WsConfig = Pick<
   | 'WS_HANDSHAKE_TIMEOUT_MS'
   | 'WS_RECONNECT_LADDER_MS'
   | 'WS_STABLE_CONNECTION_MS'
+  | 'WS_RATE_LIMIT_BACKOFF_MS'
+  | 'WS_RECONNECT_JITTER_RATIO'
   | 'MAX_FRESH_IDS_PER_TICK'
 >;
+
+/**
+ * Status detail shown while GGG is rate-limiting the live socket (a 1013 close).
+ * The SearchManager matches this EXACT string to keep surfacing it even while the
+ * poll engine covers detection, so the operator can see WS is waiting to reconnect
+ * (poll normally owns the displayed status). Keep it a stable constant.
+ */
+export const WS_RATE_LIMITED_DETAIL =
+  'live socket rate-limited by GGG (1013) — waiting to reconnect; detecting via poll';
 
 /** The slice of the safety guard the engine needs (kept narrow for tests). */
 export interface WsConnectGate {
@@ -155,20 +166,32 @@ export class WsEngine implements DetectionEngine {
       this.connectedAtMs = 0;
       if (wasStable) this.reconnectAttempt = 0;
 
-      // Persistent reconnect — never give up (1013 just goes to the top rung).
-      // The close code is the diagnostic: 1006 = dropped without handshake
-      // (typical GGG periodic drop), 1013 = server says back off, 1000 = clean.
-      const delayMs = reconnectDelayForClose(
+      // Persistent reconnect — never give up. The close code is the diagnostic:
+      // 1006 = dropped without handshake (typical GGG periodic drop), 1013 = server
+      // says back off (long wait, poll covers), 1000 = clean.
+      const baseDelayMs = reconnectDelayForClose(
         code,
         this.config.WS_RECONNECT_LADDER_MS,
         this.reconnectAttempt,
+        this.config.WS_RATE_LIMIT_BACKOFF_MS,
       );
+      // Proportional jitter so a fleet-wide 1013 doesn't resync every search into
+      // one reconnect burst that re-trips the limit (fast retries stay ~fast).
+      const delayMs =
+        baseDelayMs +
+        Math.floor(Math.random() * baseDelayMs * this.config.WS_RECONNECT_JITTER_RATIO);
       this.reconnectAttempt += 1;
-      this.callbacks?.onStatus(
-        'degraded',
-        `live connection lost (code ${code}) — reconnecting in ${delayMs / 1000}s`,
-      );
-      this.recordWs('ws-closed', code, `reconnecting in ${delayMs / 1000}s`);
+      if (code === 1013) {
+        // Rate-limited: a distinct, stable message the SearchManager surfaces even
+        // under poll coverage, and we stop the fast-retry churn (wait ~5 min).
+        this.callbacks?.onStatus('degraded', WS_RATE_LIMITED_DETAIL);
+      } else {
+        this.callbacks?.onStatus(
+          'degraded',
+          `live connection lost (code ${code}) — reconnecting in ${Math.round(delayMs / 1000)}s`,
+        );
+      }
+      this.recordWs('ws-closed', code, `reconnecting in ${Math.round(delayMs / 1000)}s`);
       this.scheduleReconnect(delayMs);
     });
   }
