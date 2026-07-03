@@ -97,7 +97,6 @@ export function AppShell() {
 
   // Live event wins; the status poll covers page loads after the trip.
   const guardTripped = eventStream.guard?.tripped ?? status?.guard.tripped ?? false;
-  const guardReason = eventStream.guard?.reason ?? status?.guard.reason ?? null;
   const sessionInvalid =
     (status?.session.hasSession ?? false) && status?.session.probedValid === false;
   // Boot login prompt: no session at all, or stored cookies failed the probe.
@@ -126,7 +125,7 @@ export function AppShell() {
 
       <div className="col-span-full">
         {update?.updateAvailable && <UpdateBanner update={update} />}
-        {guardTripped && <GuardBanner reason={guardReason} onReset={refresh} />}
+        {guardTripped && <GuardBanner onReset={refresh} />}
         {sessionInvalid && <SessionBanner />}
       </div>
 

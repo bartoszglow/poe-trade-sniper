@@ -80,7 +80,9 @@ export function RoomSection({
     try {
       await action();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+      setErrorMessage(
+        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+      );
     }
   }
 

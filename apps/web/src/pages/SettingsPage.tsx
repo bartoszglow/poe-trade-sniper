@@ -311,7 +311,8 @@ export function SettingsPage() {
     } catch (error) {
       setMessage({
         tone: 'danger',
-        text: error instanceof ApiError ? error.message : t('common.requestFailed'),
+        text:
+          error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
       });
     } finally {
       setBusy(false);
@@ -326,13 +327,15 @@ export function SettingsPage() {
     setImporting(true);
     setDataMessage(null);
     void (async () => {
+      let envelope: unknown;
       try {
-        let envelope: unknown;
-        try {
-          envelope = await readJsonFile(file);
-        } catch {
-          throw new Error(t('settings.importBadFile'));
-        }
+        envelope = await readJsonFile(file);
+      } catch {
+        setDataMessage({ tone: 'danger', text: t('settings.importBadFile') });
+        setImporting(false);
+        return;
+      }
+      try {
         const result = await apiSend<ImportResult>('POST', '/api/import/searches', envelope);
         const summary = t('settings.importDone', {
           imported: result.imported,
@@ -346,11 +349,15 @@ export function SettingsPage() {
               : summary,
         });
       } catch (error) {
-        const text =
-          error instanceof ApiError || error instanceof Error
-            ? error.message
-            : t('common.requestFailed');
-        setDataMessage({ tone: 'danger', text });
+        // Show the server's message only when it's an intended user-facing one;
+        // never the raw route+status fallback.
+        setDataMessage({
+          tone: 'danger',
+          text:
+            error instanceof ApiError && error.userFacing
+              ? error.message
+              : t('common.requestFailed'),
+        });
       } finally {
         setImporting(false);
       }

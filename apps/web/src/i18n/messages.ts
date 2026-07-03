@@ -132,7 +132,7 @@ export const EN = {
 
   // Outbound safety guard
   'guard.tripped': 'Safety guard tripped — all PoE traffic halted.',
-  'guard.unknownReason': 'unknown reason',
+  'guard.trippedHelp': 'Detection and travel stay paused until you reset it.',
   'guard.reset': 'Reset guard',
 
   // Expired-session banner
@@ -632,7 +632,7 @@ export const PL: Record<MessageKey, string> = {
 
   // Outbound safety guard
   'guard.tripped': 'Bezpiecznik zadziałał — cały ruch do PoE wstrzymany.',
-  'guard.unknownReason': 'nieznany powód',
+  'guard.trippedHelp': 'Wykrywanie i podróże pozostają wstrzymane do czasu zresetowania.',
   'guard.reset': 'Zresetuj bezpiecznik',
 
   // Expired-session banner

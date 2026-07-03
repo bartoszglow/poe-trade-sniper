@@ -49,7 +49,9 @@ export function useLoginCapture(onFinished: () => void) {
       })
       .catch((error: unknown) => {
         setLoginDetail(
-          error instanceof ApiError ? error.message : translateStatic('login.failedToStart'),
+          error instanceof ApiError && error.userFacing
+            ? error.message
+            : translateStatic('login.failedToStart'),
         );
       });
   }, [onFinished]);

@@ -194,7 +194,9 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
       setPreviewQuery(preview.query);
       setPreviewOpen(true);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+      setErrorMessage(
+        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+      );
     } finally {
       setPreviewLoading(false);
     }
@@ -224,7 +226,9 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
       setPreviewQuery(null);
       setCollapsed(true);
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+      setErrorMessage(
+        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -403,7 +407,9 @@ function SearchRow({
     try {
       await action();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+      setErrorMessage(
+        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+      );
     }
   }
 
@@ -628,7 +634,9 @@ function ArchivedSearchRow({
     try {
       await action();
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : t('common.requestFailed'));
+      setErrorMessage(
+        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+      );
     }
   }
 

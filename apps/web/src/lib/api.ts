@@ -2,6 +2,13 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /**
+     * True ONLY when `message` came from the server's response body (an intended,
+     * user-facing message such as a validation error). False for a synthesized
+     * technical fallback like `GET /path → 404` — which must NEVER be shown to the
+     * user (hard rule: translate errors, never surface raw technical strings).
+     */
+    readonly userFacing: boolean = false,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -35,7 +42,13 @@ export async function apiSend<ResponseBody>(
   const payload = text ? (JSON.parse(text) as unknown) : null;
   if (!response.ok) {
     const serverMessage = (payload as { message?: string } | null)?.message;
-    throw new ApiError(response.status, serverMessage ?? `${method} ${path} → ${response.status}`);
+    // userFacing only when the server actually gave us a message — the fallback is
+    // a raw route+status that the UI must not show.
+    throw new ApiError(
+      response.status,
+      serverMessage ?? `${method} ${path} → ${response.status}`,
+      serverMessage != null,
+    );
   }
   return payload as ResponseBody;
 }
