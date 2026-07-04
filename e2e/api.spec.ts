@@ -17,7 +17,13 @@ test('status reports session, rate-limit and search summary', async ({ request }
 });
 
 test('searches and hits start empty', async ({ request }) => {
-  expect(await (await request.get('/api/searches')).json()).toEqual([]);
+  // GET /api/searches returns the SearchesView envelope (searches + rooms + layout),
+  // not a bare array — the rooms feature (#33) changed this shape.
+  expect(await (await request.get('/api/searches')).json()).toEqual({
+    searches: [],
+    rooms: [],
+    layout: [],
+  });
   expect(await (await request.get('/api/hits')).json()).toEqual([]);
 });
 
