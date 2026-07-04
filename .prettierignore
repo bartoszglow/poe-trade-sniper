@@ -5,3 +5,6 @@ playwright-report/
 test-results/
 pnpm-lock.yaml
 data/
+# desktop build artifacts (gitignored — never format-check generated output)
+apps/desktop/release/
+apps/desktop/bundle/

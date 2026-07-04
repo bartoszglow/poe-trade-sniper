@@ -1,283 +1,621 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mockup — Activity feed redesign (#39)</title>
-<style>
-  :root {
-    --surface-0: #0b0a08; --surface-1: #141210; --surface-2: #1d1a16; --surface-3: #262219;
-    --edge: #2e2a22; --edge-strong: #443d2f;
-    --ink: #d6cfc2; --ink-muted: #8d8576; --ink-faint: #5d574c;
-    --gold: #c9a85c; --gold-bright: #e3c87e; --ok: #6fae6f; --warn: #c9974b;
-    --danger: #c25b4e; --info: #6f9ec2;
-    --rare: #d9c850; --unique: #af6025; --currency: #aa9e82; --magic: #8888ff;
-  }
-  * { box-sizing: border-box; margin: 0; }
-  body { background: #060505; color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; padding: 24px; }
-  h1 { font-size: 16px; color: var(--gold); margin-bottom: 4px; }
-  .hint { color: var(--ink-muted); font-size: 12px; margin-bottom: 20px; max-width: 720px; }
-  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
-  .framewrap > .label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mockup — Activity feed redesign (#39)</title>
+    <style>
+      :root {
+        --surface-0: #0b0a08;
+        --surface-1: #141210;
+        --surface-2: #1d1a16;
+        --surface-3: #262219;
+        --edge: #2e2a22;
+        --edge-strong: #443d2f;
+        --ink: #d6cfc2;
+        --ink-muted: #8d8576;
+        --ink-faint: #5d574c;
+        --gold: #c9a85c;
+        --gold-bright: #e3c87e;
+        --ok: #6fae6f;
+        --warn: #c9974b;
+        --danger: #c25b4e;
+        --info: #6f9ec2;
+        --rare: #d9c850;
+        --unique: #af6025;
+        --currency: #aa9e82;
+        --magic: #8888ff;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        background: #060505;
+        color: var(--ink);
+        font:
+          14px/1.5 -apple-system,
+          'Segoe UI',
+          sans-serif;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 16px;
+        color: var(--gold);
+        margin-bottom: 4px;
+      }
+      .hint {
+        color: var(--ink-muted);
+        font-size: 12px;
+        margin-bottom: 20px;
+        max-width: 720px;
+      }
+      .frames {
+        display: flex;
+        gap: 32px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .framewrap > .label {
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 8px;
+      }
 
-  .app { background: var(--surface-0); border: 1px solid var(--edge); border-radius: 10px; padding: 16px 20px 20px; }
-  .app.desktop { width: 760px; }
-  .app.mobile { width: 375px; padding: 14px 14px 18px; }
+      .app {
+        background: var(--surface-0);
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        padding: 16px 20px 20px;
+      }
+      .app.desktop {
+        width: 760px;
+      }
+      .app.mobile {
+        width: 375px;
+        padding: 14px 14px 18px;
+      }
 
-  /* header — mirrors the Searches view: title left, actions right */
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .head h2 { font-size: 18px; font-weight: 600; color: var(--ink); }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip-f { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-2); color: var(--ink-muted);
-    border: 1px solid var(--edge); border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; }
-  .chip-f.on { color: var(--gold-bright); border-color: var(--gold); background: var(--surface-3); }
-  .chip-f .g { opacity: .85; }
+      /* header — mirrors the Searches view: title left, actions right */
+      .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+      .head h2 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip-f {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: var(--surface-2);
+        color: var(--ink-muted);
+        border: 1px solid var(--edge);
+        border-radius: 999px;
+        padding: 4px 11px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .chip-f.on {
+        color: var(--gold-bright);
+        border-color: var(--gold);
+        background: var(--surface-3);
+      }
+      .chip-f .g {
+        opacity: 0.85;
+      }
 
-  .feed { display: flex; flex-direction: column; gap: 8px; }
+      .feed {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
 
-  /* one card shell for every kind (the Searches card language) + a left kind-accent */
-  .card { position: relative; display: flex; gap: 12px; align-items: flex-start;
-    border: 1px solid var(--edge); border-radius: 10px; background: var(--surface-1);
-    padding: 11px 14px 11px 16px; overflow: hidden; }
-  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent, var(--edge-strong)); }
-  .card.hit { --accent: var(--gold); }
-  .card.pc  { --accent: var(--info); }
-  .card.buy { --accent: var(--ok); }
-  .card.buy.fail { --accent: var(--danger); }
+      /* one card shell for every kind (the Searches card language) + a left kind-accent */
+      .card {
+        position: relative;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        background: var(--surface-1);
+        padding: 11px 14px 11px 16px;
+        overflow: hidden;
+      }
+      .card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--accent, var(--edge-strong));
+      }
+      .card.hit {
+        --accent: var(--gold);
+      }
+      .card.pc {
+        --accent: var(--info);
+      }
+      .card.buy {
+        --accent: var(--ok);
+      }
+      .card.buy.fail {
+        --accent: var(--danger);
+      }
 
-  .kind { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center;
-    font-size: 13px; background: var(--surface-3); border: 1px solid var(--edge); margin-top: 1px; }
-  .body { flex: 1; min-width: 0; }
-  .row1 { display: flex; align-items: center; gap: 8px; }
-  .row2 { display: flex; align-items: center; gap: 7px; margin-top: 3px; }
-  .grow { flex: 1; }
-  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .name.rare { color: var(--rare); } .name.unique { color: var(--unique); } .name.currency { color: var(--currency); }
-  .badge { font-size: 10px; letter-spacing: .04em; border-radius: 5px; padding: 1px 6px; border: 1px solid var(--edge-strong); color: var(--ink-muted); }
-  .badge.rare-b { color: var(--rare); border-color: color-mix(in srgb, var(--rare) 45%, transparent); }
-  .badge.ok  { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
-  .badge.dg  { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
-  .price { font: 13px/1 ui-monospace, monospace; color: var(--gold-bright); white-space: nowrap; }
-  .price em { color: var(--gold); font-style: normal; font-size: 11px; }
-  .est { font-size: 12px; color: var(--ink-muted); }
-  .est b { color: var(--gold-bright); font-weight: 500; font-family: ui-monospace, monospace; }
-  .chip { font-size: 11px; color: var(--ink-muted); background: var(--surface-2); border: 1px solid var(--edge);
-    border-radius: 999px; padding: 1px 8px; cursor: pointer; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip:hover { color: var(--ink); border-color: var(--edge-strong); }
-  .dot { color: var(--ink-faint); }
-  .time { font-size: 11px; color: var(--ink-faint); }
-  .link, .chev { color: var(--ink-faint); text-decoration: none; font-size: 13px; cursor: pointer; padding: 0 2px; }
-  .link:hover, .chev:hover { color: var(--ink); }
-  .empty { color: var(--ink-faint); font-size: 13px; padding: 8px 2px; }
+      .kind {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        background: var(--surface-3);
+        border: 1px solid var(--edge);
+        margin-top: 1px;
+      }
+      .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .row1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .row2 {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 3px;
+      }
+      .grow {
+        flex: 1;
+      }
+      .name {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .name.rare {
+        color: var(--rare);
+      }
+      .name.unique {
+        color: var(--unique);
+      }
+      .name.currency {
+        color: var(--currency);
+      }
+      .badge {
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        border-radius: 5px;
+        padding: 1px 6px;
+        border: 1px solid var(--edge-strong);
+        color: var(--ink-muted);
+      }
+      .badge.rare-b {
+        color: var(--rare);
+        border-color: color-mix(in srgb, var(--rare) 45%, transparent);
+      }
+      .badge.ok {
+        color: var(--ok);
+        border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+      }
+      .badge.dg {
+        color: var(--danger);
+        border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+      }
+      .price {
+        font:
+          13px/1 ui-monospace,
+          monospace;
+        color: var(--gold-bright);
+        white-space: nowrap;
+      }
+      .price em {
+        color: var(--gold);
+        font-style: normal;
+        font-size: 11px;
+      }
+      .est {
+        font-size: 12px;
+        color: var(--ink-muted);
+      }
+      .est b {
+        color: var(--gold-bright);
+        font-weight: 500;
+        font-family: ui-monospace, monospace;
+      }
+      .chip {
+        font-size: 11px;
+        color: var(--ink-muted);
+        background: var(--surface-2);
+        border: 1px solid var(--edge);
+        border-radius: 999px;
+        padding: 1px 8px;
+        cursor: pointer;
+        max-width: 55%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chip:hover {
+        color: var(--ink);
+        border-color: var(--edge-strong);
+      }
+      .dot {
+        color: var(--ink-faint);
+      }
+      .time {
+        font-size: 11px;
+        color: var(--ink-faint);
+      }
+      .link,
+      .chev {
+        color: var(--ink-faint);
+        text-decoration: none;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 0 2px;
+      }
+      .link:hover,
+      .chev:hover {
+        color: var(--ink);
+      }
+      .empty {
+        color: var(--ink-faint);
+        font-size: 13px;
+        padding: 8px 2px;
+      }
 
-  /* expanded card — level 1 (event details) inside the body */
-  .details { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--edge); display: flex; flex-direction: column; gap: 8px; }
-  .kv { font-size: 12px; color: var(--ink-muted); display: flex; gap: 14px; flex-wrap: wrap; }
-  .kv b { color: var(--ink); font-weight: 500; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .act { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-muted);
-    background: var(--surface-2); border: 1px solid var(--edge); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
-  .act:hover { color: var(--gold-bright); border-color: var(--edge-strong); }
-  .subtoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gold); cursor: pointer; align-self: flex-start; }
-  /* level 2 — restyled ItemDetailView (tooltip-like mods block on a surface-2 inset) */
-  .itemdet { background: var(--surface-2); border: 1px solid var(--edge); border-radius: 8px; padding: 9px 11px; }
-  .itemdet .line { font-size: 11.5px; color: var(--ink-muted); margin-bottom: 6px; }
-  .itemdet .line b { color: var(--ink); font-weight: 500; }
-  .mods { display: flex; flex-direction: column; }
-  .mods .grp { padding: 5px 0; border-top: 1px solid var(--edge); }
-  .mods .grp:first-child { border-top: 0; padding-top: 0; }
-  .mod { font-size: 12px; line-height: 1.55; }
-  .mod.impl { color: var(--ink-faint); font-style: italic; }
-  .mod.expl { color: var(--ink); }
-  .mod.rune { color: var(--gold); }
-  .mod .v { color: var(--gold-bright); font-weight: 500; }
+      /* expanded card — level 1 (event details) inside the body */
+      .details {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--edge);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .kv {
+        font-size: 12px;
+        color: var(--ink-muted);
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .kv b {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .act {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--ink-muted);
+        background: var(--surface-2);
+        border: 1px solid var(--edge);
+        border-radius: 6px;
+        padding: 3px 9px;
+        cursor: pointer;
+      }
+      .act:hover {
+        color: var(--gold-bright);
+        border-color: var(--edge-strong);
+      }
+      .subtoggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--gold);
+        cursor: pointer;
+        align-self: flex-start;
+      }
+      /* level 2 — restyled ItemDetailView (tooltip-like mods block on a surface-2 inset) */
+      .itemdet {
+        background: var(--surface-2);
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        padding: 9px 11px;
+      }
+      .itemdet .line {
+        font-size: 11.5px;
+        color: var(--ink-muted);
+        margin-bottom: 6px;
+      }
+      .itemdet .line b {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .mods {
+        display: flex;
+        flex-direction: column;
+      }
+      .mods .grp {
+        padding: 5px 0;
+        border-top: 1px solid var(--edge);
+      }
+      .mods .grp:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .mod {
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .mod.impl {
+        color: var(--ink-faint);
+        font-style: italic;
+      }
+      .mod.expl {
+        color: var(--ink);
+      }
+      .mod.rune {
+        color: var(--gold);
+      }
+      .mod .v {
+        color: var(--gold-bright);
+        font-weight: 500;
+      }
 
-  .note { margin-top: 12px; font-size: 11px; color: var(--ink-faint); }
-</style>
-</head>
-<body>
-  <h1>Activity feed redesign (#39) — proposal</h1>
-  <p class="hint">One chronological timeline of everything: <b>live hits</b>, <b>price checks</b> and <b>auto-buy/travel runs</b>,
-  restyled in the Searches view's card language. Filter-chip row (a visible-kinds whitelist) on the right; each card shares one
-  shell with a left kind-accent + icon. Layout option <b>(a) merged stream</b> is shown — see Q1 in the plan for tabs/sections.</p>
+      .note {
+        margin-top: 12px;
+        font-size: 11px;
+        color: var(--ink-faint);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Activity feed redesign (#39) — proposal</h1>
+    <p class="hint">
+      One chronological timeline of everything: <b>live hits</b>, <b>price checks</b> and
+      <b>auto-buy/travel runs</b>, restyled in the Searches view's card language. Filter-chip row (a
+      visible-kinds whitelist) on the right; each card shares one shell with a left kind-accent +
+      icon. Layout option <b>(a) merged stream</b> is shown — see Q1 in the plan for tabs/sections.
+    </p>
 
-  <div class="frames">
-    <!-- ================= DESKTOP ================= -->
-    <div class="framewrap">
-      <div class="label">Desktop</div>
-      <div class="app desktop">
-        <div class="head">
-          <h2>Activity</h2>
-          <div class="chips">
-            <button class="chip-f on"><span class="g">⚡</span> Hits</button>
-            <button class="chip-f on"><span class="g">🪙</span> Price checks</button>
-            <button class="chip-f on"><span class="g">🛒</span> Auto-buy</button>
+    <div class="frames">
+      <!-- ================= DESKTOP ================= -->
+      <div class="framewrap">
+        <div class="label">Desktop</div>
+        <div class="app desktop">
+          <div class="head">
+            <h2>Activity</h2>
+            <div class="chips">
+              <button class="chip-f on"><span class="g">⚡</span> Hits</button>
+              <button class="chip-f on"><span class="g">🪙</span> Price checks</button>
+              <button class="chip-f on"><span class="g">🛒</span> Auto-buy</button>
+            </div>
           </div>
-        </div>
-        <div class="feed">
-
-          <div class="card hit">
-            <div class="kind">⚡</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name rare">Corpse Shell</span>
-                <span class="badge rare-b">RARE</span>
-                <span class="grow"></span>
-                <span class="price">5&nbsp;<em>divine</em></span>
-                <a class="link" title="Open on trade site">↗</a>
-                <span class="chev" title="Collapse">▾</span>
-              </div>
-              <div class="row2">
-                <span class="chip" title="Locate the source search">charge regulation 21</span>
-                <span class="dot">·</span><span class="time">2m ago</span>
-              </div>
-              <!-- level 1: event/action details (first click) -->
-              <div class="details">
-                <div class="kv"><span>seller <b>Xyzzy_PoE</b></span><span>indexed <b>3m ago</b></span><span>listed <b>5 divine</b></span></div>
-                <div class="actions">
-                  <span class="act">↗ Open on trade</span>
-                  <span class="act">⧉ Copy whisper</span>
-                  <span class="act">➤ Travel</span>
+          <div class="feed">
+            <div class="card hit">
+              <div class="kind">⚡</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name rare">Corpse Shell</span>
+                  <span class="badge rare-b">RARE</span>
+                  <span class="grow"></span>
+                  <span class="price">5&nbsp;<em>divine</em></span>
+                  <a class="link" title="Open on trade site">↗</a>
+                  <span class="chev" title="Collapse">▾</span>
                 </div>
-                <span class="subtoggle">▾ Item details</span>
-                <!-- level 2: restyled ItemDetailView (second click) -->
-                <div class="itemdet">
-                  <div class="line">Body Armour · <b>Advanced Dualstring Armour</b> · ilvl <b>81</b> · ES <b>124</b> · Quality <b>+20%</b></div>
-                  <div class="mods">
-                    <div class="grp"><div class="mod impl">20% increased Stun Threshold</div></div>
-                    <div class="grp">
-                      <div class="mod expl">+<span class="v">54</span> to maximum Life</div>
-                      <div class="mod expl">+<span class="v">38</span>% increased Energy Shield</div>
-                      <div class="mod expl">+<span class="v">25</span>% to Cold Resistance</div>
+                <div class="row2">
+                  <span class="chip" title="Locate the source search">charge regulation 21</span>
+                  <span class="dot">·</span><span class="time">2m ago</span>
+                </div>
+                <!-- level 1: event/action details (first click) -->
+                <div class="details">
+                  <div class="kv">
+                    <span>seller <b>Xyzzy_PoE</b></span
+                    ><span>indexed <b>3m ago</b></span
+                    ><span>listed <b>5 divine</b></span>
+                  </div>
+                  <div class="actions">
+                    <span class="act">↗ Open on trade</span>
+                    <span class="act">⧉ Copy whisper</span>
+                    <span class="act">➤ Travel</span>
+                  </div>
+                  <span class="subtoggle">▾ Item details</span>
+                  <!-- level 2: restyled ItemDetailView (second click) -->
+                  <div class="itemdet">
+                    <div class="line">
+                      Body Armour · <b>Advanced Dualstring Armour</b> · ilvl <b>81</b> · ES
+                      <b>124</b> · Quality <b>+20%</b>
                     </div>
-                    <div class="grp"><div class="mod rune">+<span class="v">12</span> to Dexterity <span style="color:var(--ink-faint)">(rune)</span></div></div>
+                    <div class="mods">
+                      <div class="grp">
+                        <div class="mod impl">20% increased Stun Threshold</div>
+                      </div>
+                      <div class="grp">
+                        <div class="mod expl">+<span class="v">54</span> to maximum Life</div>
+                        <div class="mod expl">
+                          +<span class="v">38</span>% increased Energy Shield
+                        </div>
+                        <div class="mod expl">+<span class="v">25</span>% to Cold Resistance</div>
+                      </div>
+                      <div class="grp">
+                        <div class="mod rune">
+                          +<span class="v">12</span> to Dexterity
+                          <span style="color: var(--ink-faint)">(rune)</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="card pc">
-            <div class="kind">🪙</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name currency">Divine Orb</span>
-                <span class="grow"></span>
-                <span class="est">est. <b>737 exalted</b></span>
+            <div class="card pc">
+              <div class="kind">🪙</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name currency">Divine Orb</span>
+                  <span class="grow"></span>
+                  <span class="est">est. <b>737 exalted</b></span>
+                </div>
+                <div class="row2"><span class="time">5m ago · price check</span></div>
               </div>
-              <div class="row2"><span class="time">5m ago · price check</span></div>
             </div>
-          </div>
 
-          <div class="card buy">
-            <div class="kind">🛒</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name unique">Andvarius</span>
-                <span class="badge ok">PLACED</span>
-                <span class="grow"></span>
-                <span class="price">20&nbsp;<em>exalted</em></span>
-                <span class="chev" title="Show steps">▸</span>
+            <div class="card buy">
+              <div class="kind">🛒</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name unique">Andvarius</span>
+                  <span class="badge ok">PLACED</span>
+                  <span class="grow"></span>
+                  <span class="price">20&nbsp;<em>exalted</em></span>
+                  <span class="chev" title="Show steps">▸</span>
+                </div>
+                <div class="row2">
+                  <span class="chip">grubosze</span><span class="dot">·</span
+                  ><span class="time">12m ago · auto-buy</span>
+                </div>
               </div>
-              <div class="row2"><span class="chip">grubosze</span><span class="dot">·</span><span class="time">12m ago · auto-buy</span></div>
             </div>
-          </div>
 
-          <div class="card hit">
-            <div class="kind">⚡</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name rare">Sorcerer Gloves</span>
-                <span class="badge rare-b">RARE</span>
-                <span class="grow"></span>
-                <span class="price">2&nbsp;<em>divine</em></span>
-                <a class="link" title="Open on trade site">↗</a>
+            <div class="card hit">
+              <div class="kind">⚡</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name rare">Sorcerer Gloves</span>
+                  <span class="badge rare-b">RARE</span>
+                  <span class="grow"></span>
+                  <span class="price">2&nbsp;<em>divine</em></span>
+                  <a class="link" title="Open on trade site">↗</a>
+                </div>
+                <div class="row2">
+                  <span class="chip">ES gloves 120+</span><span class="dot">·</span
+                  ><span class="time">18m ago</span>
+                </div>
               </div>
-              <div class="row2"><span class="chip">ES gloves 120+</span><span class="dot">·</span><span class="time">18m ago</span></div>
             </div>
-          </div>
 
-          <div class="card pc">
-            <div class="kind">🪙</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name rare">Advanced Dualstring Armour</span>
-                <span class="grow"></span>
-                <span class="est">cheapest <b>3 divine</b> · 8 listings</span>
+            <div class="card pc">
+              <div class="kind">🪙</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name rare">Advanced Dualstring Armour</span>
+                  <span class="grow"></span>
+                  <span class="est">cheapest <b>3 divine</b> · 8 listings</span>
+                </div>
+                <div class="row2"><span class="time">31m ago · price check</span></div>
               </div>
-              <div class="row2"><span class="time">31m ago · price check</span></div>
             </div>
-          </div>
 
-          <div class="card buy fail">
-            <div class="kind">🛒</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name rare">Heavy Belt</span>
-                <span class="badge dg">TRAVEL FAILED</span>
-                <span class="grow"></span>
-                <span class="price">40&nbsp;<em>exalted</em></span>
-                <span class="chev" title="Show steps">▸</span>
+            <div class="card buy fail">
+              <div class="kind">🛒</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name rare">Heavy Belt</span>
+                  <span class="badge dg">TRAVEL FAILED</span>
+                  <span class="grow"></span>
+                  <span class="price">40&nbsp;<em>exalted</em></span>
+                  <span class="chev" title="Show steps">▸</span>
+                </div>
+                <div class="row2">
+                  <span class="time">44m ago · auto-buy · item no longer available</span>
+                </div>
               </div>
-              <div class="row2"><span class="time">44m ago · auto-buy · item no longer available</span></div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= MOBILE ================= -->
-    <div class="framewrap">
-      <div class="label">Mobile</div>
-      <div class="app mobile">
-        <div class="head">
-          <h2>Activity</h2>
-          <div class="chips">
-            <button class="chip-f on">⚡</button>
-            <button class="chip-f on">🪙</button>
-            <button class="chip-f on">🛒</button>
-          </div>
-        </div>
-        <div class="feed">
-          <div class="card hit">
-            <div class="kind">⚡</div>
-            <div class="body">
-              <div class="row1">
-                <span class="name rare">Corpse Shell</span>
-                <span class="grow"></span>
-                <span class="price">5&nbsp;<em>div</em></span>
-              </div>
-              <div class="row2"><span class="chip">charge regulation 21</span><span class="dot">·</span><span class="time">2m</span></div>
-            </div>
-          </div>
-          <div class="card pc">
-            <div class="kind">🪙</div>
-            <div class="body">
-              <div class="row1"><span class="name currency">Divine Orb</span><span class="grow"></span><span class="est"><b>737 ex</b></span></div>
-              <div class="row2"><span class="time">5m · price check</span></div>
-            </div>
-          </div>
-          <div class="card buy">
-            <div class="kind">🛒</div>
-            <div class="body">
-              <div class="row1"><span class="name unique">Andvarius</span><span class="badge ok">PLACED</span><span class="grow"></span><span class="chev">▸</span></div>
-              <div class="row2"><span class="time">12m · auto-buy · 20 ex</span></div>
-            </div>
-          </div>
-          <div class="card hit">
-            <div class="kind">⚡</div>
-            <div class="body">
-              <div class="row1"><span class="name rare">Sorcerer Gloves</span><span class="grow"></span><span class="price">2&nbsp;<em>div</em></span></div>
-              <div class="row2"><span class="chip">ES gloves 120+</span><span class="dot">·</span><span class="time">18m</span></div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <p class="note">Card shell = the Searches view card; left bar + icon encode the kind (gold ⚡ hit · blue 🪙 price check ·
-  green 🛒 buy, red on failure). Bodies reuse existing components (hit row, PriceCheckResultView, ActivityCard steps).</p>
-</body>
+      <!-- ================= MOBILE ================= -->
+      <div class="framewrap">
+        <div class="label">Mobile</div>
+        <div class="app mobile">
+          <div class="head">
+            <h2>Activity</h2>
+            <div class="chips">
+              <button class="chip-f on">⚡</button>
+              <button class="chip-f on">🪙</button>
+              <button class="chip-f on">🛒</button>
+            </div>
+          </div>
+          <div class="feed">
+            <div class="card hit">
+              <div class="kind">⚡</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name rare">Corpse Shell</span>
+                  <span class="grow"></span>
+                  <span class="price">5&nbsp;<em>div</em></span>
+                </div>
+                <div class="row2">
+                  <span class="chip">charge regulation 21</span><span class="dot">·</span
+                  ><span class="time">2m</span>
+                </div>
+              </div>
+            </div>
+            <div class="card pc">
+              <div class="kind">🪙</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name currency">Divine Orb</span><span class="grow"></span
+                  ><span class="est"><b>737 ex</b></span>
+                </div>
+                <div class="row2"><span class="time">5m · price check</span></div>
+              </div>
+            </div>
+            <div class="card buy">
+              <div class="kind">🛒</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name unique">Andvarius</span><span class="badge ok">PLACED</span
+                  ><span class="grow"></span><span class="chev">▸</span>
+                </div>
+                <div class="row2"><span class="time">12m · auto-buy · 20 ex</span></div>
+              </div>
+            </div>
+            <div class="card hit">
+              <div class="kind">⚡</div>
+              <div class="body">
+                <div class="row1">
+                  <span class="name rare">Sorcerer Gloves</span><span class="grow"></span
+                  ><span class="price">2&nbsp;<em>div</em></span>
+                </div>
+                <div class="row2">
+                  <span class="chip">ES gloves 120+</span><span class="dot">·</span
+                  ><span class="time">18m</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">
+      Card shell = the Searches view card; left bar + icon encode the kind (gold ⚡ hit · blue 🪙
+      price check · green 🛒 buy, red on failure). Bodies reuse existing components (hit row,
+      PriceCheckResultView, ActivityCard steps).
+    </p>
+  </body>
 </html>

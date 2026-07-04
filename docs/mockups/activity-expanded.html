@@ -1,132 +1,475 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mockup — expanded Activity card layout (#39)</title>
-<style>
-  :root {
-    --surface-0: #0b0a08; --surface-1: #141210; --surface-2: #1d1a16; --surface-3: #262219;
-    --edge: #2e2a22; --edge-strong: #443d2f;
-    --ink: #d6cfc2; --ink-muted: #8d8576; --ink-faint: #5d574c;
-    --gold: #c9a85c; --gold-bright: #e3c87e; --ok: #6fae6f; --warn: #c9974b;
-    --danger: #c25b4e; --info: #6f9ec2;
-    --rare: #d9c850; --unique: #af6025; --currency: #aa9e82; --magic: #8888ff;
-  }
-  * { box-sizing: border-box; margin: 0; }
-  body { background: #060505; color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; padding: 24px; }
-  h1 { font-size: 16px; color: var(--gold); margin-bottom: 4px; }
-  .hint { color: var(--ink-muted); font-size: 12px; margin-bottom: 20px; max-width: 760px; }
-  h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 22px 0 10px; }
-  .rec { color: var(--ok); }
-  .frames { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
-  .framewrap > .label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mockup — expanded Activity card layout (#39)</title>
+    <style>
+      :root {
+        --surface-0: #0b0a08;
+        --surface-1: #141210;
+        --surface-2: #1d1a16;
+        --surface-3: #262219;
+        --edge: #2e2a22;
+        --edge-strong: #443d2f;
+        --ink: #d6cfc2;
+        --ink-muted: #8d8576;
+        --ink-faint: #5d574c;
+        --gold: #c9a85c;
+        --gold-bright: #e3c87e;
+        --ok: #6fae6f;
+        --warn: #c9974b;
+        --danger: #c25b4e;
+        --info: #6f9ec2;
+        --rare: #d9c850;
+        --unique: #af6025;
+        --currency: #aa9e82;
+        --magic: #8888ff;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        background: #060505;
+        color: var(--ink);
+        font:
+          14px/1.5 -apple-system,
+          'Segoe UI',
+          sans-serif;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 16px;
+        color: var(--gold);
+        margin-bottom: 4px;
+      }
+      .hint {
+        color: var(--ink-muted);
+        font-size: 12px;
+        margin-bottom: 20px;
+        max-width: 760px;
+      }
+      h2 {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin: 22px 0 10px;
+      }
+      .rec {
+        color: var(--ok);
+      }
+      .frames {
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .framewrap > .label {
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 8px;
+      }
 
-  /* the expanded card (shared shell) */
-  .card { position: relative; overflow: hidden; border: 1px solid var(--edge); border-radius: 10px; background: var(--surface-1); }
-  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ok); }
-  .card.desktop { width: 720px; }
-  .card.mobile { width: 360px; }
-  .cardpad { padding: 10px 14px 12px 16px; }
-  .toprow { display: flex; align-items: center; gap: 8px; }
-  .kicon { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 13px; background: var(--surface-3); border: 1px solid var(--edge); }
-  .name { font-weight: 600; color: var(--unique); }
-  .badge { font-size: 10px; border-radius: 5px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ok); }
-  .grow { flex: 1; }
-  .chip { font-size: 11px; color: var(--ink-muted); background: var(--surface-3); border: 1px solid var(--edge); border-radius: 999px; padding: 1px 8px; }
-  .time { font-size: 11px; color: var(--ink-faint); }
-  .chev { color: var(--ink-faint); }
-  .detwrap { margin-top: 9px; padding-top: 10px; border-top: 1px solid var(--edge); }
+      /* the expanded card (shared shell) */
+      .card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        background: var(--surface-1);
+      }
+      .card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--ok);
+      }
+      .card.desktop {
+        width: 720px;
+      }
+      .card.mobile {
+        width: 360px;
+      }
+      .cardpad {
+        padding: 10px 14px 12px 16px;
+      }
+      .toprow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .kicon {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        background: var(--surface-3);
+        border: 1px solid var(--edge);
+      }
+      .name {
+        font-weight: 600;
+        color: var(--unique);
+      }
+      .badge {
+        font-size: 10px;
+        border-radius: 5px;
+        padding: 1px 6px;
+        border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+        color: var(--ok);
+      }
+      .grow {
+        flex: 1;
+      }
+      .chip {
+        font-size: 11px;
+        color: var(--ink-muted);
+        background: var(--surface-3);
+        border: 1px solid var(--edge);
+        border-radius: 999px;
+        padding: 1px 8px;
+      }
+      .time {
+        font-size: 11px;
+        color: var(--ink-faint);
+      }
+      .chev {
+        color: var(--ink-faint);
+      }
+      .detwrap {
+        margin-top: 9px;
+        padding-top: 10px;
+        border-top: 1px solid var(--edge);
+      }
 
-  .kv { font-size: 12px; color: var(--ink-muted); display: flex; gap: 14px; flex-wrap: wrap; }
-  .kv b { color: var(--ink); font-weight: 500; }
-  .kv .g { color: var(--gold-bright); font-family: ui-monospace, monospace; }
-  .home { color: var(--ok); }
+      .kv {
+        font-size: 12px;
+        color: var(--ink-muted);
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .kv b {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .kv .g {
+        color: var(--gold-bright);
+        font-family: ui-monospace, monospace;
+      }
+      .home {
+        color: var(--ok);
+      }
 
-  /* vertical steps (current) */
-  .steps { display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--edge); padding-left: 8px; margin-top: 8px; }
-  .step { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
-  .step .k { width: 46px; flex: none; color: var(--ink-faint); }
-  .step .p.ok { color: var(--ok); } .step .p.gold { color: var(--gold); }
-  .step .d { color: var(--ink-faint); }
-  .step .t { margin-left: auto; font: 10px ui-monospace, monospace; color: var(--ink-faint); }
+      /* vertical steps (current) */
+      .steps {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        border-left: 1px solid var(--edge);
+        padding-left: 8px;
+        margin-top: 8px;
+      }
+      .step {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .step .k {
+        width: 46px;
+        flex: none;
+        color: var(--ink-faint);
+      }
+      .step .p.ok {
+        color: var(--ok);
+      }
+      .step .p.gold {
+        color: var(--gold);
+      }
+      .step .d {
+        color: var(--ink-faint);
+      }
+      .step .t {
+        margin-left: auto;
+        font:
+          10px ui-monospace,
+          monospace;
+        color: var(--ink-faint);
+      }
 
-  /* item-detail block — the reverted DetailCard grid look */
-  .idet { display: grid; grid-template-columns: 1fr; gap: 8px; }
-  .dcard { border: 1px solid var(--edge); border-radius: 8px; background: var(--surface-2); padding: 8px 10px; }
-  .dcard .dt { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
-  .drow { display: flex; justify-content: space-between; font-size: 12px; gap: 10px; }
-  .drow .l { color: var(--ink-muted); } .drow .v { color: var(--ink); }
-  .mod { font-size: 12px; }
-  .mod.impl { color: var(--ink-muted); font-style: italic; } .mod.expl { color: var(--magic); } .mod.rune { color: var(--gold); }
-  .subtoggle { display: inline-flex; gap: 6px; font-size: 12px; color: var(--gold); margin-top: 8px; }
+      /* item-detail block — the reverted DetailCard grid look */
+      .idet {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .dcard {
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        background: var(--surface-2);
+        padding: 8px 10px;
+      }
+      .dcard .dt {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 4px;
+      }
+      .drow {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        gap: 10px;
+      }
+      .drow .l {
+        color: var(--ink-muted);
+      }
+      .drow .v {
+        color: var(--ink);
+      }
+      .mod {
+        font-size: 12px;
+      }
+      .mod.impl {
+        color: var(--ink-muted);
+        font-style: italic;
+      }
+      .mod.expl {
+        color: var(--magic);
+      }
+      .mod.rune {
+        color: var(--gold);
+      }
+      .subtoggle {
+        display: inline-flex;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--gold);
+        margin-top: 8px;
+      }
 
-  /* OPTION 1 — two columns */
-  .cols { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }
-  .cols .col-l .kv { margin-bottom: 2px; }
-  .cols .col-r .idet { grid-template-columns: 1fr; }
+      /* OPTION 1 — two columns */
+      .cols {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 16px;
+      }
+      .cols .col-l .kv {
+        margin-bottom: 2px;
+      }
+      .cols .col-r .idet {
+        grid-template-columns: 1fr;
+      }
 
-  /* OPTION 2 — horizontal timeline */
-  .htl { display: flex; gap: 0; margin-top: 12px; }
-  .hstep { flex: 1; position: relative; padding-top: 16px; text-align: center; }
-  .hstep::before { content: ""; position: absolute; top: 5px; left: 0; right: 0; height: 2px; background: var(--edge); }
-  .hstep:first-child::before { left: 50%; } .hstep:last-child::before { right: 50%; }
-  .hstep .node { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 11px; height: 11px; border-radius: 50%; background: var(--surface-1); border: 2px solid var(--ok); }
-  .hstep.gold .node { border-color: var(--gold); }
-  .hstep .k { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; }
-  .hstep .p { font-size: 12px; } .hstep .p.ok { color: var(--ok); } .hstep .p.gold { color: var(--gold); }
-  .hstep .t { font: 10px ui-monospace, monospace; color: var(--ink-faint); }
+      /* OPTION 2 — horizontal timeline */
+      .htl {
+        display: flex;
+        gap: 0;
+        margin-top: 12px;
+      }
+      .hstep {
+        flex: 1;
+        position: relative;
+        padding-top: 16px;
+        text-align: center;
+      }
+      .hstep::before {
+        content: '';
+        position: absolute;
+        top: 5px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: var(--edge);
+      }
+      .hstep:first-child::before {
+        left: 50%;
+      }
+      .hstep:last-child::before {
+        right: 50%;
+      }
+      .hstep .node {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--surface-1);
+        border: 2px solid var(--ok);
+      }
+      .hstep.gold .node {
+        border-color: var(--gold);
+      }
+      .hstep .k {
+        font-size: 10px;
+        color: var(--ink-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .hstep .p {
+        font-size: 12px;
+      }
+      .hstep .p.ok {
+        color: var(--ok);
+      }
+      .hstep .p.gold {
+        color: var(--gold);
+      }
+      .hstep .t {
+        font:
+          10px ui-monospace,
+          monospace;
+        color: var(--ink-faint);
+      }
 
-  .note { margin-top: 10px; font-size: 11px; color: var(--ink-faint); max-width: 720px; }
-  .mobnote { font-size: 11px; color: var(--ink-faint); margin-top: 8px; }
-</style>
-</head>
-<body>
-  <h1>Expanded Activity card — layout options (#39)</h1>
-  <p class="hint">Fixing the wide-screen emptiness when an <b>auto-buy</b> card is expanded (content was pinned left + right).
-  Two options below. My recommendation: <b class="rec">Option 1 (two columns)</b> — it fills the width meaningfully, shows the
-  item without a second click, and stacks cleanly on mobile; the horizontal timeline looks nice but gets cramped with variable
-  step details and needs scroll/wrap on mobile.</p>
+      .note {
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--ink-faint);
+        max-width: 720px;
+      }
+      .mobnote {
+        font-size: 11px;
+        color: var(--ink-faint);
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Expanded Activity card — layout options (#39)</h1>
+    <p class="hint">
+      Fixing the wide-screen emptiness when an <b>auto-buy</b> card is expanded (content was pinned
+      left + right). Two options below. My recommendation:
+      <b class="rec">Option 1 (two columns)</b> — it fills the width meaningfully, shows the item
+      without a second click, and stacks cleanly on mobile; the horizontal timeline looks nice but
+      gets cramped with variable step details and needs scroll/wrap on mobile.
+    </p>
 
-  <!-- ============ OPTION 1 ============ -->
-  <h2>Option 1 — two columns · <span class="rec">recommended</span> (left = action, right = item shown immediately)</h2>
-  <div class="frames">
-    <div class="framewrap">
-      <div class="label">Desktop</div>
-      <div class="card desktop">
-        <div class="cardpad">
-          <div class="toprow">
-            <span class="kicon">🛒</span>
-            <span class="name">Andvarius</span>
-            <span class="badge">PLACED</span>
-            <span class="grow"></span>
-            <span class="chip">grubosze</span>
-            <span class="time">12m ago</span>
-            <span class="chev">▾</span>
-          </div>
-          <div class="detwrap">
-            <div class="cols">
-              <div class="col-l">
-                <div class="kv"><span>listed <span class="g">20 exalted</span></span><span>seller <b>Xyzzy_PoE</b></span><span>manual</span><span class="home">⌂ home</span></div>
-                <div class="steps">
-                  <div class="step"><span class="k">travel</span><span class="p ok">success</span><span class="t">12:01:02</span></div>
-                  <div class="step"><span class="k">buy</span><span class="p gold">item-located</span><span class="t">12:01:04</span></div>
-                  <div class="step"><span class="k">buy</span><span class="p ok">moved</span><span class="t">12:01:05</span></div>
-                  <div class="step"><span class="k">return</span><span class="p ok">returned</span><span class="t">12:01:08</span></div>
+    <!-- ============ OPTION 1 ============ -->
+    <h2>
+      Option 1 — two columns · <span class="rec">recommended</span> (left = action, right = item
+      shown immediately)
+    </h2>
+    <div class="frames">
+      <div class="framewrap">
+        <div class="label">Desktop</div>
+        <div class="card desktop">
+          <div class="cardpad">
+            <div class="toprow">
+              <span class="kicon">🛒</span>
+              <span class="name">Andvarius</span>
+              <span class="badge">PLACED</span>
+              <span class="grow"></span>
+              <span class="chip">grubosze</span>
+              <span class="time">12m ago</span>
+              <span class="chev">▾</span>
+            </div>
+            <div class="detwrap">
+              <div class="cols">
+                <div class="col-l">
+                  <div class="kv">
+                    <span>listed <span class="g">20 exalted</span></span
+                    ><span>seller <b>Xyzzy_PoE</b></span
+                    ><span>manual</span><span class="home">⌂ home</span>
+                  </div>
+                  <div class="steps">
+                    <div class="step">
+                      <span class="k">travel</span><span class="p ok">success</span
+                      ><span class="t">12:01:02</span>
+                    </div>
+                    <div class="step">
+                      <span class="k">buy</span><span class="p gold">item-located</span
+                      ><span class="t">12:01:04</span>
+                    </div>
+                    <div class="step">
+                      <span class="k">buy</span><span class="p ok">moved</span
+                      ><span class="t">12:01:05</span>
+                    </div>
+                    <div class="step">
+                      <span class="k">return</span><span class="p ok">returned</span
+                      ><span class="t">12:01:08</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-r">
+                  <div class="idet">
+                    <div class="dcard">
+                      <div class="dt">Item</div>
+                      <div class="drow">
+                        <span class="l">Base</span><span class="v">Gold Ring</span>
+                      </div>
+                      <div class="drow">
+                        <span class="l">Item level</span><span class="v">72</span>
+                      </div>
+                    </div>
+                    <div class="dcard">
+                      <div class="dt">Mods</div>
+                      <div class="mod impl">+20% increased Rarity of Items found (implicit)</div>
+                      <div class="mod expl">+31 to maximum Life</div>
+                      <div class="mod expl">+18% to Fire Resistance</div>
+                      <div class="mod expl">-5 Physical damage taken from hits</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="col-r">
-                <div class="idet">
-                  <div class="dcard"><div class="dt">Item</div>
-                    <div class="drow"><span class="l">Base</span><span class="v">Gold Ring</span></div>
-                    <div class="drow"><span class="l">Item level</span><span class="v">72</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="framewrap">
+        <div class="label">Mobile (columns stack)</div>
+        <div class="card mobile">
+          <div class="cardpad">
+            <div class="toprow">
+              <span class="kicon">🛒</span><span class="name">Andvarius</span
+              ><span class="badge">PLACED</span><span class="grow"></span
+              ><span class="chev">▾</span>
+            </div>
+            <div class="detwrap">
+              <div class="kv">
+                <span>listed <span class="g">20 ex</span></span
+                ><span>seller <b>Xyzzy</b></span
+                ><span class="home">⌂ home</span>
+              </div>
+              <div class="steps">
+                <div class="step">
+                  <span class="k">travel</span><span class="p ok">success</span
+                  ><span class="t">:02</span>
+                </div>
+                <div class="step">
+                  <span class="k">buy</span><span class="p ok">moved</span
+                  ><span class="t">:05</span>
+                </div>
+                <div class="step">
+                  <span class="k">return</span><span class="p ok">returned</span
+                  ><span class="t">:08</span>
+                </div>
+              </div>
+              <div class="idet" style="margin-top: 10px">
+                <div class="dcard">
+                  <div class="dt">Item</div>
+                  <div class="drow">
+                    <span class="l">Base</span><span class="v">Gold Ring</span>
                   </div>
-                  <div class="dcard"><div class="dt">Mods</div>
-                    <div class="mod impl">+20% increased Rarity of Items found (implicit)</div>
-                    <div class="mod expl">+31 to maximum Life</div>
-                    <div class="mod expl">+18% to Fire Resistance</div>
-                    <div class="mod expl">-5 Physical damage taken from hits</div>
-                  </div>
+                  <div class="drow"><span class="l">ilvl</span><span class="v">72</span></div>
+                </div>
+                <div class="dcard">
+                  <div class="dt">Mods</div>
+                  <div class="mod expl">+31 to maximum Life</div>
+                  <div class="mod expl">+18% to Fire Resistance</div>
                 </div>
               </div>
             </div>
@@ -134,80 +477,116 @@
         </div>
       </div>
     </div>
-    <div class="framewrap">
-      <div class="label">Mobile (columns stack)</div>
-      <div class="card mobile">
-        <div class="cardpad">
-          <div class="toprow"><span class="kicon">🛒</span><span class="name">Andvarius</span><span class="badge">PLACED</span><span class="grow"></span><span class="chev">▾</span></div>
-          <div class="detwrap">
-            <div class="kv"><span>listed <span class="g">20 ex</span></span><span>seller <b>Xyzzy</b></span><span class="home">⌂ home</span></div>
-            <div class="steps">
-              <div class="step"><span class="k">travel</span><span class="p ok">success</span><span class="t">:02</span></div>
-              <div class="step"><span class="k">buy</span><span class="p ok">moved</span><span class="t">:05</span></div>
-              <div class="step"><span class="k">return</span><span class="p ok">returned</span><span class="t">:08</span></div>
-            </div>
-            <div class="idet" style="margin-top:10px">
-              <div class="dcard"><div class="dt">Item</div><div class="drow"><span class="l">Base</span><span class="v">Gold Ring</span></div><div class="drow"><span class="l">ilvl</span><span class="v">72</span></div></div>
-              <div class="dcard"><div class="dt">Mods</div><div class="mod expl">+31 to maximum Life</div><div class="mod expl">+18% to Fire Resistance</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- ============ OPTION 2 ============ -->
-  <h2>Option 2 — horizontal timeline (steps left→right; item behind the toggle)</h2>
-  <div class="frames">
-    <div class="framewrap">
-      <div class="label">Desktop</div>
-      <div class="card desktop">
-        <div class="cardpad">
-          <div class="toprow">
-            <span class="kicon">🛒</span>
-            <span class="name">Andvarius</span>
-            <span class="badge">PLACED</span>
-            <span class="grow"></span>
-            <span class="chip">grubosze</span>
-            <span class="time">12m ago</span>
-            <span class="chev">▾</span>
-          </div>
-          <div class="detwrap">
-            <div class="kv"><span>listed <span class="g">20 exalted</span></span><span>seller <b>Xyzzy_PoE</b></span><span>manual</span><span class="home">⌂ home</span></div>
-            <div class="htl">
-              <div class="hstep"><span class="node"></span><div class="k">travel</div><div class="p ok">success</div><div class="t">12:01:02</div></div>
-              <div class="hstep gold"><span class="node"></span><div class="k">buy</div><div class="p gold">item-located</div><div class="t">12:01:04</div></div>
-              <div class="hstep"><span class="node"></span><div class="k">buy</div><div class="p ok">moved</div><div class="t">12:01:05</div></div>
-              <div class="hstep"><span class="node"></span><div class="k">return</div><div class="p ok">returned</div><div class="t">12:01:08</div></div>
+    <!-- ============ OPTION 2 ============ -->
+    <h2>Option 2 — horizontal timeline (steps left→right; item behind the toggle)</h2>
+    <div class="frames">
+      <div class="framewrap">
+        <div class="label">Desktop</div>
+        <div class="card desktop">
+          <div class="cardpad">
+            <div class="toprow">
+              <span class="kicon">🛒</span>
+              <span class="name">Andvarius</span>
+              <span class="badge">PLACED</span>
+              <span class="grow"></span>
+              <span class="chip">grubosze</span>
+              <span class="time">12m ago</span>
+              <span class="chev">▾</span>
             </div>
-            <div class="subtoggle">▸ Item details</div>
+            <div class="detwrap">
+              <div class="kv">
+                <span>listed <span class="g">20 exalted</span></span
+                ><span>seller <b>Xyzzy_PoE</b></span
+                ><span>manual</span><span class="home">⌂ home</span>
+              </div>
+              <div class="htl">
+                <div class="hstep">
+                  <span class="node"></span>
+                  <div class="k">travel</div>
+                  <div class="p ok">success</div>
+                  <div class="t">12:01:02</div>
+                </div>
+                <div class="hstep gold">
+                  <span class="node"></span>
+                  <div class="k">buy</div>
+                  <div class="p gold">item-located</div>
+                  <div class="t">12:01:04</div>
+                </div>
+                <div class="hstep">
+                  <span class="node"></span>
+                  <div class="k">buy</div>
+                  <div class="p ok">moved</div>
+                  <div class="t">12:01:05</div>
+                </div>
+                <div class="hstep">
+                  <span class="node"></span>
+                  <div class="k">return</div>
+                  <div class="p ok">returned</div>
+                  <div class="t">12:01:08</div>
+                </div>
+              </div>
+              <div class="subtoggle">▸ Item details</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="framewrap">
+        <div class="label">Mobile (timeline cramped → wraps/scrolls)</div>
+        <div class="card mobile">
+          <div class="cardpad">
+            <div class="toprow">
+              <span class="kicon">🛒</span><span class="name">Andvarius</span
+              ><span class="badge">PLACED</span><span class="grow"></span
+              ><span class="chev">▾</span>
+            </div>
+            <div class="detwrap">
+              <div class="kv">
+                <span>listed <span class="g">20 ex</span></span
+                ><span class="home">⌂ home</span>
+              </div>
+              <div class="htl">
+                <div class="hstep">
+                  <span class="node"></span>
+                  <div class="k">trav</div>
+                  <div class="p ok">ok</div>
+                  <div class="t">:02</div>
+                </div>
+                <div class="hstep gold">
+                  <span class="node"></span>
+                  <div class="k">buy</div>
+                  <div class="p gold">loc…</div>
+                  <div class="t">:04</div>
+                </div>
+                <div class="hstep">
+                  <span class="node"></span>
+                  <div class="k">buy</div>
+                  <div class="p ok">mov</div>
+                  <div class="t">:05</div>
+                </div>
+                <div class="hstep">
+                  <span class="node"></span>
+                  <div class="k">ret</div>
+                  <div class="p ok">ok</div>
+                  <div class="t">:08</div>
+                </div>
+              </div>
+              <div class="subtoggle">▸ Item details</div>
+              <div class="mobnote">
+                ↑ labels truncate on narrow widths; longer step details (e.g. failure reasons) don't
+                fit under a node.
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-    <div class="framewrap">
-      <div class="label">Mobile (timeline cramped → wraps/scrolls)</div>
-      <div class="card mobile">
-        <div class="cardpad">
-          <div class="toprow"><span class="kicon">🛒</span><span class="name">Andvarius</span><span class="badge">PLACED</span><span class="grow"></span><span class="chev">▾</span></div>
-          <div class="detwrap">
-            <div class="kv"><span>listed <span class="g">20 ex</span></span><span class="home">⌂ home</span></div>
-            <div class="htl">
-              <div class="hstep"><span class="node"></span><div class="k">trav</div><div class="p ok">ok</div><div class="t">:02</div></div>
-              <div class="hstep gold"><span class="node"></span><div class="k">buy</div><div class="p gold">loc…</div><div class="t">:04</div></div>
-              <div class="hstep"><span class="node"></span><div class="k">buy</div><div class="p ok">mov</div><div class="t">:05</div></div>
-              <div class="hstep"><span class="node"></span><div class="k">ret</div><div class="p ok">ok</div><div class="t">:08</div></div>
-            </div>
-            <div class="subtoggle">▸ Item details</div>
-            <div class="mobnote">↑ labels truncate on narrow widths; longer step details (e.g. failure reasons) don't fit under a node.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <p class="note">Both keep the collapsed summary + the shared card shell. Option 1 turns the second "Item details" click into an
-  always-shown right column on wide screens (still stacks on mobile); Option 2 keeps the toggle and re-shapes only the steps.
-  Hits/price-check cards are unaffected (only the auto-buy card has a step timeline).</p>
-</body>
+    <p class="note">
+      Both keep the collapsed summary + the shared card shell. Option 1 turns the second "Item
+      details" click into an always-shown right column on wide screens (still stacks on mobile);
+      Option 2 keeps the toggle and re-shapes only the steps. Hits/price-check cards are unaffected
+      (only the auto-buy card has a step timeline).
+    </p>
+  </body>
 </html>

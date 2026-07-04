@@ -25,4 +25,3 @@ contextBridge.exposeInMainWorld('systemInfo', { platform: process.platform });
 ipcRenderer.on('price-check:result', (_event, result) => {
   window.dispatchEvent(new CustomEvent('sniper:price-check-result', { detail: { result } }));
 });
-
