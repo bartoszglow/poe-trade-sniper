@@ -188,6 +188,7 @@ export function PriceCheckProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- the hook is intentionally colocated with its Provider (a fast-refresh trade-off for context modules)
 export function usePriceCheck(): PriceCheckState {
   const context = useContext(PriceCheckContext);
   if (!context) throw new Error('usePriceCheck must be used within a PriceCheckProvider');

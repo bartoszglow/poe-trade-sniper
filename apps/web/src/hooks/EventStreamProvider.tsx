@@ -211,6 +211,7 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
   return <EventStreamContext.Provider value={value}>{children}</EventStreamContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- the hook is intentionally colocated with its Provider (a fast-refresh trade-off for context modules)
 export function useEventStream(): EventStreamContextValue {
   return useContext(EventStreamContext);
 }

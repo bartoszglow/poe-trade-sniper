@@ -83,11 +83,13 @@ export function ServerStatusProvider({ children }: { children: ReactNode }) {
 }
 
 /** Read the shared server status (+ a `refresh()` that updates all consumers). */
+// eslint-disable-next-line react-refresh/only-export-components -- the hook is intentionally colocated with its Provider (a fast-refresh trade-off for context modules)
 export function useServerStatus(): ServerStatusValue {
   return useContext(ServerStatusContext);
 }
 
 /** "11/60" from the tightest bucket of the search policy, or null. */
+// eslint-disable-next-line react-refresh/only-export-components -- pure status helper colocated with the status provider it reads
 export function formatSearchBudget(status: ServerStatus | null): string | null {
   const snapshot = status?.rateLimit.policies['search'];
   if (!snapshot || snapshot.rules.length === 0) return null;
