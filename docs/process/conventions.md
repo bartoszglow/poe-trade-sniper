@@ -2,11 +2,16 @@
 
 ## Quality gates
 
-- `pnpm verify` = lint + typecheck + test. **Nothing lands red.**
+- `pnpm verify` = lint + typecheck + test. **Nothing lands red.** Fast gate — **no e2e**.
+- `pnpm verify:full` = build + verify + Playwright e2e — the pre-push / CI mirror. Run it
+  before pushing: it catches runtime API-contract drift that `verify` can't (e2e is
+  CI-only otherwise). Needs the **node ABI** like the server tests — flip with
+  `pnpm abi:node` (+ re-sign on macOS) if you just ran `pnpm dev:desktop`.
 - Pre-commit: lint-staged (ESLint --fix + Prettier on staged files).
 - Pre-push: `format:check` + `pnpm audit --audit-level=high` + gitleaks
-  (hard-fails if gitleaks is missing — no unscanned pushes).
-- CI mirrors verify + build + audit + secret scan on every push.
+  (hard-fails if gitleaks is missing — no unscanned pushes). `auditConfig.ignoreGhsas`
+  in `pnpm-workspace.yaml` acknowledges known transitive build-tooling advisories.
+- CI mirrors `verify:full` + audit + secret scan on every push.
 
 ## Git
 

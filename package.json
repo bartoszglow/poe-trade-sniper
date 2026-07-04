@@ -17,6 +17,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify:full": "pnpm build && pnpm verify && pnpm test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
