@@ -7,3 +7,15 @@ allowBuilds:
   electron-winstaller: false
   esbuild: true
   uiohook-napi: true
+# Acknowledged high advisories in TRANSITIVE build/dev-tooling deps (undici via
+# electron/@electron/get + node-gyp, form-data via electron-builder, multer via
+# @nestjs/platform-express). No runtime attack surface for a localhost single-user
+# desktop app; drop an entry once upstream ships a patched release. The pre-push
+# `pnpm audit --audit-level=high` gate still catches any NEW/unlisted advisory.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-hmw2-7cc7-3qxx # form-data CRLF injection
+    - GHSA-72gw-mp4g-v24j # multer DoS
+    - GHSA-vmh5-mc38-953g # undici TLS cert validation bypass
+    - GHSA-vxpw-j846-p89q # undici WebSocket client DoS
+    - GHSA-hm92-r4w5-c3mj # undici cross-origin request routing
