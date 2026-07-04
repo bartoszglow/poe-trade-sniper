@@ -197,6 +197,69 @@ ByCategory?Category=currency&perPage=` → `{Items:[{Text, ApiId, CurrentPrice}]
   live temp league before adding any search; config `'Standard'` is only the last
   resort.
 
+## Self-created searches + price filters — Phase 0 probe for deal-watch (plan 41)
+
+All observed live 2026-07-05 via a throwaway `DEAL_PROBE=1` dev controller
+routing through `TradeApiClient` (governor + guard intact). Probe subject:
+Barrage gem queries in "Runes of Aldur". Raw results archived in the session
+scratchpad; summarized here as the durable evidence.
+
+- **POST `/api/trade2/search/<realm>/<league>` returns a search id.** Response is
+  `{id, result: ids[], total}` — the `id` field (e.g. `5nv8453oTa`) is a real
+  saved-search slug, not a request token. This upgrades the 2026-06-11 entry
+  (which recorded only `{result, total}`). (2026-07-05)
+- **Ids are content-addressed / deterministic.** POSTing the _identical_ query
+  twice returned the _same_ id both times. Re-POSTing an unchanged query is
+  idempotent — no id churn, no growing trail of abandoned ids; only a changed
+  query mints a new id. (2026-07-05)
+- **Created ids round-trip.** `GET /api/trade2/search/<realm>/<league>/<id>` on a
+  self-created id returns the exact query POSTed (price filter and status
+  intact). (2026-07-05)
+- **Created ids are live-watchable.** `wss…/api/trade2/live/<realm>/<league>/<id>`
+  connected and authed on a self-created id (watched via the app: engine `ws`,
+  detail "live websocket connected"). The full deal-watch premise — build query →
+  POST → id → resolve → fetch → live ws — is proven end-to-end. (2026-07-05)
+- **Id lifetime**: unknown beyond same-day; re-check scheduled (probe id kept as
+  the `[P0 probe]` search). `TODO(verify)` — aging of idle vs live-watched ids.
+- **`trade_filters.price` is accepted when POSTed** (previously only ever parsed
+  from resolved queries): `{filters:{trade_filters:{filters:{price:{max,option?}}}}}`.
+  (2026-07-05)
+- **Price-cap currency semantics** (load-bearing for deal-watch):
+  - `option: '<currency>'` → **literal** match: only listings priced in that
+    exact currency. Cap `{max:1000, option:'exalted'}` matched 0 of 3 listings
+    priced `1 divine` (~714 ex).
+  - **`option` absent → value-converted match in the league base currency
+    (exalted)**: cap `{max:1000}` matched all 3 `1 divine` listings. GGG converts
+    at its own internal rate.
+  - Barter-priced listings (e.g. `99 waystone-10`) are **excluded** from
+    converted caps (unpriceable in currency terms). (2026-07-05)
+- **`sort {price:'asc'}` is accepted and orders cross-currency by value**
+  (`1 divine` × 3 → `1 mirror` → barter listings last). Backfills the missing
+  evidence for the #37 price-check sort. (2026-07-05)
+- **`status {option:'online'}` is accepted** on a POSTed query (200 + id +
+  plausible results). Whether it strictly filters to online sellers was not
+  independently verified — `TODO(verify)` (would need an offline-seller
+  counter-example). Backfills the #37 builders' assumption. (2026-07-05)
+- **Rate-limit policy `trade-search-request-limit` has an Account rule** besides
+  Ip: observed `x-rate-limit-account: 3:5:60` with `x-rate-limit-rules:
+Account,Ip`, and Ip tiers `8:10:60, 15:60:120, 60:300:1800`. The governor
+  already parses per-rule headers generically. (2026-07-05)
+- **Invalid/expired id signals**: GET-resolve of a bogus id → clean **404**;
+  `/fetch?query=<bogus>` → **200 with null-filled result entries** (silent
+  failure). Expiry detection must use GET-resolve (or the ws handshake), never
+  fetch-result emptiness. (2026-07-05)
+- **`listing.whisper` + `whisper_token` keys confirmed present** on a live /fetch
+  listing object (`method, indexed, stash, price, account, whisper,
+whisper_token`) — partially closes the 2026-06-24 `TODO(verify)` (key exists;
+  copy-whisper content still needs a real buy attempt).
+- **poe2scout `ApiId` == GGG listing currency code** (`divine`, `mirror`, `chaos`,
+  `annul`, `vaal` all match; `DivinePrice` 714.3 ex live) — the exchange-rate map
+  for deal-watch normalization is a direct ApiId-keyed lookup. (2026-07-05)
+- **Live price-fixer specimen**: the single online listing for a 21/20%/5s
+  Barrage was priced `1 mirror` (~4.5M ex) — the "cheapest listing" of an
+  illiquid item can be pure noise; robust median baseline is mandatory
+  (plan 41 D-dw-2). (2026-07-05)
+
 ## Adding entries
 
 New discovery → add a row/bullet **with date + how it was observed** in the
