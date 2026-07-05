@@ -3,6 +3,7 @@ import { useT } from '../i18n/i18n';
 import {
   DEAL_DOT_CLASSES,
   DEAL_STATUS_DISPLAY,
+  formatDealCutoffChip,
   formatDealThresholdChip,
 } from '../lib/deal-watch-display';
 import { Badge } from './Badge';
@@ -33,7 +34,7 @@ export function DealWatchControl({ search, onExpandDeal }: DealWatchControlProps
         type="button"
         aria-label={t('dealWatch.manage')}
         onClick={onExpandDeal}
-        className="rounded transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-gold"
+        className="flex items-center gap-1 rounded transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-gold"
       >
         <Badge tone="gold">
           <span
@@ -42,6 +43,13 @@ export function DealWatchControl({ search, onExpandDeal }: DealWatchControlProps
           />
           {formatDealThresholdChip(state.mode, state.thresholdValue, state.unit)}
         </Badge>
+        {/* The actual buy-below price (D-dw-6 cap) — null before the first
+            derive lands, so a fresh percent-mode watch shows only the % chip. */}
+        {state.capExalted !== null && (
+          <Badge tone="neutral">
+            {formatDealCutoffChip(state.capExalted, state.divinePriceExalted)}
+          </Badge>
+        )}
       </button>
     </Tooltip>
   );

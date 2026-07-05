@@ -100,6 +100,18 @@ export function formatDealThresholdChip(
 }
 
 /**
+ * The row chip's buy-below tag (operator request 2026-07-05): `< 30 div` — the
+ * actual persisted cutoff price, shown alongside the threshold chip so a
+ * percent-mode watch also reads as a concrete price, not just a relative %.
+ */
+export function formatDealCutoffChip(
+  capExalted: number,
+  divinePriceExalted: number | null,
+): string {
+  return `< ${formatExaltedAmount(capExalted, divinePriceExalted)}`;
+}
+
+/**
  * Divine-aware magnitude display (operator request 2026-07-05): exalted is
  * worth so little that real amounts read as unusable five-digit numbers, so
  * anything at or above one divine renders in divine with one decimal

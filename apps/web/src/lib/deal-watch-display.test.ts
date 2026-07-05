@@ -6,6 +6,7 @@ import {
   DEAL_STATUS_DISPLAY,
   computeClientCutoffExalted,
   dealQueryPinsItem,
+  formatDealCutoffChip,
   formatDealThresholdChip,
   formatExaltedAmount,
   formatExaltedDetailed,
@@ -58,6 +59,14 @@ describe('formatDealThresholdChip', () => {
 
   it('rounds threshold amounts by magnitude like listing prices', () => {
     expect(formatDealThresholdChip('absolute', 736.9231, 'exalted')).toBe('−737 ex');
+  });
+});
+
+describe('formatDealCutoffChip', () => {
+  it('renders the buy-below price with a "<" prefix, divine-aware', () => {
+    expect(formatDealCutoffChip(53421, 714.3)).toBe('< 74.8 div');
+    expect(formatDealCutoffChip(516, 714.3)).toBe('< 516 ex');
+    expect(formatDealCutoffChip(516, null)).toBe('< 516 ex');
   });
 });
 
