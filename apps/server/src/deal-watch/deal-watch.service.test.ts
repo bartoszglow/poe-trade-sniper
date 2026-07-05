@@ -4,6 +4,7 @@ import type { DealWatchState, ManagedSearch } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import type { OutboundGuard } from '../guard/outbound-guard.js';
+import type { TradeDataService } from '../price-check/trade-data.service.js';
 import { HitDecoratorRegistry } from '../search/hit-decorator.js';
 import type { SearchManager } from '../search/search-manager.js';
 import type { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
@@ -67,6 +68,10 @@ function createHarness(
     paused?: boolean;
     guardTripped?: boolean;
     headroom?: number;
+    /** Dictionary category returned for ANY name lookup (default: unknown item → null). */
+    itemCategory?: string | null;
+    /** True = every dictionary lookup rejects (offline / no cache / no session). */
+    dictionaryUnavailable?: boolean;
   } = {},
 ) {
   const row = makeRow();
@@ -173,6 +178,16 @@ function createHarness(
     clearForWatch: vi.fn(),
   } as unknown as DealHistoryService;
 
+  const tradeData = {
+    categoryForItemName: vi
+      .fn()
+      .mockImplementation(() =>
+        options.dictionaryUnavailable
+          ? Promise.reject(new Error('dictionary refresh failed: offline'))
+          : Promise.resolve(options.itemCategory ?? null),
+      ),
+  } as unknown as TradeDataService;
+
   const database = { run: vi.fn(), delete: vi.fn() } as unknown as SniperDatabase;
   const guard = { tripped: options.guardTripped ?? false } as unknown as OutboundGuard;
   const governor = {
@@ -195,6 +210,7 @@ function createHarness(
     registry,
     baselineService,
     historyService,
+    tradeData,
   );
   service.onModuleInit();
   return {
@@ -204,6 +220,7 @@ function createHarness(
     tradeApi,
     baselineService,
     historyService,
+    tradeData,
     registry,
     computationHolder,
     resolveHolder,
@@ -284,9 +301,101 @@ describe('DealWatchService', () => {
       },
     });
     (searchManager.dealModeRows as ReturnType<typeof vi.fn>).mockReturnValue([busyRow]);
-    await expect(service.applyConfig('orig1234', PERCENT_CONFIG)).rejects.toThrow(
-      ConflictException,
+    let caught: unknown = null;
+    try {
+      await service.applyConfig('orig1234', PERCENT_CONFIG);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ConflictException);
+    // Coded body only — the web maps it to i18n (review P2-2), prose never travels.
+    expect((caught as ConflictException).getResponse()).toEqual({ code: 'deal-capped' });
+  });
+
+  it('a refused unsupported-item watch does not consume a cap slot (review P2-9)', async () => {
+    const { service, store, searchManager } = createHarness({
+      configOverrides: { DEAL_MAX_WATCHES: '1' },
+    });
+    // The only other deal row was REFUSED (unsupported-item): it never derives,
+    // spends no budget and opens no socket — the single slot must stay free.
+    const refusedRow = makeRow({
+      id: 'refused1',
+      dealWatch: {
+        watchId: 'w-refused',
+        mode: 'percent',
+        thresholdValue: 10,
+        unit: 'exalted',
+        definition: {},
+        originalSearchId: 'refused1',
+        originalPriceFilter: null,
+        baseline: null,
+        capBaseline: null,
+        capExalted: null,
+        derivedCreatedAt: null,
+        status: 'unsupported-item',
+        nextRefreshAt: null,
+      },
+    });
+    // Dynamic: the live row must stay discoverable for the queue's post-await
+    // revalidation (findByWatchId reads dealModeRows) while the refused row
+    // occupies the list.
+    (searchManager.dealModeRows as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      store.row.dealWatch !== null ? [refusedRow, store.row] : [refusedRow],
     );
+    await service.applyConfig('orig1234', PERCENT_CONFIG);
+    expect(store.row.id).toBe('derived99');
+    expect(store.row.dealWatch?.status).toBe('active');
+  });
+
+  it('enable on a stack-priced item is refused: unsupported-item persisted, coded 409, zero GGG (W3)', async () => {
+    const { service, store, tradeApi, baselineService, tradeData } = createHarness({
+      itemCategory: 'currency',
+    });
+    let caught: unknown = null;
+    try {
+      await service.applyConfig('orig1234', PERCENT_CONFIG);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ConflictException);
+    expect((caught as ConflictException).getResponse()).toEqual({ code: 'deal-unsupported-item' });
+    // The definition's top-level type went through the dictionary lookup…
+    expect(tradeData.categoryForItemName).toHaveBeenCalledWith('Barrage');
+    // …the refusal persisted, and the ORIGINAL query keeps watching: no
+    // baseline compute, no derive POST, id untouched.
+    expect(store.row.dealWatch?.status).toBe('unsupported-item');
+    expect(store.row.id).toBe('orig1234');
+    expect(baselineService.computeBaseline).not.toHaveBeenCalled();
+    expect(tradeApi.createSearch).not.toHaveBeenCalled();
+  });
+
+  it('an unavailable dictionary never blocks an enable — warn + proceed (W3)', async () => {
+    const { service, store } = createHarness({ dictionaryUnavailable: true });
+    await service.applyConfig('orig1234', PERCENT_CONFIG);
+    expect(store.row.id).toBe('derived99');
+    expect(store.row.dealWatch?.status).toBe('active');
+  });
+
+  it('a non-stackable category proceeds through the gate (W3)', async () => {
+    const { service, store, tradeData } = createHarness({ itemCategory: 'weapon' });
+    await service.applyConfig('orig1234', PERCENT_CONFIG);
+    expect(tradeData.categoryForItemName).toHaveBeenCalledWith('Barrage');
+    expect(store.row.id).toBe('derived99');
+    expect(store.row.dealWatch?.status).toBe('active');
+  });
+
+  it('a refused unsupported-item watch never refreshes or derives afterwards (W3)', async () => {
+    const { service, store, baselineService, tradeApi } = createHarness({
+      itemCategory: 'currency',
+    });
+    await service.applyConfig('orig1234', PERCENT_CONFIG).catch(() => {});
+    expect(store.row.dealWatch?.status).toBe('unsupported-item');
+    // A manual refresh reaching the queue is a deliberate no-op for it.
+    const result = await service.manualRefresh(store.row.id);
+    expect(result.kind).toBe('ok');
+    expect(store.row.dealWatch?.status).toBe('unsupported-item');
+    expect(baselineService.computeBaseline).not.toHaveBeenCalled();
+    expect(tradeApi.createSearch).not.toHaveBeenCalled();
   });
 
   it('refresh with drift beyond the threshold re-derives with the fresh cap', async () => {

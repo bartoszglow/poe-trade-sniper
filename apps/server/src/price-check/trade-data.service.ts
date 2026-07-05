@@ -38,6 +38,8 @@ export class TradeDataService {
   private dictionary: TradeDictionary | null = null;
   private compiled: CompiledStat[] | null = null;
   private itemKeys = new Set<string>();
+  /** Item key → dictionary category (e.g. 'currency') — deal-watch's W3 gate. */
+  private categoriesByKey = new Map<string, string | null>();
   /** Known base-type names, longest first — used to recover a magic item's base
    *  from its affixed name (#19). */
   private baseTypes: string[] = [];
@@ -59,6 +61,17 @@ export class TradeDataService {
   async isKnownItemName(name: string): Promise<boolean> {
     await this.ensureLoaded();
     return this.itemKeys.has(name.trim().toLowerCase());
+  }
+
+  /**
+   * Dictionary category for a known item/base name (case-insensitive), or null
+   * when the name is unknown (or the item carries no category). Narrow lookup
+   * for deal-watch's stackable gate (plan 41 W3) — additive, no behaviour
+   * change for price-check.
+   */
+  async categoryForItemName(nameOrType: string): Promise<string | null> {
+    await this.ensureLoaded();
+    return this.categoriesByKey.get(nameOrType.trim().toLowerCase()) ?? null;
   }
 
   /**
@@ -135,6 +148,7 @@ export class TradeDataService {
     }));
     this.compiled = compileStats(statEntries);
     this.itemKeys = new Set(dictionary.items.map((item) => item.key));
+    this.categoriesByKey = new Map(dictionary.items.map((item) => [item.key, item.category]));
     // Base types only (not uniques), longest first, so the magic-base matcher
     // prefers the most specific base ("Heavy Belt" over "Belt").
     this.baseTypes = [

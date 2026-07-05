@@ -71,17 +71,26 @@ export function buildQuery(input: QueryBuildInput): BuiltQuery {
   return { query, sort: { price: 'asc' } };
 }
 
+/**
+ * Item-class/category keywords marking STACK-PRICED item families (currency
+ * and currency-like consumables priced per stack, not per listing). Shared
+ * knowledge, matched case-insensitively by substring: price-check routes these
+ * to the aggregator (isFixedValueItem below) and deal-watch refuses them with
+ * `unsupported-item` (plan 41 v1 scope — no per-unit price normalization).
+ */
+export const STACK_PRICED_CATEGORY_KEYWORDS = [
+  'currency',
+  'rune',
+  'essence',
+  'omen',
+  'catalyst',
+  'distilled',
+] as const;
+
 /** Fixed-value items priced by an aggregator, not a listings search. */
 export function isFixedValueItem(rarity: string | null, itemClass: string | null): boolean {
   const rarityLower = rarity?.toLowerCase();
   if (rarityLower === 'currency' || rarityLower === 'unique') return true;
   const classLower = itemClass?.toLowerCase() ?? '';
-  return (
-    classLower.includes('currency') ||
-    classLower.includes('rune') ||
-    classLower.includes('essence') ||
-    classLower.includes('omen') ||
-    classLower.includes('catalyst') ||
-    classLower.includes('distilled')
-  );
+  return STACK_PRICED_CATEGORY_KEYWORDS.some((keyword) => classLower.includes(keyword));
 }

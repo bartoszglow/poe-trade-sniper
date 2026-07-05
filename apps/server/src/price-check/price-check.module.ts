@@ -16,5 +16,8 @@ import { TradeDataService } from './trade-data.service.js';
   imports: [MarketDataModule, SearchModule],
   controllers: [PriceCheckController],
   providers: [TradeDataService, TierDataService, PriceCheckService, PriceCheckHistoryService],
+  // Dependency direction: deal-watch → price-check (TradeDataService powers the
+  // W3 stackable gate); the dictionary's long-term home is market-data (D-dw-3 follow-up move).
+  exports: [TradeDataService],
 })
 export class PriceCheckModule {}

@@ -23,6 +23,8 @@ import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import { dealBaselineHistory } from '../db/schema.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
+import { STACK_PRICED_CATEGORY_KEYWORDS } from '../price-check/query-builder.js';
+import { TradeDataService } from '../price-check/trade-data.service.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { HitDecoratorRegistry } from '../search/hit-decorator.js';
 import { SearchManager } from '../search/search-manager.js';
@@ -107,6 +109,7 @@ export class DealWatchService
     @Inject(HitDecoratorRegistry) private readonly hitDecorators: HitDecoratorRegistry,
     @Inject(DealBaselineService) private readonly baselineService: DealBaselineService,
     @Inject(DealHistoryService) private readonly historyService: DealHistoryService,
+    @Inject(TradeDataService) private readonly tradeData: TradeDataService,
   ) {}
 
   onModuleInit(): void {
@@ -133,7 +136,8 @@ export class DealWatchService
       const state = row.dealWatch;
       if (state === null) continue;
       this.seedSnapshot(state);
-      const consumesSlot = row.enabled && row.archivedAt === null;
+      const consumesSlot =
+        row.enabled && row.archivedAt === null && state.status !== 'unsupported-item';
       if (consumesSlot && armedCount >= this.config.DEAL_MAX_WATCHES) {
         if (state.status !== 'capped') {
           this.searchManager.updateDealState(row.id, { ...state, status: 'capped' });
@@ -232,13 +236,21 @@ export class DealWatchService
     row: ManagedSearch,
     configInput: DealWatchConfigInput,
   ): Promise<SearchRuntimeInfo> {
+    // `unsupported-item` rows never derive, never spend budget and never open a
+    // socket — they must not consume cap slots (review P2-9), or ten refused
+    // enables would block every further watch behind a misleading cap 409.
     const activeWatches = this.searchManager
       .dealModeRows()
-      .filter((dealRow) => dealRow.enabled && dealRow.archivedAt === null).length;
+      .filter(
+        (dealRow) =>
+          dealRow.enabled &&
+          dealRow.archivedAt === null &&
+          dealRow.dealWatch?.status !== 'unsupported-item',
+      ).length;
     if (activeWatches >= this.config.DEAL_MAX_WATCHES) {
-      throw new ConflictException(
-        `deal-watch cap reached (${this.config.DEAL_MAX_WATCHES} concurrent watches)`,
-      );
+      // Coded body — the web maps it to i18n; raw prose never crosses the wire
+      // (error-audit rule; review P2-2).
+      throw new ConflictException({ code: 'deal-capped' });
     }
     const { definition, originalPriceFilter } = stripPriceFilter(row.filters);
     const state: DealWatchState = {
@@ -256,6 +268,20 @@ export class DealWatchService
       status: 'pending-derive',
       nextRefreshAt: null,
     };
+    // W3 stackable gate (plan 41 v1 scope): stack-priced categories have no
+    // per-unit price handling, so a baseline over mixed stack sizes would be
+    // silently garbage. Refused BEFORE any baseline compute: the state persists
+    // as `unsupported-item` (never derived — the row keeps watching its
+    // original query under its original id) and the PATCH answers 409.
+    const stackableCategory = await this.stackableCategoryFor(state.definition);
+    if (stackableCategory !== null) {
+      this.searchManager.updateDealState(row.id, { ...state, status: 'unsupported-item' });
+      this.seedSnapshot(state);
+      this.logger.warn(
+        `deal enable refused for ${row.id}: stack-priced category '${stackableCategory}'`,
+      );
+      throw new ConflictException({ code: 'deal-unsupported-item' });
+    }
     // Persist FIRST so the operator sees pending-derive even if the first
     // derive is slow/declined; the row still watches its original query until
     // the swap lands (the decorator treats pre-derive rows as ordinary). Under
@@ -448,8 +474,15 @@ export class DealWatchService
       const state = row.dealWatch;
       if (state === null || !row.enabled || row.archivedAt !== null) continue;
       // `capped` rows are parked (no slot); `restore-pending` rows are dying —
-      // their disable job is already queued, a refresh would just interleave.
-      if (state.status === 'capped' || state.status === 'restore-pending') continue;
+      // their disable job is already queued, a refresh would just interleave;
+      // `unsupported-item` rows are refused (W3) — a refresh would derive them.
+      if (
+        state.status === 'capped' ||
+        state.status === 'restore-pending' ||
+        state.status === 'unsupported-item'
+      ) {
+        continue;
+      }
       if (state.status === 'pending-derive') {
         // A pending derive (declined enable / import) retries on the beat.
         this.enqueue(state.watchId, { forceRederive: true });
@@ -530,6 +563,9 @@ export class DealWatchService
     // Revalidate under CURRENT state — the watch may have been disabled or its
     // search removed while the job sat in the queue.
     if (row === null || state === null) return;
+    // W3 gate: a refused stack-priced watch never derives or refreshes — any
+    // job reaching it (manual refresh, edit debounce) is a deliberate no-op.
+    if (state.status === 'unsupported-item') return;
 
     const searchIdAtStart = row.id;
     let forceRederive = job.forceRederive;
@@ -724,6 +760,27 @@ export class DealWatchService
   // Snapshots + small helpers
   // -------------------------------------------------------------------------
 
+  /**
+   * Resolve the definition's top-level name/type to a stack-priced dictionary
+   * category (W3 gate), or null when the item is supported. Offline-tolerant
+   * by design: an unavailable dictionary or an unknown name NEVER blocks an
+   * enable — the gate is best-effort, the broad-query UI warning is the net.
+   */
+  private async stackableCategoryFor(definition: unknown): Promise<string | null> {
+    for (const candidate of queryItemNames(definition)) {
+      try {
+        const category = await this.tradeData.categoryForItemName(candidate);
+        if (category !== null && isStackPricedCategory(category)) return category;
+      } catch (error) {
+        this.logger.warn(
+          `stackable gate skipped for '${candidate}' (dictionary unavailable): ${String(error)}`,
+        );
+        return null;
+      }
+    }
+    return null;
+  }
+
   private snapshotForSearch(searchId: string): DealRuntimeSnapshot | null {
     const watchId = this.searchManager.getRow(searchId)?.dealWatch?.watchId;
     return watchId === undefined ? null : (this.snapshots.get(watchId) ?? null);
@@ -859,3 +916,32 @@ export class DealWatchService
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** True when a dictionary category names a stack-priced family (set shared with price-check). */
+function isStackPricedCategory(category: string): boolean {
+  const categoryLower = category.toLowerCase();
+  return STACK_PRICED_CATEGORY_KEYWORDS.some((keyword) => categoryLower.includes(keyword));
+}
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The query's top-level `name`/`type` fields as dictionary-lookup candidates.
+ * Both fields appear either as a plain string or as an `{option, …}` envelope
+ * (evidenced query shapes, api-notes + apps/web/src/lib/query-criteria.ts).
+ */
+function queryItemNames(definition: unknown): string[] {
+  if (!isJsonRecord(definition)) return [];
+  const candidates: string[] = [];
+  for (const field of ['name', 'type'] as const) {
+    const value = definition[field];
+    if (typeof value === 'string') {
+      candidates.push(value);
+    } else if (isJsonRecord(value) && typeof value['option'] === 'string') {
+      candidates.push(value['option']);
+    }
+  }
+  return candidates;
+}
