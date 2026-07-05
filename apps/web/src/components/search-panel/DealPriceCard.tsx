@@ -27,12 +27,7 @@ import { formatRelativeMagnitude } from '../../lib/relative-time';
 import type { UpdateSearchPayload } from '../../hooks/useSearches';
 import { Button } from '../Button';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { Field } from '../Field';
-import { Select } from '../Select';
-
-/** Bare number input for the composite threshold field — the wrapper owns the box. */
-const NUMBER_INPUT_CLASS =
-  'min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right font-mono text-sm text-ink focus:outline-none';
+import { DealConfigFields } from './DealConfigFields';
 
 /** Detection-honesty line: a poll-served deal search is blind for sniping. */
 type DealDetectionKind = 'ws' | 'poll' | 'none';
@@ -281,68 +276,18 @@ export function DealPriceCard({
           </p>
         )}
 
-        {/* Threshold configuration: mode 70% + a composite threshold field 30%
-            with the unit/`%` as an integrated suffix (operator layout). */}
-        <div className="grid grid-cols-[7fr_3fr] gap-2">
-          <Field label={t('dealWatch.modeLabel')}>
-            <Select
-              value={draftMode}
-              onChange={(value) => setDraftMode(value === 'absolute' ? 'absolute' : 'percent')}
-              options={[
-                { value: 'percent', label: t('dealWatch.mode.percent') },
-                { value: 'absolute', label: t('dealWatch.mode.absolute') },
-              ]}
-            />
-          </Field>
-          <Field label={t('dealWatch.thresholdLabel')}>
-            <div className="flex items-stretch rounded-md border border-edge bg-surface-2 focus-within:border-gold">
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={draftThreshold}
-                onChange={(changeEvent) => setDraftThreshold(changeEvent.target.value)}
-                className={NUMBER_INPUT_CLASS}
-                aria-label={t('dealWatch.thresholdLabel')}
-              />
-              {draftMode === 'percent' ? (
-                <span className="flex items-center border-l border-edge px-2 text-sm text-ink-muted">
-                  %
-                </span>
-              ) : (
-                <Select
-                  variant="bare"
-                  className="border-l border-edge"
-                  value={draftUnit}
-                  onChange={(value) => setDraftUnit(value === 'divine' ? 'divine' : 'exalted')}
-                  ariaLabel={t('dealWatch.unitLabel')}
-                  options={[
-                    { value: 'exalted', label: t('dealWatch.unit.exalted') },
-                    { value: 'divine', label: t('dealWatch.unit.divine') },
-                  ]}
-                />
-              )}
-            </div>
-          </Field>
-        </div>
-        {/* Sample-size knob (D-dw-15): how many cheapest listings the base price
-            is the median of — thin markets want ~5, liquid ones 10-20. */}
-        <div className="flex items-center gap-2 text-xs text-ink-muted">
-          <span>{t('dealWatch.sampleSizePrefix')}</span>
-          <input
-            type="number"
-            min={BASELINE_SAMPLE_SIZE_MIN}
-            max={BASELINE_SAMPLE_SIZE_MAX}
-            step={1}
-            value={draftSampleSize}
-            onChange={(changeEvent) => setDraftSampleSize(changeEvent.target.value)}
-            aria-label={t('dealWatch.sampleSizeAria')}
-            className={`w-14 rounded-md border bg-surface-2 px-2 py-1 text-right font-mono text-sm text-ink focus:border-gold focus:outline-none ${
-              sampleSizeValid ? 'border-edge' : 'border-danger'
-            }`}
-          />
-          <span>{t('dealWatch.sampleSizeSuffix')}</span>
-        </div>
+        {/* Shared with the add-search form (D-dw-16) — the surfaces must not drift. */}
+        <DealConfigFields
+          mode={draftMode}
+          onModeChange={setDraftMode}
+          threshold={draftThreshold}
+          onThresholdChange={setDraftThreshold}
+          unit={draftUnit}
+          onUnitChange={setDraftUnit}
+          sampleSize={draftSampleSize}
+          onSampleSizeChange={setDraftSampleSize}
+          sampleSizeValid={sampleSizeValid}
+        />
 
         {/* The alert line previews the DRAFT config — once saved, the BUY BELOW
             stat carries the same number, so a clean form drops the duplicate. */}

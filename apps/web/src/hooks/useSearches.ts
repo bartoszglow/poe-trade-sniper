@@ -16,6 +16,18 @@ import { useEventStream } from './EventStreamProvider';
 /** Coalesce engine-status SSE bursts (GGG socket churn) into one refetch. */
 const REFETCH_DEBOUNCE_MS = 300;
 
+/**
+ * Deal-watch config the operator sets (plan 41): unit only matters in absolute
+ * mode (server defaults it to exalted), baselineSampleSize defaults to 10.
+ */
+export interface DealWatchConfigPayload {
+  mode: DealWatchMode;
+  thresholdValue: number;
+  unit?: DealWatchUnit;
+  /** D-dw-15: how many cheapest listings the base price is the median of. */
+  baselineSampleSize?: number;
+}
+
 export interface AddSearchPayload {
   input: string;
   label?: string;
@@ -23,6 +35,8 @@ export interface AddSearchPayload {
   autoTravel?: boolean;
   autoBuy?: boolean;
   purchaseMode?: PurchaseMode | null;
+  /** D-dw-16: arm deal mode in the same request the search is created. */
+  dealWatch?: DealWatchConfigPayload;
 }
 
 export interface UpdateSearchPayload {
@@ -36,17 +50,10 @@ export interface UpdateSearchPayload {
   /** Archive / restore (#35) — archived searches keep everything for a restore. */
   archived?: boolean;
   /**
-   * Deal-watch config (plan 41): an object enables/edits deal mode (unit only
-   * matters in absolute mode, server defaults it to exalted); null disables
-   * and restores the original search id + price filter.
+   * Deal-watch config (plan 41): an object enables/edits deal mode; null
+   * disables and restores the original search id + price filter.
    */
-  dealWatch?: {
-    mode: DealWatchMode;
-    thresholdValue: number;
-    unit?: DealWatchUnit;
-    /** D-dw-15: how many cheapest listings the base price is the median of. */
-    baselineSampleSize?: number;
-  } | null;
+  dealWatch?: DealWatchConfigPayload | null;
 }
 
 /** Fetches the watched searches; refetches whenever SSE signals a change. */

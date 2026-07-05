@@ -547,6 +547,13 @@ for deal searches" is parked.
 
 ## Decisions
 
+- **D-dw-16 (operator, 2026-07-05)** — deal config can be set AT ADD TIME. The
+  add-search form gains an optional deal section (mode + threshold value + unit
+  - sample size); on submit the server creates the search then applies the deal
+    config atomically in the same request (`POST /api/searches` accepts an
+    optional `dealWatch`, controller calls `add()` → `DealWatchService.applyConfig`
+    on the new id, returning the enabled runtime info). Other settings stay
+    post-create as today; a blank deal section = add behaves exactly as before.
 - **D-dw-1 (v3, operator, 2026-07-05)** — Deal mode is an in-place transform of the
   search itself: one row, system-managed id auto-updated in the view (supersedes v2's
   parent+hidden-shadow composition; kills the visibility architecture and the

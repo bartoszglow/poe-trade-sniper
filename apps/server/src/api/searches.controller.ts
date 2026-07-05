@@ -29,16 +29,6 @@ import { parseOrBadRequest } from './request-validation.js';
 
 const purchaseModeSchema = z.enum(PURCHASE_MODES as [string, ...string[]]);
 
-const addSearchSchema = z.object({
-  /** Bare search id or any trade2 URL (page or websocket). */
-  input: z.string().min(1),
-  label: z.string().min(1).max(80).optional(),
-  league: z.string().min(1).optional(),
-  autoTravel: z.boolean().optional(),
-  autoBuy: z.boolean().optional(),
-  purchaseMode: purchaseModeSchema.nullable().optional(),
-});
-
 /** Deal-mode config (plan 41): set to enable/edit, null to disable + restore. */
 const dealWatchConfigSchema = z.object({
   mode: z.enum(['percent', 'absolute']),
@@ -51,6 +41,18 @@ const dealWatchConfigSchema = z.object({
     .min(BASELINE_SAMPLE_SIZE_MIN)
     .max(BASELINE_SAMPLE_SIZE_MAX)
     .default(DEFAULT_BASELINE_SAMPLE_SIZE),
+});
+
+const addSearchSchema = z.object({
+  /** Bare search id or any trade2 URL (page or websocket). */
+  input: z.string().min(1),
+  label: z.string().min(1).max(80).optional(),
+  league: z.string().min(1).optional(),
+  autoTravel: z.boolean().optional(),
+  autoBuy: z.boolean().optional(),
+  purchaseMode: purchaseModeSchema.nullable().optional(),
+  /** D-dw-16: enable deal mode in the same request the search is created. */
+  dealWatch: dealWatchConfigSchema.optional(),
 });
 
 const updateSearchSchema = z
@@ -138,13 +140,18 @@ export class SearchesController {
   @Post('searches')
   async add(@Body() body: unknown): Promise<SearchRuntimeInfo> {
     const payload = parseOrBadRequest(addSearchSchema, body);
-    return this.searchManager.add(payload.input, {
+    const created = await this.searchManager.add(payload.input, {
       label: payload.label,
       league: payload.league,
       autoTravel: payload.autoTravel,
       autoBuy: payload.autoBuy,
       purchaseMode: (payload.purchaseMode ?? null) as SearchRuntimeInfo['purchaseMode'],
     });
+    if (payload.dealWatch === undefined) return created;
+    // D-dw-16: deal mode arms in the same request. A refused enable (stackable
+    // item, cap reached) throws its coded 409 AFTER the search was created —
+    // known behavior: the row exists, only the deal part was declined.
+    return this.dealWatch.applyConfig(created.id, payload.dealWatch);
   }
 
   /** Apply a user-defined drag-and-drop layout (#33): top-level order + room membership. */

@@ -31,6 +31,7 @@ function runtimeInfo(id: string): SearchRuntimeInfo {
 
 function makeController() {
   const searchManager = {
+    add: vi.fn().mockResolvedValue(runtimeInfo('Fresh1234')),
     editSearch: vi.fn().mockResolvedValue(runtimeInfo('NewId9999')),
     update: vi.fn().mockReturnValue(runtimeInfo('same1234')),
   } as unknown as SearchManager;
@@ -40,6 +41,48 @@ function makeController() {
   } as unknown as DealWatchService;
   return { controller: new SearchesController(searchManager, dealWatch), searchManager, dealWatch };
 }
+
+describe('SearchesController — add with deal config (D-dw-16)', () => {
+  it('a plain add never touches the deal service', async () => {
+    const { controller, searchManager, dealWatch } = makeController();
+    const info = await controller.add({ input: 'Fresh1234' });
+    expect(searchManager.add).toHaveBeenCalledOnce();
+    expect(dealWatch.applyConfig).not.toHaveBeenCalled();
+    expect(info.id).toBe('Fresh1234');
+  });
+
+  it('add with dealWatch enables deal mode on the NEW id in the same request', async () => {
+    const { controller, dealWatch } = makeController();
+    (dealWatch.applyConfig as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      runtimeInfo('Fresh1234'),
+    );
+    await controller.add({
+      input: 'Fresh1234',
+      dealWatch: { mode: 'absolute', thresholdValue: 5, unit: 'divine' },
+    });
+    expect(dealWatch.applyConfig).toHaveBeenCalledWith('Fresh1234', {
+      mode: 'absolute',
+      thresholdValue: 5,
+      unit: 'divine',
+      baselineSampleSize: 10, // schema default (D-dw-15)
+    });
+  });
+
+  it('a refused deal enable surfaces its coded 409 AFTER the search was created', async () => {
+    const { controller, searchManager, dealWatch } = makeController();
+    (dealWatch.applyConfig as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new HttpException({ code: 'deal-unsupported-item' }, 409),
+    );
+    await expect(
+      controller.add({
+        input: 'Fresh1234',
+        dealWatch: { mode: 'percent', thresholdValue: 30 },
+      }),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'deal-unsupported-item' } });
+    // Known D-dw-16 behavior: the row exists, only the deal part was declined.
+    expect(searchManager.add).toHaveBeenCalledOnce();
+  });
+});
 
 describe('SearchesController — deal-watch routes', () => {
   it('a combined PATCH {input, dealWatch} applies BOTH — deal config against the NEW id (F28)', async () => {

@@ -37,7 +37,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEFAULT_BASELINE_SAMPLE_SIZE,
   tradeSearchPageUrl,
+  type DealWatchMode,
+  type DealWatchUnit,
   type EngineStatus,
   type EngineStatusDetailCode,
   type SearchLayoutEntry,
@@ -51,6 +56,7 @@ import { DealWatchControl } from '../components/DealWatchControl';
 import { Field } from '../components/Field';
 import { IconButton, IconLink } from '../components/IconButton';
 import { QueryCriteriaView } from '../components/QueryCriteriaView';
+import { DealConfigFields } from '../components/search-panel/DealConfigFields';
 import {
   SearchDetailPanel,
   type PanelScrollTarget,
@@ -178,6 +184,12 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
   const [label, setLabel] = useState('');
   const [league, setLeague] = useState('');
   const [autoTravel, setAutoTravel] = useState(false);
+  // Deal watch at add time (D-dw-16) — off by default; the fields reveal on toggle.
+  const [dealEnabled, setDealEnabled] = useState(false);
+  const [dealMode, setDealMode] = useState<DealWatchMode>('percent');
+  const [dealThreshold, setDealThreshold] = useState('');
+  const [dealUnit, setDealUnit] = useState<DealWatchUnit>('exalted');
+  const [dealSampleSize, setDealSampleSize] = useState(String(DEFAULT_BASELINE_SAMPLE_SIZE));
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewQuery, setPreviewQuery] = useState<unknown>(null);
@@ -208,6 +220,21 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
   // Only a bare id needs a league — the resolve endpoint takes it in the path.
   const trimmedInput = input.trim();
   const inputIsBareId = trimmedInput !== '' && !/^(https?|wss?):\/\//.test(trimmedInput);
+
+  // Deal-config validation mirrors the panel card: threshold > 0 (and < 100 for
+  // percent), sample size within bounds. Only gates submit while deal is on.
+  const parsedDealThreshold = Number(dealThreshold);
+  const dealThresholdValid =
+    dealThreshold.trim() !== '' &&
+    Number.isFinite(parsedDealThreshold) &&
+    parsedDealThreshold > 0 &&
+    (dealMode !== 'percent' || parsedDealThreshold < 100);
+  const parsedDealSampleSize = Number(dealSampleSize);
+  const dealSampleSizeValid =
+    Number.isInteger(parsedDealSampleSize) &&
+    parsedDealSampleSize >= BASELINE_SAMPLE_SIZE_MIN &&
+    parsedDealSampleSize <= BASELINE_SAMPLE_SIZE_MAX;
+  const dealConfigInvalid = dealEnabled && (!dealThresholdValid || !dealSampleSizeValid);
 
   async function togglePreview(): Promise<void> {
     if (previewOpen) {
@@ -246,10 +273,25 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
         label: label.trim() || undefined,
         league: effectiveLeague,
         autoTravel,
+        // D-dw-16: arm deal mode in the same request when the subsection is on.
+        dealWatch:
+          dealEnabled && dealThresholdValid && dealSampleSizeValid
+            ? {
+                mode: dealMode,
+                thresholdValue: parsedDealThreshold,
+                unit: dealUnit,
+                baselineSampleSize: parsedDealSampleSize,
+              }
+            : undefined,
       });
       setInput('');
       setLabel('');
       setAutoTravel(false);
+      setDealEnabled(false);
+      setDealMode('percent');
+      setDealThreshold('');
+      setDealUnit('exalted');
+      setDealSampleSize(String(DEFAULT_BASELINE_SAMPLE_SIZE));
       // After a successful add, collapse the form (and any open preview) so the
       // search list isn't pushed down by the editor — it reopens on click.
       setPreviewOpen(false);
@@ -337,6 +379,34 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
           <QueryCriteriaView query={previewQuery} />
         </div>
       )}
+      {/* Optional deal watch at add time (D-dw-16) — same field group as the
+          panel card; off by default, so a plain add is unchanged. */}
+      <div className="mt-3 rounded-md border border-edge bg-surface-1 p-3">
+        <span className="flex items-center gap-2 text-sm text-ink-muted">
+          <Switch
+            checked={dealEnabled}
+            onChange={setDealEnabled}
+            label={t('searches.dealSetupToggle')}
+          />
+          {t('searches.dealSetupToggle')}
+        </span>
+        {dealEnabled && (
+          <div className="mt-3 flex flex-col gap-3">
+            <DealConfigFields
+              mode={dealMode}
+              onModeChange={setDealMode}
+              threshold={dealThreshold}
+              onThresholdChange={setDealThreshold}
+              unit={dealUnit}
+              onUnitChange={setDealUnit}
+              sampleSize={dealSampleSize}
+              onSampleSizeChange={setDealSampleSize}
+              sampleSizeValid={dealSampleSizeValid}
+            />
+            <p className="text-xs text-ink-faint">{t('dealWatch.summaryPending')}</p>
+          </div>
+        )}
+      </div>
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <span className="flex items-center gap-2 text-sm text-ink-muted">
           <Switch checked={autoTravel} onChange={setAutoTravel} label={t('searches.autoTravel')} />
@@ -360,7 +430,11 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
               ? t('criteria.hide')
               : t('criteria.show')}
         </Button>
-        <Button variant="primary" type="submit" disabled={submitting || input.trim() === ''}>
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={submitting || input.trim() === '' || dealConfigInvalid}
+        >
           <Plus className="h-4 w-4" />
           {t('searches.watch')}
         </Button>
