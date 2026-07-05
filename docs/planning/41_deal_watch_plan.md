@@ -1,7 +1,18 @@
 # 41 — Deal-watch (discount sniping for flipping)
 
-**Status: PLAN v3 + Phase 0 EXECUTED (2026-07-05). Gate PASSED — cleared for
-Phase 1.** Direction confirmed by operator; Q1/Q2 resolved. Phase 0 results
+**Status: Phase 1 (server core) IMPLEMENTED (2026-07-05)** — commits `ebfd382`
+(shared model + migrations 0011/0012 + config), `079d254` (market-data
+extraction + governor minHeadroom), `9e0a2d8` (deal-watch core), `21049dd`
+(web deal-event handling), `531842c` (docs + review record). Verify green
+(server 46 test files / 320+ tests incl. ~60 new, web 10, desktop 3). Shipped
+after an 8-specialist adversarial review (34 verified findings — all confirmed
+S2/S3 + S4 batch fixed pre-commit, F24 deferred; record:
+`docs/process/reviews/2026-07-05-deal-watch-phase1.md`). **Remaining: P0.2b id
+aging** (probe search kept watching), **Phase 2 web UI** (DealWatchModal, deal
+chip, feed kind, i18n for 12 status codes, stackable gate + broad-query
+warning), **Phase 3 live validation**.
+
+Phase 0 record: gate PASSED, direction confirmed by operator; Q1/Q2 resolved. Phase 0 results
 (evidence in `api-notes.md`, "Self-created searches + price filters"): P0.1/P0.3
 PASS (POST → id `5nv8453oTa` → resolve → fetch → live ws, end-to-end); P0.7 ids
 are content-addressed (identical query → same id — swap no-op guard validated,
