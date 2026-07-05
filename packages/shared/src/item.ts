@@ -56,4 +56,6 @@ export interface Listing {
 export interface Hit extends Listing {
   /** Database row id. */
   id: number;
+  /** Deal discount context captured at persistence time (plan 41); null = not a deal hit. */
+  deal?: import('./deal-watch.js').DealHitInfo | null;
 }

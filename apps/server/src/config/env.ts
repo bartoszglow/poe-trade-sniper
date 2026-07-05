@@ -47,6 +47,39 @@ export const envSchema = z.object({
   PRICE_CHECK_LISTING_LIMIT: z.coerce.number().int().min(1).max(20).default(10),
   /** Rolling cap on the persisted price-check history (#17) — "recent", not audit. */
   PRICE_CHECK_HISTORY_MAX: z.coerce.number().int().min(10).default(100),
+  // --- Deal-watch (#41) ---
+  /** Concurrent deal-mode searches cap — GGG live-socket tolerance is unprobed (P0.6). */
+  DEAL_MAX_WATCHES: z.coerce.number().int().min(1).default(10),
+  /** Baseline re-check cadence (R3). Scheduled relatively (now + interval ± jitter). */
+  DEAL_REFRESH_INTERVAL_MS: z.coerce.number().int().min(300_000).default(3_600_000),
+  /** Jitter ratio on the relative refresh schedule — the phase random-walks (R7). */
+  DEAL_REFRESH_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.15),
+  /** Baseline drift vs the cap's reference baseline that triggers a re-derive. */
+  DEAL_DRIFT_THRESHOLD: z.coerce.number().min(0.005).max(1).default(0.05),
+  /** Forced re-derive age for the derived id — bounds id lifetime even in a flat
+   *  market (id aging is TODO(verify), P0.2b — keep conservative until it lands). */
+  DEAL_MAX_ID_AGE_MS: z.coerce.number().int().min(3_600_000).default(259_200_000),
+  /** Baseline = median of the cheapest K usable survivors after the outlier drop. */
+  DEAL_BASELINE_K: z.coerce.number().int().min(1).default(3),
+  /** A listing below ratio × sample median is a price-fixer decoy — dropped. */
+  DEAL_OUTLIER_RATIO: z.coerce.number().min(0).max(1).default(0.5),
+  /** Fewer usable listings than this → insufficient-data (no baseline, no alerts). */
+  DEAL_MIN_SAMPLE: z.coerce.number().int().min(1).default(5),
+  /** Governor headroom reserve — same posture as D-pc-2; detection outranks deals. */
+  DEAL_MIN_HEADROOM: z.coerce.number().min(0).max(1).default(0.3),
+  /** Baseline older than this is surfaced as stale (alerts keep firing, flagged). */
+  DEAL_BASELINE_STALE_MS: z.coerce.number().int().min(600_000).default(10_800_000),
+  /** Debounce for threshold-edit re-derives (rapid edits coalesce). */
+  DEAL_REDERIVE_DEBOUNCE_MS: z.coerce.number().int().min(0).default(5_000),
+  /** Per-search cooldown on POST /searches/:id/deal-refresh (operator impatience). */
+  DEAL_MANUAL_REFRESH_COOLDOWN_MS: z.coerce.number().int().min(0).default(60_000),
+  /** Extra GGG-cap headroom above the exact cutoff (Q3 — default none; the cap is
+   *  value-converted by GGG at its own internal rate, which may drift vs poe2scout). */
+  DEAL_CAP_MARGIN_RATIO: z.coerce.number().min(0).max(0.5).default(0),
+  /** Rolling per-watch cap on baseline-history rows (D-dw-12) — ~3 weeks hourly. */
+  DEAL_BASELINE_HISTORY_MAX: z.coerce.number().int().min(50).default(500),
+  /** Deal queue beat — due-refresh scans + queued jobs are picked up on this cadence. */
+  DEAL_QUEUE_TICK_MS: z.coerce.number().int().min(5_000).default(30_000),
   /** Hard deadline for every outbound GGG call (AbortController). */
   OUTBOUND_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15_000),
   /**

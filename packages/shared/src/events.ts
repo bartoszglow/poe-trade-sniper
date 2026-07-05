@@ -1,5 +1,6 @@
 import type {
   Listing,
+  DealHitInfo,
   EngineKind,
   EngineStatus,
   ManagedSearch,
@@ -14,6 +15,8 @@ import type {
 export type DomainEvent =
   | HitEvent
   | HitUpdatedEvent
+  | DealEvent
+  | DealUpdatedEvent
   | SearchesChangedEvent
   | EngineStatusEvent
   | TravelEvent
@@ -48,6 +51,31 @@ export interface HitEvent {
 export interface HitUpdatedEvent {
   type: 'hit-updated';
   listing: Listing;
+}
+
+/**
+ * A NEW hit on a deal-mode search (plan 41, D-dw-5): the `hit` counterpart
+ * carrying the discount context computed against the live baseline at
+ * persistence time. A deal-mode search emits `deal` INSTEAD of `hit` — even
+ * with a missing baseline (null discount fields), never a bare `hit`.
+ * Auto-travel/auto-buy subscribe to it under the search's own opt-in flags.
+ */
+export interface DealEvent {
+  type: 'deal';
+  listing: Listing;
+  deal: DealHitInfo;
+}
+
+/**
+ * The SAME deal offer re-served by GGG under a new listing id — the
+ * `hit-updated` twin. Feed-only: the UI folds it onto the existing entity, but
+ * it never re-triggers actions (travel/buy ignore it, exactly like
+ * `hit-updated`).
+ */
+export interface DealUpdatedEvent {
+  type: 'deal-updated';
+  listing: Listing;
+  deal: DealHitInfo;
 }
 
 export interface SearchesChangedEvent {

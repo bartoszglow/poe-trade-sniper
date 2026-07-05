@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
 
 /** Watched trade searches (mirrors `ManagedSearch` in @poe-sniper/shared). */
 export const searches = sqliteTable('searches', {
@@ -28,6 +28,10 @@ export const searches = sqliteTable('searches', {
    *  detection, leave the layout/rooms (membership kept for restore) and sort
    *  into the greyed bottom section. */
   archivedAt: text('archived_at'),
+  /** Deal-mode config+state JSON (DealWatchState in packages/shared); null =
+   *  ordinary search. Plan 41 D-dw-4: 1:1 lifecycle with the row, carried
+   *  through id swaps. */
+  dealWatch: text('deal_watch', { mode: 'json' }),
 });
 
 /** Named groups of searches on the Searches view (#33). One level deep. */
@@ -57,6 +61,8 @@ export const hits = sqliteTable(
     seller: text('seller').notNull(),
     /** Normalized ItemDetail JSON (null when the payload had no item object). */
     item: text('item', { mode: 'json' }),
+    /** Discount context captured at persistence time (DealHitInfo); null = not a deal hit. */
+    deal: text('deal', { mode: 'json' }),
     detectedAt: text('detected_at').notNull(),
   },
   (table) => [
@@ -64,6 +70,32 @@ export const hits = sqliteTable(
     // (the name-substring filter is a leading-wildcard LIKE — non-sargable, no index).
     index('hits_search_id_detected_at').on(table.searchId, table.detectedAt),
   ],
+);
+
+/**
+ * Baseline price history for deal-mode searches (plan 41, D-dw-12): one row per
+ * successful hourly baseline refresh, powering the trend view + the Activity
+ * re-derive entries. Keyed by the watch's stable uuid (`watchId` inside the
+ * search row's deal_watch JSON) — NOT by search id, which churns on every
+ * re-derive. Pruned per watch to DEAL_BASELINE_HISTORY_MAX; cleared when the
+ * watch is disabled or its search removed.
+ */
+export const dealBaselineHistory = sqliteTable(
+  'deal_baseline_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    watchId: text('watch_id').notNull(),
+    /** Robust baseline in exalted equivalent (median-of-K, D-dw-2). */
+    amountExalted: real('amount_exalted').notNull(),
+    /** Raw cheapest usable listing at compute time (display only). */
+    rawLowestExalted: real('raw_lowest_exalted').notNull(),
+    sampleSize: integer('sample_size').notNull(),
+    /** True when this refresh triggered a re-derive (cap update) — the Activity
+     *  feed shows only these; hourly no-op checks stay out of the feed. */
+    rederived: integer('rederived', { mode: 'boolean' }).notNull().default(false),
+    computedAt: text('computed_at').notNull(),
+  },
+  (table) => [index('deal_baseline_history_watch_computed').on(table.watchId, table.computedAt)],
 );
 
 /**

@@ -12,3 +12,4 @@ export * from './settings.js';
 export * from './activity.js';
 export * from './data-transfer.js';
 export * from './price-check.js';
+export * from './deal-watch.js';

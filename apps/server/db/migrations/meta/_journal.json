@@ -78,6 +78,20 @@
       "when": 1783037151398,
       "tag": "0010_price_check_history",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1783207593922,
+      "tag": "0011_deal_watch",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1783208258954,
+      "tag": "0012_deal_baseline_history",
+      "breakpoints": true
     }
   ]
 }

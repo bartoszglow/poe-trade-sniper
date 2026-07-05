@@ -1,3 +1,5 @@
+import type { DealWatchState } from './deal-watch.js';
+
 /** Trade realm as used in pathofexile.com trade2 URLs. */
 export type Realm = 'poe2';
 
@@ -62,6 +64,8 @@ export interface ManagedSearch {
    * so a restore puts the search back exactly as it was.
    */
   archivedAt: string | null;
+  /** Deal-watch state; null = ordinary search (plan 41, D-dw-4). */
+  dealWatch: DealWatchState | null;
 }
 
 /** A named group of searches on the Searches view (one level deep — no nesting). */

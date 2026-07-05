@@ -1,7 +1,22 @@
+import type { DealWatchConfig } from './deal-watch.js';
 import type { ManagedSearch } from './search.js';
 
 /** Bump when the search-export envelope shape changes incompatibly. */
-export const SEARCH_EXPORT_VERSION = 3; // v3: searches carry archivedAt (#35)
+export const SEARCH_EXPORT_VERSION = 4; // v4: searches carry deal-watch CONFIG (plan 41, D-dw-10)
+
+/**
+ * The deal-watch subset that travels in an export (D-dw-10): config only —
+ * baseline/cap/derived-id are machine-local runtime state, and `watchId` is a
+ * machine-local identity (baseline-history rows key on it), so an import mints
+ * a fresh one and re-derives (`pending-derive`). Re-importing a file therefore
+ * can never collide with a watch this machine already runs.
+ */
+export type ExportedDealWatch = Omit<DealWatchConfig, 'watchId'>;
+
+/** A search as exported: the deal watch reduced to its portable config subset. */
+export type ExportedSearchEntry = Omit<ManagedSearch, 'dealWatch'> & {
+  dealWatch: ExportedDealWatch | null;
+};
 
 /**
  * A room as exported: `id` only correlates memberships WITHIN the file; on
@@ -24,7 +39,7 @@ export interface SearchExportEnvelope {
   kind: 'poe-sniper-searches';
   version: number;
   exportedAt: string;
-  searches: ManagedSearch[];
+  searches: ExportedSearchEntry[];
   /** Absent in v1 exports. */
   rooms?: ExportedRoom[];
 }
