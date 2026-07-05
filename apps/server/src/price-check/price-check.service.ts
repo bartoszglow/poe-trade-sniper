@@ -22,7 +22,7 @@ import { detectLanguage, lexiconFor } from './item-language.js';
 import { matchModLine, type StatMatch } from './stat-matcher.js';
 import { buildDraft } from './price-check-draft.js';
 import { buildQueryFromFilters } from './query-from-filters.js';
-import { Poe2ScoutClient } from './poe2scout.client.js';
+import { Poe2ScoutClient } from '../market-data/poe2scout.client.js';
 import { TierDataService } from './tier-data.service.js';
 import { TradeDataService } from './trade-data.service.js';
 
@@ -195,8 +195,9 @@ export class PriceCheckService {
 
   private currentHeadroom(): number {
     // A rare check spends BOTH a SEARCH and a FETCH slot (POST /search then
-    // GET /fetch), so the reserve must protect the tighter of the two (D-pc-2).
-    return Math.min(this.governor.headroom(POLICY_SEARCH), this.governor.headroom(POLICY_FETCH));
+    // GET /fetch), so the reserve must protect the tighter of the two (D-pc-2 —
+    // the min-over-policies gate now lives on the governor, shared with deal-watch).
+    return this.governor.minHeadroom([POLICY_SEARCH, POLICY_FETCH]);
   }
 
   private itemFromDraft(draft: PriceCheckDraft): PriceCheckItem {

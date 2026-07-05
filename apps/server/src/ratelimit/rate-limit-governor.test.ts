@@ -97,6 +97,38 @@ describe('RateLimitGovernor', () => {
     expect(acquired).toBe(true);
   });
 
+  it('minHeadroom is 1 with no observed policies (and for an empty key list)', () => {
+    const governor = new RateLimitGovernor();
+    // Nothing spent yet — a budget-gated feature must not be blocked on startup.
+    expect(governor.minHeadroom(['search', 'fetch'])).toBe(1);
+    expect(governor.minHeadroom([])).toBe(1);
+  });
+
+  it('minHeadroom is 0 for any policy set while globally paused', () => {
+    const governor = new RateLimitGovernor();
+    governor.noteResponse('search', 429, new Headers({ 'Retry-After': '30' }));
+    // The pause is global — even a never-observed policy has zero headroom.
+    expect(governor.minHeadroom(['fetch'])).toBe(0);
+    expect(governor.minHeadroom(['search', 'fetch'])).toBe(0);
+  });
+
+  it('minHeadroom reports the TIGHTEST policy of the set (D-pc-2 budget gate)', () => {
+    const governor = new RateLimitGovernor();
+    governor.noteResponse(
+      'search',
+      200,
+      new Headers({
+        'X-Rate-Limit-Rules': 'Ip',
+        'X-Rate-Limit-Ip': '10:10:60',
+        'X-Rate-Limit-Ip-State': '5:10:0',
+      }),
+    );
+    // search has 5/10 free (0.5); fetch is unobserved (1) — the gate must
+    // reserve against the tighter budget, not the average.
+    expect(governor.minHeadroom(['search', 'fetch'])).toBe(0.5);
+    expect(governor.minHeadroom(['fetch'])).toBe(1);
+  });
+
   it('exposes the latest snapshots in status', () => {
     const governor = new RateLimitGovernor();
     governor.noteResponse(

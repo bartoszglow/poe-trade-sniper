@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config/env.js';
 import type { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
-import type { Poe2ScoutClient } from './poe2scout.client.js';
+import type { Poe2ScoutClient } from '../market-data/poe2scout.client.js';
 import type { TradeDataService } from './trade-data.service.js';
 import { PriceCheckService } from './price-check.service.js';
 
@@ -73,7 +73,9 @@ function makeService(options: {
     options.priceSearch ?? (() => Promise.resolve({ listings: [], total: 0, rateLimited: false })),
   );
   const tradeApi = { priceSearch } as unknown as TradeApiClient;
-  const governor = { headroom: () => options.headroom } as unknown as RateLimitGovernor;
+  const governor = {
+    minHeadroom: () => options.headroom,
+  } as unknown as RateLimitGovernor;
   const searchManager = {
     getPrimaryLeague: () =>
       options.primaryLeague === undefined ? 'Runes of Aldur' : options.primaryLeague,

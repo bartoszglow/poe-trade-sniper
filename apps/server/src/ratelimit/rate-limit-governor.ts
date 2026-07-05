@@ -115,6 +115,22 @@ export class RateLimitGovernor {
     }
     return tightest;
   }
+
+  /**
+   * The tightest headroom across several policies — the shared budget-gate
+   * primitive (D-pc-2, reused by deal-watch per plan 41): a feature that
+   * spends one slot from EACH listed policy (a price check or a baseline
+   * refresh does search + fetch) must reserve against the most constrained
+   * of them. 1 for an empty key list / all-unobserved policies; 0 while
+   * globally paused (inherited from headroom()). Status only — never throttles.
+   */
+  minHeadroom(policyKeys: readonly string[]): number {
+    let tightest = 1;
+    for (const policyKey of policyKeys) {
+      tightest = Math.min(tightest, this.headroom(policyKey));
+    }
+    return tightest;
+  }
 }
 
 function sleep(durationMs: number): Promise<void> {
