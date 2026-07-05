@@ -23,14 +23,28 @@ export interface AppSettings {
    * (independent toggles). Empty = a price check runs but shows nowhere.
    */
   priceCheckSinks: PriceCheckSink[];
+  /**
+   * How many searches may run deal watch at once (plan 41, D-dw-17). The hourly
+   * market query is cheap; the real constraint is concurrent GGG `/live`
+   * sockets, whose tolerance is unprobed — a high value risks GGG rate-limiting
+   * the live connections, though poll coverage still catches deals if a socket
+   * is throttled. Bounded [DEAL_MAX_WATCHES_MIN, DEAL_MAX_WATCHES_MAX].
+   */
+  dealMaxWatches: number;
 }
 
 export const CURSOR_MODES: readonly CursorMode[] = ['instant', 'smooth'];
 
 export const DEFAULT_PRICE_CHECK_HOTKEY = 'CommandOrControl+Shift+D';
 
+/** Deal-watch concurrency bounds (D-dw-17) — the editable-setting range. */
+export const DEAL_MAX_WATCHES_MIN = 1;
+export const DEAL_MAX_WATCHES_MAX = 50;
+export const DEFAULT_DEAL_MAX_WATCHES = 25;
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   cursorMode: 'instant',
   priceCheckHotkey: DEFAULT_PRICE_CHECK_HOTKEY,
   priceCheckSinks: ['panel'],
+  dealMaxWatches: DEFAULT_DEAL_MAX_WATCHES,
 };

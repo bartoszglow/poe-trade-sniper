@@ -21,4 +21,30 @@ describe('AppSettingsService', () => {
     second.onApplicationBootstrap();
     expect(second.get().cursorMode).toBe('smooth');
   });
+
+  it('defaults dealMaxWatches to 25 (D-dw-17)', () => {
+    const settings = new AppSettingsService(openDatabase(':memory:'));
+    settings.onApplicationBootstrap();
+    expect(settings.get().dealMaxWatches).toBe(25);
+  });
+
+  it('notifies change listeners with next + previous on update (D-dw-17)', () => {
+    const settings = new AppSettingsService(openDatabase(':memory:'));
+    settings.onApplicationBootstrap();
+    const calls: Array<{ next: number; previous: number }> = [];
+    settings.onChange((next, previous) =>
+      calls.push({ next: next.dealMaxWatches, previous: previous.dealMaxWatches }),
+    );
+    settings.update({ dealMaxWatches: 40 });
+    expect(calls).toEqual([{ next: 40, previous: 25 }]);
+  });
+
+  it('a throwing change listener never breaks the settings write', () => {
+    const settings = new AppSettingsService(openDatabase(':memory:'));
+    settings.onApplicationBootstrap();
+    settings.onChange(() => {
+      throw new Error('boom');
+    });
+    expect(settings.update({ dealMaxWatches: 40 }).dealMaxWatches).toBe(40);
+  });
 });

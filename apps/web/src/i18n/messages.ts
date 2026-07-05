@@ -471,6 +471,10 @@ export const EN = {
   'settings.cursorInstant': 'Instant jump',
   'settings.cursorSmooth': 'Smooth glide',
   'settings.cursorHint': 'How the cursor moves onto the item when buying.',
+  'settings.dealWatchLimit': 'Deal watch limit',
+  'settings.dealWatchLimitLabel': 'Max searches with deal watch',
+  'settings.dealWatchLimitHint':
+    'How many searches can run deal watch at once (1–50). A high value may make the trade site rate-limit the live connections — polling still catches deals, just slower. Raising it resumes any parked watches immediately.',
   'settings.data': 'Backup / data',
   'settings.dataDesc':
     'Export your searches (JSON, restorable) and logs (CSV for Excel), or import searches from a file.',
@@ -1072,6 +1076,10 @@ export const PL: Record<MessageKey, string> = {
   'settings.cursorInstant': 'Natychmiastowy przeskok',
   'settings.cursorSmooth': 'Płynny ruch',
   'settings.cursorHint': 'Jak kursor przesuwa się na przedmiot podczas zakupu.',
+  'settings.dealWatchLimit': 'Limit obserwacji okazji',
+  'settings.dealWatchLimitLabel': 'Maks. wyszukiwań z obserwacją okazji',
+  'settings.dealWatchLimitHint':
+    'Ile wyszukiwań może naraz obserwować okazje (1–50). Wysoka wartość może sprawić, że strona handlu zacznie ograniczać połączenia na żywo — poll i tak łapie okazje, tylko wolniej. Podniesienie limitu od razu odblokowuje zaparkowane obserwacje.',
   'settings.data': 'Kopia / dane',
   'settings.dataDesc':
     'Wyeksportuj wyszukiwania (JSON, do przywrócenia) i logi (CSV do Excela) albo zaimportuj wyszukiwania z pliku.',

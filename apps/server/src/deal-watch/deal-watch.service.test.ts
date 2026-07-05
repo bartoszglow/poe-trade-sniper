@@ -1,12 +1,22 @@
 import { ConflictException } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DealWatchState, ManagedSearch } from '@poe-sniper/shared';
+import {
+  type AppSettings,
+  DEFAULT_APP_SETTINGS,
+  DEFAULT_DEAL_MAX_WATCHES,
+  type DealWatchState,
+  type ManagedSearch,
+} from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import type { OutboundGuard } from '../guard/outbound-guard.js';
 import type { TradeDataService } from '../price-check/trade-data.service.js';
 import { HitDecoratorRegistry } from '../search/hit-decorator.js';
 import type { SearchManager } from '../search/search-manager.js';
+import type {
+  AppSettingsService,
+  SettingsChangeListener,
+} from '../settings/app-settings.service.js';
 import type { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { TradeApiClient, TradeApiError } from '../trade-api/trade-api.client.js';
 import type { BaselineComputation, DealBaselineService } from './deal-baseline.service.js';
@@ -75,6 +85,8 @@ function createHarness(
     dictionaryUnavailable?: boolean;
     /** Pre-existing market snapshot on the row (D-dw-14 enable-reuse path). */
     marketSnapshot?: import('@poe-sniper/shared').MarketPriceSnapshot | null;
+    /** Editable deal-watch cap (D-dw-17); default = the shipped default. */
+    dealMaxWatches?: number;
   } = {},
 ) {
   const row = makeRow();
@@ -212,6 +224,23 @@ function createHarness(
     ...options.configOverrides,
   });
 
+  // Editable-cap setting (D-dw-17) with a captured change listener the test can fire.
+  const settingsState: AppSettings = {
+    ...DEFAULT_APP_SETTINGS,
+    dealMaxWatches: options.dealMaxWatches ?? DEFAULT_DEAL_MAX_WATCHES,
+  };
+  const settingsListeners: SettingsChangeListener[] = [];
+  const settings = {
+    get: () => settingsState,
+    onChange: (listener: SettingsChangeListener) => settingsListeners.push(listener),
+  } as unknown as AppSettingsService;
+  /** Simulate an operator settings change: mutate the cap + fire listeners. */
+  const setDealMaxWatches = (next: number): void => {
+    const previous: AppSettings = { ...settingsState };
+    settingsState.dealMaxWatches = next;
+    for (const listener of settingsListeners) listener(settingsState, previous);
+  };
+
   const service = new DealWatchService(
     config,
     database,
@@ -223,6 +252,7 @@ function createHarness(
     baselineService,
     historyService,
     tradeData,
+    settings,
   );
   service.onModuleInit();
   return {
@@ -238,6 +268,7 @@ function createHarness(
     resolveHolder,
     governor,
     pauseState,
+    setDealMaxWatches,
   };
 }
 
@@ -288,10 +319,8 @@ describe('DealWatchService', () => {
     expect(store.row.dealWatch?.status).toBe('insufficient-data');
   });
 
-  it('enable beyond DEAL_MAX_WATCHES is rejected', async () => {
-    const { service, searchManager } = createHarness({
-      configOverrides: { DEAL_MAX_WATCHES: '1' },
-    });
+  it('enable beyond the deal-watch cap is rejected', async () => {
+    const { service, searchManager } = createHarness({ dealMaxWatches: 1 });
     // The single slot is taken by ANOTHER search's watch; enabling on this
     // (watch-free) row must hit the cap before any GGG traffic.
     const busyRow = makeRow({
@@ -326,10 +355,80 @@ describe('DealWatchService', () => {
     expect((caught as ConflictException).getResponse()).toEqual({ code: 'deal-capped' });
   });
 
-  it('a refused unsupported-item watch does not consume a cap slot (review P2-9)', async () => {
-    const { service, store, searchManager } = createHarness({
-      configOverrides: { DEAL_MAX_WATCHES: '1' },
+  it('raising the cap resumes a parked (capped) watch without a restart (D-dw-17)', () => {
+    const { store, searchManager, setDealMaxWatches } = createHarness({ dealMaxWatches: 1 });
+    // The main row is PARKED (capped): the single slot is held by a sibling watch.
+    const parked: DealWatchState = {
+      watchId: 'w-parked',
+      mode: 'percent',
+      thresholdValue: 30,
+      unit: 'exalted',
+      baselineSampleSize: 10,
+      definition: {},
+      originalSearchId: 'orig1234',
+      originalPriceFilter: null,
+      baseline: null,
+      capBaseline: null,
+      capExalted: null,
+      derivedCreatedAt: null,
+      status: 'capped',
+      nextRefreshAt: null,
+      divinePriceExalted: null,
+    };
+    store.row = { ...store.row, dealWatch: parked };
+    const armedSibling = makeRow({
+      id: 'busy0001',
+      dealWatch: { ...parked, watchId: 'w-armed', originalSearchId: 'busy0001', status: 'active' },
     });
+    (searchManager.dealModeRows as ReturnType<typeof vi.fn>).mockImplementation(() => [
+      armedSibling,
+      store.row,
+    ]);
+
+    // Raising the cap frees a slot → the parked row resumes (no baseline yet →
+    // pending-derive) synchronously, no restart.
+    setDealMaxWatches(2);
+
+    expect(store.row.dealWatch?.status).toBe('pending-derive');
+  });
+
+  it('lowering the cap never force-parks an already-armed watch (D-dw-17)', () => {
+    const { store, searchManager, setDealMaxWatches } = createHarness({ dealMaxWatches: 5 });
+    const active: DealWatchState = {
+      watchId: 'w-main',
+      mode: 'percent',
+      thresholdValue: 30,
+      unit: 'exalted',
+      baselineSampleSize: 10,
+      definition: {},
+      originalSearchId: 'orig1234',
+      originalPriceFilter: null,
+      baseline: BASELINE,
+      capBaseline: BASELINE,
+      capExalted: 700,
+      derivedCreatedAt: new Date().toISOString(),
+      status: 'active',
+      nextRefreshAt: null,
+      divinePriceExalted: 700,
+    };
+    store.row = { ...store.row, dealWatch: active };
+    const sibling = makeRow({
+      id: 'busy0001',
+      dealWatch: { ...active, watchId: 'w-sib', originalSearchId: 'busy0001' },
+    });
+    (searchManager.dealModeRows as ReturnType<typeof vi.fn>).mockImplementation(() => [
+      sibling,
+      store.row,
+    ]);
+
+    // Two armed watches, cap dropped below them: neither is yanked at runtime.
+    setDealMaxWatches(1);
+
+    expect(store.row.dealWatch?.status).toBe('active');
+  });
+
+  it('a refused unsupported-item watch does not consume a cap slot (review P2-9)', async () => {
+    const { service, store, searchManager } = createHarness({ dealMaxWatches: 1 });
     // The only other deal row was REFUSED (unsupported-item): it never derives,
     // spends no budget and opens no socket — the single slot must stay free.
     const refusedRow = makeRow({
@@ -674,10 +773,8 @@ describe('DealWatchService', () => {
     );
   });
 
-  it('boot parks watches beyond DEAL_MAX_WATCHES as capped and never derives them (F3)', () => {
-    const { service, searchManager } = createHarness({
-      configOverrides: { DEAL_MAX_WATCHES: '1' },
-    });
+  it('boot parks watches beyond the cap as capped and never derives them (F3)', () => {
+    const { service, searchManager } = createHarness({ dealMaxWatches: 1 });
     const watchState = (watchId: string): DealWatchState => ({
       watchId,
       mode: 'percent',

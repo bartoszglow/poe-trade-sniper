@@ -48,8 +48,8 @@ export const envSchema = z.object({
   /** Rolling cap on the persisted price-check history (#17) — "recent", not audit. */
   PRICE_CHECK_HISTORY_MAX: z.coerce.number().int().min(10).default(100),
   // --- Deal-watch (#41) ---
-  /** Concurrent deal-mode searches cap — GGG live-socket tolerance is unprobed (P0.6). */
-  DEAL_MAX_WATCHES: z.coerce.number().int().min(1).default(10),
+  // NOTE: the concurrent-deal-watch cap moved to the operator-editable
+  // `AppSettings.dealMaxWatches` (D-dw-17) — it is no longer an env var.
   /** Baseline re-check cadence (R3). Scheduled relatively (now + interval ± jitter). */
   DEAL_REFRESH_INTERVAL_MS: z.coerce.number().int().min(300_000).default(3_600_000),
   /** Jitter ratio on the relative refresh schedule — the phase random-walks (R7). */

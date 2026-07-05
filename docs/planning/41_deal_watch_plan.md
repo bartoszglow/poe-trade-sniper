@@ -418,26 +418,26 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 
 ### Config (zod env schema, no magic numbers)
 
-| Key                               | Default           | Meaning                                                             |
-| --------------------------------- | ----------------- | ------------------------------------------------------------------- |
-| `DEAL_MAX_WATCHES`                | 10                | Concurrent deal-mode searches cap (socket tolerance unknown — P0.6) |
-| `DEAL_REFRESH_INTERVAL_MS`        | 3 600 000         | Baseline re-check cadence (R3)                                      |
-| `DEAL_REFRESH_JITTER_RATIO`       | 0.15              | Relative-scheduling jitter                                          |
-| `DEAL_DRIFT_THRESHOLD`            | 0.05              | Drift vs capBaseline that triggers re-derive                        |
-| `DEAL_MAX_ID_AGE_MS`              | 259 200 000 (3 d) | Forced re-derive age (pending P0.2/P0.8)                            |
-| `DEAL_OUTLIER_RATIO`              | 0.5               | Listing < ratio × sample median = dropped (price-fixer)             |
-| `DEAL_MIN_SAMPLE`                 | 5                 | Fewer usable listings → insufficient-data                           |
-| `DEAL_MIN_HEADROOM`               | 0.3               | Governor headroom reserve (shared helper with D-pc-2)               |
-| `DEAL_BASELINE_STALE_MS`          | 10 800 000        | Baseline older than 3 h → stale status                              |
-| `DEAL_REDERIVE_DEBOUNCE_MS`       | 5 000             | Threshold-edit re-derive debounce                                   |
-| `DEAL_MANUAL_REFRESH_COOLDOWN_MS` | 60 000            | Manual refresh per-search cooldown                                  |
-| `DEAL_CAP_MARGIN_RATIO`           | 0                 | Extra GGG-cap headroom above cutoff (Q3)                            |
-| `DEAL_BASELINE_HISTORY_MAX`       | 500               | Rolling per-watch cap on baseline-history rows (D-dw-12)            |
-| `DEAL_QUEUE_TICK_MS`              | 30 000            | Deal queue beat (due-refresh scan + queued-job pickup)              |
-| `MARKET_CHECK_ENABLED`            | true              | Killswitch for the universal market-price loop (D-dw-14)            |
-| `MARKET_CHECK_INTERVAL_MS`        | 3 600 000         | Market-price check cadence per active non-deal search (D-dw-14)     |
-| `MARKET_CHECK_JITTER_RATIO`       | 0.15              | Jitter on the market-check schedule                                 |
-| `MARKET_SNAPSHOT_REUSE_MS`        | 900 000           | Snapshot fresher than this seeds a deal enable for free (D-dw-14)   |
+| Key                               | Default           | Meaning                                                                                          |
+| --------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| ~~`DEAL_MAX_WATCHES`~~            | —                 | **Removed (D-dw-17)** → operator-editable `AppSettings.dealMaxWatches` (default 25, bounds 1–50) |
+| `DEAL_REFRESH_INTERVAL_MS`        | 3 600 000         | Baseline re-check cadence (R3)                                                                   |
+| `DEAL_REFRESH_JITTER_RATIO`       | 0.15              | Relative-scheduling jitter                                                                       |
+| `DEAL_DRIFT_THRESHOLD`            | 0.05              | Drift vs capBaseline that triggers re-derive                                                     |
+| `DEAL_MAX_ID_AGE_MS`              | 259 200 000 (3 d) | Forced re-derive age (pending P0.2/P0.8)                                                         |
+| `DEAL_OUTLIER_RATIO`              | 0.5               | Listing < ratio × sample median = dropped (price-fixer)                                          |
+| `DEAL_MIN_SAMPLE`                 | 5                 | Fewer usable listings → insufficient-data                                                        |
+| `DEAL_MIN_HEADROOM`               | 0.3               | Governor headroom reserve (shared helper with D-pc-2)                                            |
+| `DEAL_BASELINE_STALE_MS`          | 10 800 000        | Baseline older than 3 h → stale status                                                           |
+| `DEAL_REDERIVE_DEBOUNCE_MS`       | 5 000             | Threshold-edit re-derive debounce                                                                |
+| `DEAL_MANUAL_REFRESH_COOLDOWN_MS` | 60 000            | Manual refresh per-search cooldown                                                               |
+| `DEAL_CAP_MARGIN_RATIO`           | 0                 | Extra GGG-cap headroom above cutoff (Q3)                                                         |
+| `DEAL_BASELINE_HISTORY_MAX`       | 500               | Rolling per-watch cap on baseline-history rows (D-dw-12)                                         |
+| `DEAL_QUEUE_TICK_MS`              | 30 000            | Deal queue beat (due-refresh scan + queued-job pickup)                                           |
+| `MARKET_CHECK_ENABLED`            | true              | Killswitch for the universal market-price loop (D-dw-14)                                         |
+| `MARKET_CHECK_INTERVAL_MS`        | 3 600 000         | Market-price check cadence per active non-deal search (D-dw-14)                                  |
+| `MARKET_CHECK_JITTER_RATIO`       | 0.15              | Jitter on the market-check schedule                                                              |
+| `MARKET_SNAPSHOT_REUSE_MS`        | 900 000           | Snapshot fresher than this seeds a deal enable for free (D-dw-14)                                |
 
 ### Failure modes (honest degradation, `DealWatchStatusCode`)
 
@@ -445,7 +445,7 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 `derive-failed` (POST rejected/rate-limited; retry via queue backoff; old cap keeps
 running) · `derive-conflict` (returned id collides with another watched row) ·
 `derived-expired` (id-invalid signals per P0.8 → recovery re-derive) ·
-`unsupported-item` (stackable category, v1) · `capped` (over `DEAL_MAX_WATCHES`) ·
+`unsupported-item` (stackable category, v1) · `capped` (over `dealMaxWatches`) ·
 `restore-failed` (disable couldn't restore; row keeps last good state, operator
 retries). Each code → i18n message EN+PL; raw GGG errors stay in logs (error-audit
 rule).
@@ -547,6 +547,16 @@ for deal searches" is parked.
 
 ## Decisions
 
+- **D-dw-17 (operator, 2026-07-05)** — the concurrent-deal-watch cap becomes an
+  operator-editable setting (`AppSettings.dealMaxWatches`), surfaced in the
+  Settings view, replacing the env-only `DEAL_MAX_WATCHES`. Default raised to 25
+  (the hourly market query is cheap and scales to dozens; the real constraint is
+  concurrent GGG `/live` sockets, whose tolerance is unprobed — P0.6). Input
+  bounded to `DEAL_MAX_WATCHES_MAX = 50` with a UI note that a high cap risks
+  GGG rate-limiting the live sockets, and that poll coverage still catches deals
+  if a socket is 1013'd (graceful degradation). Raising the cap re-scans and
+  resumes parked `capped` watches WITHOUT a restart; lowering it never
+  force-parks already-armed watches (enforced on new enables + boot, as today).
 - **D-dw-16 (operator, 2026-07-05)** — deal config can be set AT ADD TIME. The
   add-search form gains an optional deal section (mode + threshold value + unit
   - sample size); on submit the server creates the search then applies the deal
@@ -647,7 +657,10 @@ for deal searches" is parked.
 - **Q3 — Cap margin.** If P0.4 shows GGG cross-currency conversion is coarse or drifts
   vs poe2scout, a small `DEAL_CAP_MARGIN_RATIO` (e.g. 0.05) avoids missing borderline
   deals at the cost of sub-threshold hits (suppressed, history-only).
-- **Q4 — Scale.** `DEAL_MAX_WATCHES` default 10 — raise only with P0.6 evidence.
+- **Q4 — Scale.** RESOLVED by D-dw-17: the cap is now the operator-editable
+  `AppSettings.dealMaxWatches` (default 25, bounds 1–50) — the operator tunes it
+  live; the binding constraint is concurrent `/live` sockets (P0.6, still
+  unprobed numerically), not the query budget.
 
 Resolved: Q1 → D-dw-2 (median, operator-confirmed 2026-07-05); Q2 → D-dw-1 v3 (merged
 single-search model, operator decision 2026-07-05).

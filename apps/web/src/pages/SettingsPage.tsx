@@ -9,6 +9,9 @@ import {
   Volume2,
 } from 'lucide-react';
 import {
+  DEAL_MAX_WATCHES_MAX,
+  DEAL_MAX_WATCHES_MIN,
+  DEFAULT_DEAL_MAX_WATCHES,
   DEFAULT_PRICE_CHECK_HOTKEY,
   PERMISSION_KINDS,
   PRICE_CHECK_SINK_OPTIONS,
@@ -55,6 +58,66 @@ function SettingsCard({ title, children }: { title: string; children: ReactNode 
       <h2 className="text-sm font-semibold text-ink">{title}</h2>
       <div className="mt-3">{children}</div>
     </div>
+  );
+}
+
+/**
+ * How many searches may run deal watch at once (D-dw-17). The number commits on
+ * blur/Enter, clamped to [MIN, MAX]. Raising it resumes parked watches server-
+ * side without a restart; the hint explains the concurrent-socket tradeoff.
+ */
+function DealWatchLimitCard({
+  settings,
+  onChanged,
+}: {
+  settings: AppSettings | undefined;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const current = settings?.dealMaxWatches ?? DEFAULT_DEAL_MAX_WATCHES;
+  const [draft, setDraft] = useState<string>(String(current));
+
+  // Follow the server value when it changes elsewhere and the field isn't being edited.
+  const syncedRef = useRef(current);
+  if (syncedRef.current !== current) {
+    syncedRef.current = current;
+    setDraft(String(current));
+  }
+
+  function commit(): void {
+    const parsed = Math.round(Number(draft));
+    if (!Number.isFinite(parsed)) {
+      setDraft(String(current));
+      return;
+    }
+    const clamped = Math.min(DEAL_MAX_WATCHES_MAX, Math.max(DEAL_MAX_WATCHES_MIN, parsed));
+    setDraft(String(clamped));
+    if (clamped !== current) {
+      void apiSend('PATCH', '/api/settings', { dealMaxWatches: clamped }).then(onChanged);
+    }
+  }
+
+  return (
+    <SettingsCard title={t('settings.dealWatchLimit')}>
+      <div className="flex flex-wrap items-center gap-3">
+        <Field label={t('settings.dealWatchLimitLabel')}>
+          <TextInput
+            type="number"
+            inputMode="numeric"
+            min={DEAL_MAX_WATCHES_MIN}
+            max={DEAL_MAX_WATCHES_MAX}
+            value={draft}
+            onChange={(changeEvent) => setDraft(changeEvent.target.value)}
+            onBlur={commit}
+            onKeyDown={(keyEvent) => {
+              if (keyEvent.key === 'Enter') keyEvent.currentTarget.blur();
+            }}
+            className="w-24"
+          />
+        </Field>
+        <span className="max-w-md text-xs text-ink-faint">{t('settings.dealWatchLimitHint')}</span>
+      </div>
+    </SettingsCard>
   );
 }
 
@@ -578,6 +641,8 @@ export function SettingsPage() {
           <span className="text-xs text-ink-faint">{t('settings.cursorHint')}</span>
         </div>
       </SettingsCard>
+
+      <DealWatchLimitCard settings={status?.settings} onChanged={refresh} />
 
       <PriceCheckCard settings={status?.settings} onChanged={refresh} />
 

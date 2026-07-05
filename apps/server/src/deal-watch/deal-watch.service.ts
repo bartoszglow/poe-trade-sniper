@@ -27,6 +27,7 @@ import { TradeDataService } from '../price-check/trade-data.service.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { HitDecoratorRegistry } from '../search/hit-decorator.js';
 import { SearchManager } from '../search/search-manager.js';
+import { AppSettingsService } from '../settings/app-settings.service.js';
 import { TradeApiClient, TradeApiError } from '../trade-api/trade-api.client.js';
 import { DealBaselineService, type BaselineComputation } from './deal-baseline.service.js';
 import { DealHistoryService } from './deal-history.service.js';
@@ -115,6 +116,7 @@ export class DealWatchService
     @Inject(DealBaselineService) private readonly baselineService: DealBaselineService,
     @Inject(DealHistoryService) private readonly historyService: DealHistoryService,
     @Inject(TradeDataService) private readonly tradeData: TradeDataService,
+    @Inject(AppSettingsService) private readonly settings: AppSettingsService,
   ) {}
 
   onModuleInit(): void {
@@ -128,39 +130,34 @@ export class DealWatchService
     // Narrow cleanup seam (review F2): a deal row deleted via remove()/import-
     // replace tears down its runtime maps + history without an event round-trip.
     this.searchManager.setDealRowCleanup((watchId) => this.forgetWatch(watchId));
+    // D-dw-17: when the operator raises the deal-watch cap, resume parked
+    // `capped` watches immediately (no restart). Lowering never yanks a live
+    // socket — reconcileCaps(false) only resumes, never parks (that stays a
+    // boot / new-enable concern). AppSettingsService is @Global, so this is a
+    // one-way dependency with no module cycle.
+    this.settings.onChange((next, previous) => {
+      if (next.dealMaxWatches !== previous.dealMaxWatches) this.reconcileCaps(false);
+    });
   }
 
   onApplicationBootstrap(): void {
     this.reconcileOrphanHistory();
-    // DEAL_MAX_WATCHES holds on EVERY path that arms watches (review F3): rows
-    // beyond the cap — e.g. after a large import or a lowered cap — are parked
-    // as `capped` (never derived/refreshed) instead of silently armed. Only
-    // enabled, non-archived rows consume cap slots (review F27).
-    let armedCount = 0;
+    // Seed the decorator snapshot for EVERY deal row (all statuses) before any
+    // cap/derive decisions — the hot-path decorator needs it regardless.
+    for (const row of this.searchManager.dealModeRows()) {
+      if (row.dealWatch !== null) this.seedSnapshot(row.dealWatch);
+    }
+    // Enforce the cap, parking overflow (a large import / lowered cap) — boot is
+    // the one place that force-parks (D-dw-17).
+    this.reconcileCaps(true);
+    // Recover in-flight states: derive the pending, finish interrupted disables.
+    // Reads post-reconcile statuses (a just-resumed row is now pending-derive).
     for (const row of this.searchManager.dealModeRows()) {
       const state = row.dealWatch;
       if (state === null) continue;
-      this.seedSnapshot(state);
-      const consumesSlot =
-        row.enabled && row.archivedAt === null && state.status !== 'unsupported-item';
-      if (consumesSlot && armedCount >= this.config.DEAL_MAX_WATCHES) {
-        if (state.status !== 'capped') {
-          this.searchManager.updateDealState(row.id, { ...state, status: 'capped' });
-        }
-        continue;
-      }
-      if (consumesSlot) armedCount += 1;
-      if (state.status === 'capped') {
-        // A slot opened up (cap raised / other watches gone) — resume deriving.
-        this.searchManager.updateDealState(row.id, {
-          ...state,
-          status: state.baseline === null ? 'pending-derive' : 'active',
-        });
-      }
       if (state.status === 'pending-derive' || state.status === 'derived-expired') {
         this.enqueue(state.watchId, { forceRederive: true });
-      }
-      if (state.status === 'restore-pending') {
+      } else if (state.status === 'restore-pending') {
         this.enqueue(state.watchId, { disable: true });
       }
     }
@@ -182,6 +179,48 @@ export class DealWatchService
     for (const timer of this.rederiveDebounceTimers.values()) clearTimeout(timer);
     this.rederiveDebounceTimers.clear();
     this.settleAllPending();
+  }
+
+  /**
+   * Enforce the deal-watch cap (`AppSettings.dealMaxWatches`, D-dw-17): resume
+   * `capped` rows while slots are free (cap raised, or other watches gone), and
+   * — only when `parkOverflow` — park rows beyond the cap. Idempotent; walks
+   * rows in list order so the SAME first-N rows stay armed across passes. Only
+   * enabled, non-archived, non-`unsupported-item` rows consume a slot (review
+   * F27/P2-9). `parkOverflow` is TRUE at boot (a large import / lowered cap
+   * parks the excess) and FALSE on a live setting change: lowering the cap must
+   * never yank an already-armed live socket — it takes effect for new enables
+   * and the next boot only.
+   */
+  private reconcileCaps(parkOverflow: boolean): void {
+    const cap = this.settings.get().dealMaxWatches;
+    let armedCount = 0;
+    for (const row of this.searchManager.dealModeRows()) {
+      const state = row.dealWatch;
+      if (state === null) continue;
+      const consumesSlot =
+        row.enabled && row.archivedAt === null && state.status !== 'unsupported-item';
+      if (!consumesSlot) continue;
+      const isCapped = state.status === 'capped';
+      if (armedCount >= cap) {
+        // Over the cap. Park only fresh overflow, and only when allowed (boot).
+        if (isCapped) continue; // already parked — no slot consumed
+        if (parkOverflow) {
+          this.searchManager.updateDealState(row.id, { ...state, status: 'capped' });
+          continue;
+        }
+        armedCount += 1; // live watch over a just-lowered cap keeps its slot
+        continue;
+      }
+      armedCount += 1;
+      if (isCapped) {
+        const resumedStatus = state.baseline === null ? 'pending-derive' : 'active';
+        this.searchManager.updateDealState(row.id, { ...state, status: resumedStatus });
+        if (resumedStatus === 'pending-derive') {
+          this.enqueue(state.watchId, { forceRederive: true });
+        }
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -252,7 +291,7 @@ export class DealWatchService
           dealRow.archivedAt === null &&
           dealRow.dealWatch?.status !== 'unsupported-item',
       ).length;
-    if (activeWatches >= this.config.DEAL_MAX_WATCHES) {
+    if (activeWatches >= this.settings.get().dealMaxWatches) {
       // Coded body — the web maps it to i18n; raw prose never crosses the wire
       // (error-audit rule; review P2-2).
       throw new ConflictException({ code: 'deal-capped' });
