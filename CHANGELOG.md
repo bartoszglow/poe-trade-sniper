@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rate-limit aggressiveness slider** (Settings, plan 41 D-dw-19): choose how
+  hard the app runs against the trade site's own request limits (learned live,
+  never guessed) — from 50% (extra margin) up to 100% (right at the limit),
+  scaling market checks and deal re-derives. A clearly-warned risk zone above
+  100% deliberately exceeds the limits and is not recommended (periodic lockouts
+  that pause all detection). Default 85%.
 - **Market price for every active search (plan 41, D-dw-14)**: the app now
   checks each active search's approximate market price about once an hour (the
   same manipulation-resistant instant-buyout baseline deal watch uses, with the

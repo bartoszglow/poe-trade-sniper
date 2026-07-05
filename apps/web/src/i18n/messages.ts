@@ -475,6 +475,12 @@ export const EN = {
   'settings.dealWatchLimitLabel': 'Max searches with deal watch',
   'settings.dealWatchLimitHint':
     'How many searches can run deal watch at once (1–50). A high value may make the trade site rate-limit the live connections — polling still catches deals, just slower. Raising it resumes any parked watches immediately.',
+  'settings.rateLimit': 'Rate-limit aggressiveness',
+  'settings.rateLimitLabel': 'Target % of the trade site’s rate limits',
+  'settings.rateLimitHint':
+    'How hard to run against the trade site’s own request limits (learned live, never guessed). 100% runs right at the limit; lower leaves more margin. Higher = faster market checks and re-derives.',
+  'settings.rateLimitRisk':
+    'Above 100% deliberately exceeds the trade site’s limits → periodic lockouts that pause ALL detection, and it stops looking like a normal browser. Use only briefly, if at all.',
   'settings.data': 'Backup / data',
   'settings.dataDesc':
     'Export your searches (JSON, restorable) and logs (CSV for Excel), or import searches from a file.',
@@ -1080,6 +1086,12 @@ export const PL: Record<MessageKey, string> = {
   'settings.dealWatchLimitLabel': 'Maks. wyszukiwań z obserwacją okazji',
   'settings.dealWatchLimitHint':
     'Ile wyszukiwań może naraz obserwować okazje (1–50). Wysoka wartość może sprawić, że strona handlu zacznie ograniczać połączenia na żywo — poll i tak łapie okazje, tylko wolniej. Podniesienie limitu od razu odblokowuje zaparkowane obserwacje.',
+  'settings.rateLimit': 'Agresywność limitów zapytań',
+  'settings.rateLimitLabel': 'Docelowy % limitów strony handlu',
+  'settings.rateLimitRisk':
+    'Powyżej 100% świadomie przekraczasz limity strony handlu → okresowe blokady, które pauzują CAŁĄ detekcję, i przestaje to wyglądać jak zwykła przeglądarka. Używaj tylko krótko, jeśli w ogóle.',
+  'settings.rateLimitHint':
+    'Jak mocno korzystać z limitów zapytań strony handlu (poznawanych na żywo, nigdy zgadywanych). 100% jedzie tuż przy limicie; niżej zostawia większy zapas. Wyżej = szybsze odczyty rynku i przeliczenia.',
   'settings.data': 'Kopia / dane',
   'settings.dataDesc':
     'Wyeksportuj wyszukiwania (JSON, do przywrócenia) i logi (CSV do Excela) albo zaimportuj wyszukiwania z pliku.',

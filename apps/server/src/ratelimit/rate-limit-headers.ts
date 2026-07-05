@@ -61,15 +61,34 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitSnapshot | nul
 }
 
 /**
- * True when any bucket sits at (or one hit below) its cap — the caller should
- * hold off for the bucket's period instead of risking a stacking lockout.
+ * The number of hits we allow ourselves in a bucket = GGG's advertised cap
+ * scaled by the aggressiveness setting (D-dw-19), integer for the discrete
+ * hold decision. At 100 = the full cap; below leaves margin; above (risk zone)
+ * exceeds the cap so the hold never fires and GGG's 429 is the only brake.
+ * FLOOR (not round) so a sub-100 setting always leaves ≥1 hit of margin even on
+ * a tight bucket — round(3×0.85)=3 would give the Account 3-cap zero margin at
+ * the default, less conservative than the retired cap−1 rule (review S3).
+ * Floored at 1 so a tiny cap is never zeroed.
  */
-export function isNearLimit(snapshot: RateLimitSnapshot): RateLimitRule | null {
+export function effectiveCap(ruleMaxHits: number, aggressivenessPercent: number): number {
+  return Math.max(1, Math.floor((ruleMaxHits * aggressivenessPercent) / 100));
+}
+
+/**
+ * True when any bucket has reached our effective ceiling (GGG's cap scaled by
+ * aggressiveness) — the caller should hold off for the bucket's period instead
+ * of risking a stacking lockout. At aggressiveness 100 this is GGG's raw cap;
+ * lower holds earlier, higher (risk zone) effectively never holds.
+ */
+export function isNearLimit(
+  snapshot: RateLimitSnapshot,
+  aggressivenessPercent: number,
+): RateLimitRule | null {
   for (let index = 0; index < snapshot.states.length; index += 1) {
     const state = snapshot.states[index];
     const rule = snapshot.rules[index];
     if (!state || !rule) continue;
-    if (state.maxHits >= rule.maxHits - 1) {
+    if (state.maxHits >= effectiveCap(rule.maxHits, aggressivenessPercent)) {
       return rule;
     }
   }

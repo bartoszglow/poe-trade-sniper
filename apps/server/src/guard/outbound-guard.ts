@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { clampAggressiveness } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
+import { AppSettingsService } from '../settings/app-settings.service.js';
 
 export interface GuardStatus {
   tripped: boolean;
@@ -33,15 +35,34 @@ export class OutboundGuard {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(RealtimeBus) private readonly realtimeBus: RealtimeBus,
+    @Inject(AppSettingsService) private readonly settings: AppSettingsService,
   ) {}
 
   get tripped(): boolean {
     return this.trippedReason !== null;
   }
 
+  /**
+   * The runaway HTTP tripwire, scaled UP in the aggressiveness risk zone
+   * (D-dw-19). At 50–100% it stays the trusted base ceiling — a lower value must
+   * NOT tighten the tripwire below the volume it was sized for (that would trip
+   * spuriously); only >100%, where we intentionally do MORE requests, raises it
+   * so normal operation never trips. The ws-connect ceiling is NOT scaled — the
+   * concurrent-socket limit is a different, unprobed GGG constraint (D-dw-8).
+   */
+  private effectiveHttpCeiling(): number {
+    // Fail-closed clamp first (S2): a corrupt persisted value must never NaN out
+    // the tripwire (Math.max(100, NaN) = NaN → length > NaN always false).
+    const aggressiveness = Math.max(
+      100,
+      clampAggressiveness(this.settings.get().rateLimitAggressiveness),
+    );
+    return Math.round((this.config.GUARD_MAX_HTTP_PER_MINUTE * aggressiveness) / 100);
+  }
+
   /** Gate for every GGG HTTP request. False = refused (guard tripped). */
   allowHttp(detail: string): boolean {
-    return this.allow(this.httpTimestamps, this.config.GUARD_MAX_HTTP_PER_MINUTE, 'HTTP', detail);
+    return this.allow(this.httpTimestamps, this.effectiveHttpCeiling(), 'HTTP', detail);
   }
 
   /** Gate for every ws connection attempt (probes included). */

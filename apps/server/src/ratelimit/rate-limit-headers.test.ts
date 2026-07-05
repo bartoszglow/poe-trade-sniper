@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isNearLimit, parseRateLimitHeaders, parseRuleTriplets } from './rate-limit-headers.js';
+import {
+  effectiveCap,
+  isNearLimit,
+  parseRateLimitHeaders,
+  parseRuleTriplets,
+} from './rate-limit-headers.js';
 
 describe('parseRuleTriplets', () => {
   it('parses the observed search policy shape', () => {
@@ -43,33 +48,49 @@ describe('parseRateLimitHeaders', () => {
   });
 });
 
+describe('effectiveCap', () => {
+  it('scales GGG’s cap by the aggressiveness %, flooring, floored at 1', () => {
+    expect(effectiveCap(20, 50)).toBe(10);
+    expect(effectiveCap(20, 85)).toBe(17);
+    expect(effectiveCap(20, 100)).toBe(20);
+    expect(effectiveCap(20, 120)).toBe(24);
+    expect(effectiveCap(1, 50)).toBe(1); // never floors a real bucket to zero
+  });
+
+  it('leaves ≥1 hit of margin on a tight bucket at a sub-100 default (review S3)', () => {
+    // The Account rule cap is 3. round(3×0.85)=3 = the raw cap → zero margin,
+    // less conservative than the retired cap−1. Floor gives 2 — real margin.
+    expect(effectiveCap(3, 85)).toBe(2);
+    expect(effectiveCap(3, 100)).toBe(3); // at 100 we do run right at the cap
+  });
+});
+
 describe('isNearLimit', () => {
   const rules = [
     { maxHits: 8, periodSeconds: 10, restrictionSeconds: 60 },
     { maxHits: 60, periodSeconds: 300, restrictionSeconds: 1800 },
   ];
+  const stateAt = (first: number, second: number) => [
+    { maxHits: first, periodSeconds: 10, restrictionSeconds: 0 },
+    { maxHits: second, periodSeconds: 300, restrictionSeconds: 0 },
+  ];
 
-  it('flags a bucket one hit below its cap', () => {
-    const crowded = isNearLimit({
-      policyName: 'p',
-      rules,
-      states: [
-        { maxHits: 7, periodSeconds: 10, restrictionSeconds: 0 },
-        { maxHits: 10, periodSeconds: 300, restrictionSeconds: 0 },
-      ],
-    });
-    expect(crowded).toEqual(rules[0]);
+  it('at A=100 flags a bucket that has reached GGG’s raw cap', () => {
+    expect(isNearLimit({ policyName: 'p', rules, states: stateAt(8, 10) }, 100)).toEqual(rules[0]);
+    // one below the cap is still clear at 100
+    expect(isNearLimit({ policyName: 'p', rules, states: stateAt(7, 10) }, 100)).toBeNull();
+  });
+
+  it('at A=85 flags earlier — the effective ceiling of an 8-cap bucket is 7', () => {
+    expect(isNearLimit({ policyName: 'p', rules, states: stateAt(7, 10) }, 85)).toEqual(rules[0]);
+  });
+
+  it('at A=120 (risk zone) stays quiet even at the raw cap', () => {
+    // effectiveCap(8,120)=10 > 8 — never holds; the 429 path is the only brake.
+    expect(isNearLimit({ policyName: 'p', rules, states: stateAt(8, 10) }, 120)).toBeNull();
   });
 
   it('stays quiet with headroom everywhere', () => {
-    const crowded = isNearLimit({
-      policyName: 'p',
-      rules,
-      states: [
-        { maxHits: 2, periodSeconds: 10, restrictionSeconds: 0 },
-        { maxHits: 10, periodSeconds: 300, restrictionSeconds: 0 },
-      ],
-    });
-    expect(crowded).toBeNull();
+    expect(isNearLimit({ policyName: 'p', rules, states: stateAt(2, 10) }, 100)).toBeNull();
   });
 });

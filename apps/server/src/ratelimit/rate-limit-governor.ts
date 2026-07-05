@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { clampAggressiveness } from '@poe-sniper/shared';
+import { AppSettingsService } from '../settings/app-settings.service.js';
 import {
   isNearLimit,
   parseRateLimitHeaders,
@@ -18,7 +20,10 @@ export interface GovernorStatus {
  * - spacing: per-policy minimum gap between requests (caller supplies it from
  *   config — the governor itself hardcodes nothing).
  * - 429: pauses ALL policies for Retry-After (lockouts stack on retry).
- * - near-limit: a bucket at cap-1 holds that policy for the bucket's period.
+ * - near-limit: a bucket at our EFFECTIVE ceiling (GGG's cap scaled by the
+ *   `rateLimitAggressiveness` setting, D-dw-19) holds that policy for the
+ *   bucket's period. GGG's advertised caps are learned live from headers and
+ *   never hardcoded; the setting only scales how close to them we run.
  */
 @Injectable()
 export class RateLimitGovernor {
@@ -26,6 +31,17 @@ export class RateLimitGovernor {
   private globalPauseUntilMs = 0;
   private readonly policyNextSlotMs = new Map<string, number>();
   private readonly policySnapshots = new Map<string, RateLimitSnapshot>();
+
+  // Explicit @Inject: tsx/esbuild emits no decorator metadata. AppSettingsService
+  // is @Global, so this is a one-way dependency (governor → settings), no cycle.
+  constructor(@Inject(AppSettingsService) private readonly settings: AppSettingsService) {}
+
+  /** Live aggressiveness (% of GGG's advertised limits) — read per evaluation
+   *  so a Settings change applies immediately, no restart (D-dw-19). Fail-closed
+   *  clamped: a corrupt persisted value must never disarm the governor (S2). */
+  private aggressiveness(): number {
+    return clampAggressiveness(this.settings.get().rateLimitAggressiveness);
+  }
 
   /** Resolves when it is safe to fire a request under the given policy. */
   async acquire(policyKey: string, minSpacingMs: number): Promise<void> {
@@ -53,7 +69,7 @@ export class RateLimitGovernor {
     const snapshot = parseRateLimitHeaders(headers);
     if (snapshot) {
       this.policySnapshots.set(policyKey, snapshot);
-      const crowdedRule = isNearLimit(snapshot);
+      const crowdedRule = isNearLimit(snapshot, this.aggressiveness());
       if (crowdedRule) {
         const holdMs = crowdedRule.periodSeconds * 1000;
         const nextSlot = Date.now() + holdMs;
@@ -97,20 +113,27 @@ export class RateLimitGovernor {
 
   /**
    * Fraction of a policy's TIGHTEST bucket still free (0..1) — read-only, for
-   * budget-aware callers like the price checker (#37) that must yield to
-   * detection. 1 when the policy has no observed headers yet (nothing spent),
-   * 0 while globally paused. Never changes throttle behaviour — status only.
+   * budget-aware callers like the price checker (#37) and deal-watch (plan 41)
+   * that must yield to detection. Computed against our EFFECTIVE ceiling (GGG's
+   * cap scaled by the aggressiveness setting, D-dw-19), NOT GGG's raw cap, so
+   * the reserves (D-dw-18) mean "keep X% of what we're willing to use free".
+   * 1 with no observed headers yet (nothing spent), 0 while globally paused.
+   * Never changes throttle behaviour — status only.
    */
   headroom(policyKey: string): number {
     if (this.globalPauseUntilMs > Date.now()) return 0;
     const snapshot = this.policySnapshots.get(policyKey);
     if (!snapshot) return 1;
+    const aggressiveness = this.aggressiveness();
     let tightest = 1;
     for (let index = 0; index < snapshot.rules.length; index += 1) {
       const rule = snapshot.rules[index];
       const state = snapshot.states[index];
       if (!rule || !state || rule.maxHits <= 0) continue;
-      const free = Math.max(0, (rule.maxHits - state.maxHits) / rule.maxHits);
+      // Continuous (unrounded) effective ceiling for a smooth fraction; the
+      // discrete hold decision uses the integer effectiveCap() separately.
+      const effectiveCeiling = (rule.maxHits * aggressiveness) / 100;
+      const free = Math.max(0, Math.min(1, (effectiveCeiling - state.maxHits) / effectiveCeiling));
       tightest = Math.min(tightest, free);
     }
     return tightest;

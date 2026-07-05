@@ -1,6 +1,12 @@
 import { BadRequestException, Body, Controller, Get, Inject, Patch } from '@nestjs/common';
 import { z } from 'zod';
-import { type AppSettings, DEAL_MAX_WATCHES_MAX, DEAL_MAX_WATCHES_MIN } from '@poe-sniper/shared';
+import {
+  type AppSettings,
+  DEAL_MAX_WATCHES_MAX,
+  DEAL_MAX_WATCHES_MIN,
+  RATE_LIMIT_AGGRESSIVENESS_MAX,
+  RATE_LIMIT_AGGRESSIVENESS_MIN,
+} from '@poe-sniper/shared';
 import { AppSettingsService } from './app-settings.service.js';
 
 const settingsPatchSchema = z
@@ -9,6 +15,12 @@ const settingsPatchSchema = z
     priceCheckHotkey: z.string().min(1).max(120).optional(),
     priceCheckSinks: z.array(z.enum(['panel', 'overlay'])).optional(),
     dealMaxWatches: z.number().int().min(DEAL_MAX_WATCHES_MIN).max(DEAL_MAX_WATCHES_MAX).optional(),
+    rateLimitAggressiveness: z
+      .number()
+      .int()
+      .min(RATE_LIMIT_AGGRESSIVENESS_MIN)
+      .max(RATE_LIMIT_AGGRESSIVENESS_MAX)
+      .optional(),
   })
   .strict();
 

@@ -48,4 +48,15 @@ describe('SettingsController', () => {
   it('rejects a non-integer dealMaxWatches', () => {
     expect(() => harness().patch({ dealMaxWatches: 12.5 })).toThrow(BadRequestException);
   });
+
+  it('patches valid rateLimitAggressiveness across the range (D-dw-19)', () => {
+    expect(harness().patch({ rateLimitAggressiveness: 50 }).rateLimitAggressiveness).toBe(50);
+    expect(harness().patch({ rateLimitAggressiveness: 85 }).rateLimitAggressiveness).toBe(85);
+    expect(harness().patch({ rateLimitAggressiveness: 120 }).rateLimitAggressiveness).toBe(120);
+  });
+
+  it('rejects rateLimitAggressiveness outside [50, 120]', () => {
+    expect(() => harness().patch({ rateLimitAggressiveness: 49 })).toThrow(BadRequestException);
+    expect(() => harness().patch({ rateLimitAggressiveness: 121 })).toThrow(BadRequestException);
+  });
 });

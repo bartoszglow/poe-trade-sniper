@@ -1,12 +1,14 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { type AppSettings, DEFAULT_APP_SETTINGS } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
 import { NetworkLog } from '../network/network-log.service.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
+import type { AppSettingsService } from '../settings/app-settings.service.js';
 import { DbSessionStore } from '../session/db-session-store.js';
 import { SessionCipher } from '../session/session-cipher.js';
 import { SessionService } from '../session/session.service.js';
@@ -39,11 +41,14 @@ function createClient(fetchStub: FetchFunction, withSession = true) {
     FETCH_SPACING_MS: '100',
     LOG_DIR: join(tmpdir(), 'sniper-test-logs'),
   });
+  const stubSettings = {
+    get: (): AppSettings => ({ ...DEFAULT_APP_SETTINGS }),
+  } as unknown as AppSettingsService;
   const client = new TradeApiClient(
     config,
     sessionService,
-    new RateLimitGovernor(),
-    new OutboundGuard(config, new RealtimeBus()),
+    new RateLimitGovernor(stubSettings),
+    new OutboundGuard(config, new RealtimeBus(), stubSettings),
     new NetworkLog(config, new RealtimeBus()),
     fetchStub,
   );

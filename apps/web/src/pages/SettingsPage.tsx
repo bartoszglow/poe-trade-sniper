@@ -13,8 +13,12 @@ import {
   DEAL_MAX_WATCHES_MIN,
   DEFAULT_DEAL_MAX_WATCHES,
   DEFAULT_PRICE_CHECK_HOTKEY,
+  DEFAULT_RATE_LIMIT_AGGRESSIVENESS,
   PERMISSION_KINDS,
   PRICE_CHECK_SINK_OPTIONS,
+  RATE_LIMIT_AGGRESSIVENESS_MAX,
+  RATE_LIMIT_AGGRESSIVENESS_MIN,
+  RATE_LIMIT_AGGRESSIVENESS_SAFE_MAX,
   describeState,
   type AppSettings,
   type ImportResult,
@@ -117,6 +121,56 @@ function DealWatchLimitCard({
         </Field>
         <span className="max-w-md text-xs text-ink-faint">{t('settings.dealWatchLimitHint')}</span>
       </div>
+    </SettingsCard>
+  );
+}
+
+function RateLimitCard({
+  settings,
+  onChanged,
+}: {
+  settings: AppSettings | undefined;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const current = settings?.rateLimitAggressiveness ?? DEFAULT_RATE_LIMIT_AGGRESSIVENESS;
+  const [draft, setDraft] = useState<number>(current);
+
+  // Follow the server value when it changes elsewhere and the slider isn't being dragged.
+  const syncedRef = useRef(current);
+  if (syncedRef.current !== current) {
+    syncedRef.current = current;
+    setDraft(current);
+  }
+
+  function commit(): void {
+    if (draft !== current) {
+      void apiSend('PATCH', '/api/settings', { rateLimitAggressiveness: draft }).then(onChanged);
+    }
+  }
+
+  const riskZone = draft > RATE_LIMIT_AGGRESSIVENESS_SAFE_MAX;
+  return (
+    <SettingsCard title={t('settings.rateLimit')}>
+      <div className="flex items-center gap-3">
+        <Slider
+          value={draft}
+          onChange={setDraft}
+          onCommit={commit}
+          label={t('settings.rateLimitLabel')}
+          min={RATE_LIMIT_AGGRESSIVENESS_MIN}
+          max={RATE_LIMIT_AGGRESSIVENESS_MAX}
+          className="max-w-xs flex-1"
+        />
+        <span
+          className={`w-14 text-right font-mono text-sm ${riskZone ? 'text-warn' : 'text-gold-bright'}`}
+        >
+          {draft}%
+        </span>
+      </div>
+      <p className={`mt-2 max-w-md text-xs ${riskZone ? 'text-warn' : 'text-ink-faint'}`}>
+        {riskZone ? t('settings.rateLimitRisk') : t('settings.rateLimitHint')}
+      </p>
     </SettingsCard>
   );
 }
@@ -643,6 +697,8 @@ export function SettingsPage() {
       </SettingsCard>
 
       <DealWatchLimitCard settings={status?.settings} onChanged={refresh} />
+
+      <RateLimitCard settings={status?.settings} onChanged={refresh} />
 
       <PriceCheckCard settings={status?.settings} onChanged={refresh} />
 
