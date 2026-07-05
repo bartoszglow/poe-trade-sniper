@@ -37,6 +37,7 @@ import { PriceCheckResultView } from '../components/PriceCheckResultView';
 import { Select } from '../components/Select';
 import { Slider } from '../components/Slider';
 import { Switch } from '../components/Switch';
+import { NumberInput } from '../components/NumberInput';
 import { TextInput } from '../components/TextInput';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useLoginCapture } from '../hooks/useLoginCapture';
@@ -105,18 +106,16 @@ function DealWatchLimitCard({
     <SettingsCard title={t('settings.dealWatchLimit')}>
       <div className="flex flex-wrap items-center gap-3">
         <Field label={t('settings.dealWatchLimitLabel')}>
-          <TextInput
-            type="number"
-            inputMode="numeric"
+          <NumberInput
+            className="w-24"
             min={DEAL_MAX_WATCHES_MIN}
             max={DEAL_MAX_WATCHES_MAX}
+            step={1}
             value={draft}
-            onChange={(changeEvent) => setDraft(changeEvent.target.value)}
+            onValueChange={setDraft}
             onBlur={commit}
-            onKeyDown={(keyEvent) => {
-              if (keyEvent.key === 'Enter') keyEvent.currentTarget.blur();
-            }}
-            className="w-24"
+            onEnter={commit}
+            ariaLabel={t('settings.dealWatchLimitLabel')}
           />
         </Field>
         <span className="max-w-md text-xs text-ink-faint">{t('settings.dealWatchLimitHint')}</span>

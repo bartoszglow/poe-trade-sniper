@@ -2,11 +2,8 @@ import { BASELINE_SAMPLE_SIZE_MAX, BASELINE_SAMPLE_SIZE_MIN } from '@poe-sniper/
 import type { DealWatchMode, DealWatchUnit } from '@poe-sniper/shared';
 import { useT } from '../../i18n/i18n';
 import { Field } from '../Field';
+import { NumberInput } from '../NumberInput';
 import { Select } from '../Select';
-
-/** Bare number input for the composite threshold field — the wrapper owns the box. */
-export const NUMBER_INPUT_CLASS =
-  'min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right font-mono text-sm text-ink focus:outline-none';
 
 export interface DealConfigFieldsProps {
   mode: DealWatchMode;
@@ -54,14 +51,16 @@ export function DealConfigFields({
         </Field>
         <Field label={t('dealWatch.thresholdLabel')}>
           <div className="flex items-stretch rounded-md border border-edge bg-surface-2 focus-within:border-gold">
-            <input
-              type="number"
+            {/* Bare + no steppers: the wrapper owns the box and the suffix sits
+                where the stepper would; native spinners are still hidden. */}
+            <NumberInput
+              variant="bare"
+              steppers={false}
               min={0}
               step="any"
               value={threshold}
-              onChange={(changeEvent) => onThresholdChange(changeEvent.target.value)}
-              className={NUMBER_INPUT_CLASS}
-              aria-label={t('dealWatch.thresholdLabel')}
+              onValueChange={onThresholdChange}
+              ariaLabel={t('dealWatch.thresholdLabel')}
             />
             {mode === 'percent' ? (
               <span className="flex items-center border-l border-edge px-2 text-sm text-ink-muted">
@@ -87,17 +86,15 @@ export function DealConfigFields({
           is the median of — thin markets want ~5, liquid ones 10-20. */}
       <div className="flex items-center gap-2 text-xs text-ink-muted">
         <span>{t('dealWatch.sampleSizePrefix')}</span>
-        <input
-          type="number"
+        <NumberInput
+          className="w-20"
           min={BASELINE_SAMPLE_SIZE_MIN}
           max={BASELINE_SAMPLE_SIZE_MAX}
           step={1}
           value={sampleSize}
-          onChange={(changeEvent) => onSampleSizeChange(changeEvent.target.value)}
-          aria-label={t('dealWatch.sampleSizeAria')}
-          className={`w-14 rounded-md border bg-surface-2 px-2 py-1 text-right font-mono text-sm text-ink focus:border-gold focus:outline-none ${
-            sampleSizeValid ? 'border-edge' : 'border-danger'
-          }`}
+          onValueChange={onSampleSizeChange}
+          invalid={!sampleSizeValid}
+          ariaLabel={t('dealWatch.sampleSizeAria')}
         />
         <span>{t('dealWatch.sampleSizeSuffix')}</span>
       </div>

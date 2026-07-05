@@ -7,6 +7,7 @@ import type {
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { Button } from './Button';
+import { NumberInput } from './NumberInput';
 
 /** Attribute discriminator → i18n key. Falls back to the server label for a
  *  future registry attr without a key (keeps EN+PL parity for the known ones). */
@@ -35,9 +36,6 @@ function parseNumber(raw: string): number | null {
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
 }
-
-const NUMBER_INPUT_CLASS =
-  'w-16 rounded border border-edge bg-surface-1 px-1.5 py-0.5 text-right font-mono text-xs text-ink focus:border-gold focus:outline-none';
 
 /**
  * The interactive price-check editor (#38 A): the parsed item as a list of
@@ -72,26 +70,26 @@ export function PriceCheckEditor({ draft, onChange, onPrice, pricing }: PriceChe
         </span>
         <label className="flex items-center gap-1 text-[0.65rem] text-ink-faint">
           {t('priceCheck.min')}
-          <input
-            type="number"
-            value={filter.min ?? ''}
+          <NumberInput
+            steppers={false}
+            className="w-16"
+            value={filter.min?.toString() ?? ''}
             disabled={!filter.enabled}
-            onChange={(event) =>
-              patchFilter(filter.id, (f) => ({ ...f, min: parseNumber(event.target.value) }))
+            onValueChange={(raw) =>
+              patchFilter(filter.id, (f) => ({ ...f, min: parseNumber(raw) }))
             }
-            className={NUMBER_INPUT_CLASS}
           />
         </label>
         <label className="flex items-center gap-1 text-[0.65rem] text-ink-faint">
           {t('priceCheck.max')}
-          <input
-            type="number"
-            value={filter.max ?? ''}
+          <NumberInput
+            steppers={false}
+            className="w-16"
+            value={filter.max?.toString() ?? ''}
             disabled={!filter.enabled}
-            onChange={(event) =>
-              patchFilter(filter.id, (f) => ({ ...f, max: parseNumber(event.target.value) }))
+            onValueChange={(raw) =>
+              patchFilter(filter.id, (f) => ({ ...f, max: parseNumber(raw) }))
             }
-            className={NUMBER_INPUT_CLASS}
           />
         </label>
       </div>
@@ -109,14 +107,14 @@ export function PriceCheckEditor({ draft, onChange, onPrice, pricing }: PriceChe
           {labelKey ? t(labelKey) : filter.label}
         </span>
         {filter.inputType === 'number-min' && (
-          <input
-            type="number"
-            value={typeof filter.value === 'number' ? filter.value : ''}
+          <NumberInput
+            steppers={false}
+            className="w-16"
+            value={typeof filter.value === 'number' ? filter.value.toString() : ''}
             disabled={!filter.enabled}
-            onChange={(event) =>
-              patchFilter(filter.id, (f) => ({ ...f, value: parseNumber(event.target.value) }))
+            onValueChange={(raw) =>
+              patchFilter(filter.id, (f) => ({ ...f, value: parseNumber(raw) }))
             }
-            className={NUMBER_INPUT_CLASS}
           />
         )}
         {filter.inputType === 'text' && (
