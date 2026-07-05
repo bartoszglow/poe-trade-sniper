@@ -20,6 +20,7 @@ function makeDeal(overrides: Partial<DealHitInfo> = {}): DealHitInfo {
     discountPercent: 32,
     discountExalted: 156,
     baselineStale: false,
+    divinePriceExalted: null,
     ...overrides,
   };
 }
@@ -29,6 +30,7 @@ const PENDING_DEAL: DealHitInfo = {
   discountPercent: null,
   discountExalted: null,
   baselineStale: false,
+  divinePriceExalted: null,
 };
 
 describe('formatDealDiscount', () => {

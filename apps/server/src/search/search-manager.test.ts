@@ -119,6 +119,7 @@ function asImportEntries(exported: ExportedSearchEntry[]): ManagedSearch[] {
             derivedCreatedAt: null,
             status: 'pending-derive' as const,
             nextRefreshAt: null,
+            divinePriceExalted: null,
           },
   }));
 }
@@ -1455,6 +1456,7 @@ describe('deal-watch seam (plan 41)', () => {
     derivedCreatedAt: new Date().toISOString(),
     status: 'active' as const,
     nextRefreshAt: null,
+    divinePriceExalted: null,
   };
 
   it('swapDealSearch keeps the list slot, re-points hits, and keeps both guards (F17a)', async () => {
@@ -1569,6 +1571,7 @@ describe('deal-watch seam (plan 41)', () => {
               discountPercent: 40,
               discountExalted: 400,
               baselineStale: false,
+              divinePriceExalted: null,
             },
           },
           updatedEvent: {
@@ -1579,6 +1582,7 @@ describe('deal-watch seam (plan 41)', () => {
               discountPercent: 40,
               discountExalted: 400,
               baselineStale: false,
+              divinePriceExalted: null,
             },
           },
           hitColumns: {
@@ -1587,6 +1591,7 @@ describe('deal-watch seam (plan 41)', () => {
               discountPercent: 40,
               discountExalted: 400,
               baselineStale: false,
+              divinePriceExalted: null,
             },
           },
           // The cheap listing alerts; the expensive one is history-only.

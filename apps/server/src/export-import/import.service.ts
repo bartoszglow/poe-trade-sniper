@@ -104,6 +104,7 @@ function rebuildDealWatch(
     derivedCreatedAt: null,
     status: 'pending-derive',
     nextRefreshAt: null,
+    divinePriceExalted: null,
   };
 }
 

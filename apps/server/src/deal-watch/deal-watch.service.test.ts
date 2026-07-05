@@ -298,6 +298,7 @@ describe('DealWatchService', () => {
         derivedCreatedAt: null,
         status: 'active',
         nextRefreshAt: null,
+        divinePriceExalted: null,
       },
     });
     (searchManager.dealModeRows as ReturnType<typeof vi.fn>).mockReturnValue([busyRow]);
@@ -334,6 +335,7 @@ describe('DealWatchService', () => {
         derivedCreatedAt: null,
         status: 'unsupported-item',
         nextRefreshAt: null,
+        divinePriceExalted: null,
       },
     });
     // Dynamic: the live row must stay discoverable for the queue's post-await
@@ -676,6 +678,7 @@ describe('DealWatchService', () => {
       derivedCreatedAt: null,
       status: 'pending-derive',
       nextRefreshAt: null,
+      divinePriceExalted: null,
     });
     const first = makeRow({ id: 'first111', dealWatch: watchState('w-1') });
     const second = makeRow({ id: 'second22', dealWatch: watchState('w-2') });

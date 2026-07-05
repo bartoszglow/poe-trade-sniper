@@ -21,6 +21,7 @@ import {
   dealDefinitionOf,
   dealQueryPinsItem,
   formatExaltedAmount,
+  formatExaltedDetailed,
 } from '../lib/deal-watch-display';
 import { formatPriceAmount } from '../lib/format-price';
 import { formatRelativeMagnitude } from '../lib/relative-time';
@@ -63,6 +64,19 @@ const DECLINED_MESSAGE_KEYS: Record<DealRefreshDeclinedCode, MessageKey> = {
   'guard-tripped': 'dealWatch.refreshDeclined.guard-tripped',
 };
 
+/** Divine-aware amount with the exact exalted value alongside, muted. */
+function renderDetailedAmount(amountExalted: number, divinePriceExalted: number | null) {
+  const detail = formatExaltedDetailed(amountExalted, divinePriceExalted);
+  return (
+    <>
+      {detail.primary}
+      {detail.secondary !== null && (
+        <span className="ml-1 font-normal text-ink-faint">({detail.secondary})</span>
+      )}
+    </>
+  );
+}
+
 interface DealWatchModalProps {
   open: boolean;
   search: SearchRuntimeInfo;
@@ -89,6 +103,8 @@ export function DealWatchModal({
 }: DealWatchModalProps) {
   const t = useT();
   const state = search.dealWatch;
+  /** Display-only divine rate, snapshotted server-side at the last refresh. */
+  const divineRate = state?.divinePriceExalted ?? null;
 
   const [draftMode, setDraftMode] = useState<DealWatchMode>('percent');
   const [draftThreshold, setDraftThreshold] = useState('30');
@@ -315,7 +331,9 @@ export function DealWatchModal({
           {thresholdValid && (
             <p className="text-xs text-ink-muted">
               {cutoffExalted !== null
-                ? t('dealWatch.summaryCutoff', { cutoff: formatPriceAmount(cutoffExalted) })
+                ? t('dealWatch.summaryCutoff', {
+                    cutoff: formatExaltedAmount(cutoffExalted, divineRate),
+                  })
                 : draftMode === 'absolute' && draftUnit === 'divine'
                   ? t('dealWatch.summaryDivine', { value: formatPriceAmount(parsedThreshold) })
                   : t('dealWatch.summaryPending')}
@@ -338,13 +356,13 @@ export function DealWatchModal({
                   <div>
                     <dt className="text-ink-faint">{t('dealWatch.baselineValue')}</dt>
                     <dd className="font-medium text-ink">
-                      {formatExaltedAmount(state.baseline.amountExalted)}
+                      {renderDetailedAmount(state.baseline.amountExalted, divineRate)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-ink-faint">{t('dealWatch.rawLowest')}</dt>
                     <dd className="text-ink">
-                      {formatExaltedAmount(state.baseline.rawLowestExalted)}
+                      {renderDetailedAmount(state.baseline.rawLowestExalted, divineRate)}
                     </dd>
                   </div>
                   <div>
@@ -385,7 +403,11 @@ export function DealWatchModal({
               {historyFailed ? (
                 <p className="text-xs text-ink-faint">{t('common.requestFailed')}</p>
               ) : history !== null ? (
-                <DealTrendSparkline entries={history} nowMs={nowMs} />
+                <DealTrendSparkline
+                  entries={history}
+                  nowMs={nowMs}
+                  divinePriceExalted={divineRate}
+                />
               ) : null}
             </div>
           </section>

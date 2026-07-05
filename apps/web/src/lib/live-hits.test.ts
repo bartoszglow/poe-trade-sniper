@@ -80,6 +80,7 @@ describe('collapseHit', () => {
       discountPercent: 32,
       discountExalted: 156,
       baselineStale: false,
+      divinePriceExalted: null,
     };
     const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100, dealInfo);
     expect(feed[0]?.deal).toEqual(dealInfo);
@@ -91,6 +92,7 @@ describe('collapseHit', () => {
       discountPercent: 32,
       discountExalted: 156,
       baselineStale: false,
+      divinePriceExalted: null,
     };
     const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100, dealInfo);
     const folded = collapseHit(feed, makeListing({ listingId: 'id-2' }), 100);
@@ -104,12 +106,14 @@ describe('collapseHit', () => {
       discountPercent: 32,
       discountExalted: 156,
       baselineStale: true,
+      divinePriceExalted: null,
     };
     const freshInfo = {
       baselineExalted: 500,
       discountPercent: 28,
       discountExalted: 140,
       baselineStale: false,
+      divinePriceExalted: null,
     };
     const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100, staleInfo);
     const folded = collapseHit(feed, makeListing({ listingId: 'id-2' }), 100, freshInfo);

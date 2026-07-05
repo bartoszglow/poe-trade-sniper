@@ -8,6 +8,7 @@ import {
   dealQueryPinsItem,
   formatDealThresholdChip,
   formatExaltedAmount,
+  formatExaltedDetailed,
   formatSignedExaltedAmount,
 } from './deal-watch-display';
 
@@ -61,16 +62,43 @@ describe('formatDealThresholdChip', () => {
 });
 
 describe('exalted amount formatters', () => {
-  it('appends the exalted suffix with price rounding', () => {
-    expect(formatExaltedAmount(736.9231)).toBe('737 ex');
-    expect(formatExaltedAmount(5)).toBe('5 ex');
+  it('appends the exalted suffix with price rounding when no rate is known', () => {
+    expect(formatExaltedAmount(736.9231, null)).toBe('737 ex');
+    expect(formatExaltedAmount(5, null)).toBe('5 ex');
+  });
+
+  it('switches to divine at or above one divine (operator readability request)', () => {
+    expect(formatExaltedAmount(53421, 714.3)).toBe('74.8 div');
+    expect(formatExaltedAmount(714.3, 714.3)).toBe('1 div');
+    expect(formatExaltedAmount(713, 714.3)).toBe('713 ex');
+    expect(formatExaltedAmount(1428.6, 714.3)).toBe('2 div');
+  });
+
+  it('never divides by a degenerate rate', () => {
+    expect(formatExaltedAmount(53421, 0)).toBe('53421 ex');
+    expect(formatExaltedAmount(53421, -5)).toBe('53421 ex');
+  });
+
+  it('pairs the divine primary with the exact exalted secondary', () => {
+    expect(formatExaltedDetailed(53421, 714.3)).toEqual({
+      primary: '74.8 div',
+      secondary: '53421 ex',
+    });
+    expect(formatExaltedDetailed(516, 714.3)).toEqual({ primary: '516 ex', secondary: null });
+    expect(formatExaltedDetailed(53421, null)).toEqual({ primary: '53421 ex', secondary: null });
   });
 
   it('signs trend deltas and neutralizes a rounded-to-zero delta', () => {
-    expect(formatSignedExaltedAmount(12)).toBe('+12 ex');
-    expect(formatSignedExaltedAmount(-8.4)).toBe('−8.4 ex');
-    expect(formatSignedExaltedAmount(0)).toBe('0 ex');
-    expect(formatSignedExaltedAmount(-0.001)).toBe('0 ex');
+    expect(formatSignedExaltedAmount(12, null)).toBe('+12 ex');
+    expect(formatSignedExaltedAmount(-8.4, null)).toBe('−8.4 ex');
+    expect(formatSignedExaltedAmount(0, null)).toBe('0 ex');
+    expect(formatSignedExaltedAmount(-0.001, null)).toBe('0 ex');
+  });
+
+  it('signs divine-magnitude deltas in divine', () => {
+    expect(formatSignedExaltedAmount(1500, 714.3)).toBe('+2.1 div');
+    expect(formatSignedExaltedAmount(-1500, 714.3)).toBe('−2.1 div');
+    expect(formatSignedExaltedAmount(500, 714.3)).toBe('+500 ex');
   });
 });
 

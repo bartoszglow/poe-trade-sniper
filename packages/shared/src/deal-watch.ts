@@ -95,6 +95,12 @@ export interface DealWatchState extends DealWatchConfig {
   status: DealWatchStatusCode;
   /** ISO-8601 time of the next scheduled baseline refresh (relative + jittered, R7). */
   nextRefreshAt: string | null;
+  /**
+   * The poe2scout divine rate (exalted per divine) snapshotted at the last
+   * baseline refresh — display conversion only (readable divine amounts);
+   * null = unknown, the UI falls back to exalted.
+   */
+  divinePriceExalted: number | null;
 }
 
 /**
@@ -125,4 +131,10 @@ export interface DealHitInfo {
   discountExalted: number | null;
   /** True when the baseline was older than DEAL_BASELINE_STALE_MS — surfaced in the UI. */
   baselineStale: boolean;
+  /**
+   * The divine rate (exalted per divine) AT decoration time, so historical
+   * alerts keep converting with the rate that was true when they fired;
+   * null = rate unknown, display falls back to exalted.
+   */
+  divinePriceExalted: number | null;
 }

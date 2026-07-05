@@ -538,7 +538,7 @@ export const EN = {
   'dealWatch.unitLabel': 'Unit',
   'dealWatch.unit.exalted': 'exalted',
   'dealWatch.unit.divine': 'divine',
-  'dealWatch.summaryCutoff': 'Alert when listed ≤ {cutoff} ex',
+  'dealWatch.summaryCutoff': 'Alert when listed ≤ {cutoff}',
   'dealWatch.summaryDivine':
     'Alert at −{value} div below market — the exact cutoff follows the live divine rate',
   'dealWatch.summaryPending': 'The cutoff is computed after the first market check',
@@ -579,7 +579,7 @@ export const EN = {
   // Deal-watch — feeds & alerts (W2 section; add W2 keys below this line)
   'deal.badgePending': 'deal — baseline pending',
   'deal.stale': 'stale',
-  'deal.context': 'listed {price} · resale ≈ {baseline} ex ({profit} ex)',
+  'deal.context': 'listed {price} · resale ≈ {baseline} ({profit})',
   'deal.contextPending': 'listed {price} · resale unknown — baseline pending',
   'notify.dealTitle': 'DEAL {discount} · {item}',
   'notify.dealTitlePending': 'DEAL · {item}',
@@ -1117,7 +1117,7 @@ export const PL: Record<MessageKey, string> = {
   'dealWatch.unitLabel': 'Jednostka',
   'dealWatch.unit.exalted': 'exalted',
   'dealWatch.unit.divine': 'divine',
-  'dealWatch.summaryCutoff': 'Alert, gdy oferta ≤ {cutoff} ex',
+  'dealWatch.summaryCutoff': 'Alert, gdy oferta ≤ {cutoff}',
   'dealWatch.summaryDivine':
     'Alert przy −{value} div poniżej rynku — dokładny próg wynika z bieżącego kursu divine',
   'dealWatch.summaryPending': 'Próg zostanie wyliczony po pierwszym sprawdzeniu rynku',
@@ -1159,7 +1159,7 @@ export const PL: Record<MessageKey, string> = {
   // Deal-watch — feed i alerty (sekcja W2; klucze W2 dodawaj poniżej)
   'deal.badgePending': 'okazja — oczekiwanie na cenę bazową',
   'deal.stale': 'nieaktualna',
-  'deal.context': 'wystawiono za {price} · odsprzedaż ≈ {baseline} ex ({profit} ex)',
+  'deal.context': 'wystawiono za {price} · odsprzedaż ≈ {baseline} ({profit})',
   'deal.contextPending': 'wystawiono za {price} · odsprzedaż nieznana — oczekiwanie na cenę bazową',
   'notify.dealTitle': 'OKAZJA {discount} · {item}',
   'notify.dealTitlePending': 'OKAZJA · {item}',

@@ -99,13 +99,66 @@ export function formatDealThresholdChip(
   return `${MINUS_SIGN}${formatPriceAmount(thresholdValue)} ${UNIT_SUFFIXES[unit]}`;
 }
 
-/** Exalted-equivalent amount for display: `737 ex` (format-price rounding). */
-export function formatExaltedAmount(amountExalted: number): string {
+/**
+ * Divine-aware magnitude display (operator request 2026-07-05): exalted is
+ * worth so little that real amounts read as unusable five-digit numbers, so
+ * anything at or above one divine renders in divine with one decimal
+ * ('74.8 div'); smaller amounts — or an unknown rate — stay exalted
+ * ('516 ex'). Display only: every computation stays in exalted.
+ */
+function crossesDivine(
+  amountExalted: number,
+  divinePriceExalted: number | null,
+): divinePriceExalted is number {
+  return (
+    divinePriceExalted !== null &&
+    divinePriceExalted > 0 &&
+    Math.abs(amountExalted) >= divinePriceExalted
+  );
+}
+
+/** One-decimal divine amount with a trimmed '.0' ('74.8 div', '75 div'). */
+function formatDivineAmount(amountExalted: number, divinePriceExalted: number): string {
+  return `${Number((amountExalted / divinePriceExalted).toFixed(1)).toString()} div`;
+}
+
+/** Magnitude-aware amount: `74.8 div` at ≥1 divine, else `516 ex`. */
+export function formatExaltedAmount(
+  amountExalted: number,
+  divinePriceExalted: number | null,
+): string {
+  if (crossesDivine(amountExalted, divinePriceExalted)) {
+    return formatDivineAmount(amountExalted, divinePriceExalted);
+  }
   return `${formatPriceAmount(amountExalted)} ex`;
 }
 
-/** Signed exalted delta for trend labels: `+12 ex`, `−8 ex`, `0 ex`. */
-export function formatSignedExaltedAmount(amountExalted: number): string {
+/**
+ * Magnitude-aware amount with the exact exalted value alongside when the
+ * primary is divine — for surfaces with room (the modal's baseline card).
+ */
+export function formatExaltedDetailed(
+  amountExalted: number,
+  divinePriceExalted: number | null,
+): { primary: string; secondary: string | null } {
+  if (crossesDivine(amountExalted, divinePriceExalted)) {
+    return {
+      primary: formatDivineAmount(amountExalted, divinePriceExalted),
+      secondary: `${formatPriceAmount(amountExalted)} ex`,
+    };
+  }
+  return { primary: `${formatPriceAmount(amountExalted)} ex`, secondary: null };
+}
+
+/** Signed magnitude-aware delta for trend labels: `+2.3 div`, `−8 ex`, `0 ex`. */
+export function formatSignedExaltedAmount(
+  amountExalted: number,
+  divinePriceExalted: number | null,
+): string {
+  if (crossesDivine(amountExalted, divinePriceExalted)) {
+    const magnitudeText = formatDivineAmount(Math.abs(amountExalted), divinePriceExalted);
+    return `${amountExalted > 0 ? '+' : MINUS_SIGN}${magnitudeText}`;
+  }
   const magnitudeText = formatPriceAmount(Math.abs(amountExalted));
   // A tiny delta can round to "0" — show it unsigned rather than as "+0"/"−0".
   if (magnitudeText === '0') return '0 ex';

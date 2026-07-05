@@ -94,6 +94,7 @@ describe('ImportService', () => {
       capBaseline: null,
       capExalted: null,
       derivedCreatedAt: null,
+      divinePriceExalted: null,
       status: 'pending-derive',
       nextRefreshAt: null,
     });

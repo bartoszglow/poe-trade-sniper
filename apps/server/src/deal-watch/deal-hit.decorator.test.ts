@@ -26,6 +26,7 @@ function dealState(overrides: Partial<DealWatchState> = {}): DealWatchState {
     derivedCreatedAt: '2026-07-05T11:30:00.000Z',
     status: 'active',
     nextRefreshAt: null,
+    divinePriceExalted: null,
     ...overrides,
   };
 }

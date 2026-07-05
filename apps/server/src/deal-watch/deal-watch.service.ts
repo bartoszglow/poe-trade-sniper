@@ -267,6 +267,7 @@ export class DealWatchService
       derivedCreatedAt: null,
       status: 'pending-derive',
       nextRefreshAt: null,
+      divinePriceExalted: null,
     };
     // W3 stackable gate (plan 41 v1 scope): stack-priced categories have no
     // per-unit price handling, so a baseline over mixed stack sizes would be
@@ -626,6 +627,7 @@ export class DealWatchService
         ...currentState,
         status: 'insufficient-data',
         nextRefreshAt: this.nextRefreshAt(),
+        divinePriceExalted: computation.divinePriceExalted,
       });
       this.applySnapshot(currentState, computation);
       return;
@@ -635,6 +637,7 @@ export class DealWatchService
       ...currentState,
       baseline: computation.baseline,
       nextRefreshAt: this.nextRefreshAt(),
+      divinePriceExalted: computation.divinePriceExalted,
     };
     const needsRederive =
       forceRederive ||
@@ -789,10 +792,12 @@ export class DealWatchService
   private seedSnapshot(state: DealWatchState): void {
     // Rates arrive with the first baseline compute; until then non-exalted
     // listing prices read as unpriceable (null discounts, never suppressed).
+    // The persisted divine rate survives a restart so display conversion and
+    // absolute-mode cutoffs don't blank until the next refresh.
     this.snapshots.set(state.watchId, {
       ratesByApiId: null,
-      divinePriceExalted: null,
-      cutoffExalted: null,
+      divinePriceExalted: state.divinePriceExalted,
+      cutoffExalted: computeCutoffExalted(state, state.divinePriceExalted),
     });
   }
 

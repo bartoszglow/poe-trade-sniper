@@ -19,6 +19,8 @@ interface DealTrendSparklineProps {
   entries: DealBaselineHistoryEntry[];
   /** Shared page tick so relative times age with the rest of the modal. */
   nowMs: number;
+  /** Display-only divine rate for magnitude-aware readouts; null = exalted. */
+  divinePriceExalted: number | null;
 }
 
 /**
@@ -28,7 +30,11 @@ interface DealTrendSparklineProps {
  * readout + the change-since-oldest label, both in ink tokens, never the series
  * color. The geometry is pure (lib/deal-trend.ts); this component only renders.
  */
-export function DealTrendSparkline({ entries, nowMs }: DealTrendSparklineProps) {
+export function DealTrendSparkline({
+  entries,
+  nowMs,
+  divinePriceExalted,
+}: DealTrendSparklineProps) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -74,7 +80,7 @@ export function DealTrendSparkline({ entries, nowMs }: DealTrendSparklineProps) 
             height={SPARKLINE_HEIGHT}
             role="img"
             aria-label={t('dealWatch.trendSince', {
-              change: formatSignedExaltedAmount(geometry.changeExalted),
+              change: formatSignedExaltedAmount(geometry.changeExalted, divinePriceExalted),
               time: formatRelativeMagnitude(geometry.oldestComputedAt, nowMs),
             })}
             className="block rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-gold"
@@ -157,11 +163,12 @@ export function DealTrendSparkline({ entries, nowMs }: DealTrendSparklineProps) 
         {geometry && (
           <span className="text-ink-muted">
             {hoveredPoint
-              ? `${formatExaltedAmount(hoveredPoint.amountExalted)} · ${t('dealWatch.checkedAgo', {
-                  time: formatRelativeMagnitude(hoveredPoint.computedAt, nowMs),
-                })}`
+              ? `${formatExaltedAmount(hoveredPoint.amountExalted, divinePriceExalted)} · ${t(
+                  'dealWatch.checkedAgo',
+                  { time: formatRelativeMagnitude(hoveredPoint.computedAt, nowMs) },
+                )}`
               : t('dealWatch.trendSince', {
-                  change: formatSignedExaltedAmount(geometry.changeExalted),
+                  change: formatSignedExaltedAmount(geometry.changeExalted, divinePriceExalted),
                   time: formatRelativeMagnitude(geometry.oldestComputedAt, nowMs),
                 })}
           </span>

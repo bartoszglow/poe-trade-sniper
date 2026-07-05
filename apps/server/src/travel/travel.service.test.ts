@@ -158,6 +158,7 @@ describe('TravelService', () => {
       discountPercent: 32,
       discountExalted: 320,
       baselineStale: false,
+      divinePriceExalted: null,
     };
     const dealOptedIn = createService({ autoTravel: true });
     dealOptedIn.realtimeBus.publish({

@@ -58,6 +58,9 @@ export class DealHitDecorator implements HitDecorator {
       discountExalted:
         baseline !== null && priceExalted !== null ? baseline.amountExalted - priceExalted : null,
       baselineStale,
+      // The rate AT decoration time — historical alerts keep converting with
+      // the rate that was true when they fired.
+      divinePriceExalted: snapshot?.divinePriceExalted ?? dealWatch.divinePriceExalted,
     };
 
     const cutoffExalted = snapshot?.cutoffExalted ?? null;

@@ -1,5 +1,6 @@
 import type { DealHitInfo, Hit, ListingPrice } from '@poe-sniper/shared';
 import type { MessageKey } from '../i18n/messages';
+import { formatExaltedAmount, formatSignedExaltedAmount } from './deal-watch-display';
 import { formatPriceAmount } from './format-price';
 
 /**
@@ -31,9 +32,11 @@ export function formatListedPrice(price: ListingPrice | null, translate: DealTra
 }
 
 /**
- * The flip-context line: 'listed 360 exalted · resale ≈ 516 ex (+156 ex)'.
- * Falls back to the baseline-pending variant when the discount math is absent.
- * The profit carries its own sign so a negative margin renders '(−12 ex)'.
+ * The flip-context line: 'listed 360 exalted · resale ≈ 74.8 div (+2.1 div)'.
+ * Amounts are divine-aware via the rate snapshotted on the deal itself, so
+ * historical alerts keep converting with the rate that was true when they
+ * fired. Falls back to the baseline-pending variant when the discount math is
+ * absent; the profit carries its own sign so a negative margin reads '(−12 ex)'.
  */
 export function composeDealContext(
   price: ListingPrice | null,
@@ -44,12 +47,10 @@ export function composeDealContext(
   if (deal.baselineExalted === null || deal.discountExalted === null) {
     return translate('deal.contextPending', { price: listed });
   }
-  const profitAmount = formatPriceAmount(Math.abs(deal.discountExalted));
-  const profit = deal.discountExalted < 0 ? `−${profitAmount}` : `+${profitAmount}`;
   return translate('deal.context', {
     price: listed,
-    baseline: formatPriceAmount(deal.baselineExalted),
-    profit,
+    baseline: formatExaltedAmount(deal.baselineExalted, deal.divinePriceExalted),
+    profit: formatSignedExaltedAmount(deal.discountExalted, deal.divinePriceExalted),
   });
 }
 

@@ -39,6 +39,8 @@ const dealWatchStateSchema = z.object({
   derivedCreatedAt: z.string().nullable(),
   status: dealWatchStatusSchema,
   nextRefreshAt: z.string().nullable(),
+  /** Absent in pre-divine-display persisted states — defaults to unknown. */
+  divinePriceExalted: z.number().nullable().default(null),
 });
 
 // Compile-time drift guard: the schema's status values must BE DealWatchStatusCode.
