@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { offerKey, type Listing } from '@poe-sniper/shared';
+import { randomUUID } from 'node:crypto';
+import {
+  offerKey,
+  type ExportedSearchEntry,
+  type Listing,
+  type ManagedSearch,
+} from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
 import { hits } from '../db/schema.js';
@@ -15,6 +21,7 @@ import { PermissionDeniedError } from '../permissions/permission-denied.error.js
 import type { PermissionGateService } from '../permissions/permission-gate.service.js';
 import type { TradeApiClient } from '../trade-api/trade-api.client.js';
 import type { EngineFactory } from './engine-registry.js';
+import { HitDecoratorRegistry } from './hit-decorator.js';
 import { LiveOfferRegistry } from './live-offer-registry.js';
 import { SearchManager } from './search-manager.js';
 
@@ -72,6 +79,7 @@ function createManager(
     },
   ];
 
+  const hitDecorators = new HitDecoratorRegistry();
   const manager = new SearchManager(
     config,
     database,
@@ -81,8 +89,38 @@ function createManager(
     options.guard ?? ARMED_GUARD,
     options.gate ?? ALLOW_GATE,
     new LiveOfferRegistry(config),
+    hitDecorators,
   );
-  return { manager, database, tradeApi, events, executeSearch, wsEngines };
+  return {
+    manager,
+    database,
+    tradeApi,
+    events,
+    executeSearch,
+    wsEngines,
+    hitDecorators,
+    realtimeBus,
+  };
+}
+
+/** Mirror of ImportService's rebuild step: exported deal config → fresh pending runtime. */
+function asImportEntries(exported: ExportedSearchEntry[]): ManagedSearch[] {
+  return exported.map((entry) => ({
+    ...entry,
+    dealWatch:
+      entry.dealWatch === null
+        ? null
+        : {
+            ...entry.dealWatch,
+            watchId: randomUUID(),
+            baseline: null,
+            capBaseline: null,
+            capExalted: null,
+            derivedCreatedAt: null,
+            status: 'pending-derive' as const,
+            nextRefreshAt: null,
+          },
+  }));
 }
 
 describe('SearchManager', () => {
@@ -369,6 +407,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -465,6 +504,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -654,7 +694,7 @@ describe('SearchManager', () => {
       expect(first.id).toBe('AbCdEf123');
 
       // Re-importing the same export skips the already-present search.
-      expect(manager.importSearches(exported, [], 'skip')).toEqual({
+      expect(manager.importSearches(asImportEntries(exported), [], 'skip')).toEqual({
         imported: 0,
         skipped: 1,
         errors: [],
@@ -662,7 +702,7 @@ describe('SearchManager', () => {
 
       // A different id is restored straight from the export shape (no resolveQuery).
       const result = manager.importSearches(
-        [{ ...first, id: 'NewSearch1', label: 'Restored' }],
+        asImportEntries([{ ...first, id: 'NewSearch1', label: 'Restored' }]),
         [],
         'skip',
       );
@@ -708,6 +748,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -888,6 +929,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap(); // bootstrap prunes
       try {
@@ -943,6 +985,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -986,6 +1029,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -1228,6 +1272,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reloaded.onApplicationBootstrap();
       try {
@@ -1302,7 +1347,7 @@ describe('SearchManager', () => {
       expect(exported[0]?.archivedAt).not.toBeNull();
 
       target.executeSearch.mockClear();
-      const result = target.manager.importSearches(exported, [], 'skip');
+      const result = target.manager.importSearches(asImportEntries(exported), [], 'skip');
       expect(result.imported).toBe(1);
       const imported = target.manager.list().find((entry) => entry.id === 'AbCdEf001');
       expect(imported?.archivedAt).toBe(exported[0]?.archivedAt);
@@ -1333,7 +1378,11 @@ describe('SearchManager', () => {
       const exportedRooms = source.manager.exportRooms();
       expect(exportedRooms).toEqual([{ id: roomId, name: 'Helmets', collapsed: false }]);
 
-      const result = target.manager.importSearches(exportedSearches, exportedRooms, 'skip');
+      const result = target.manager.importSearches(
+        asImportEntries(exportedSearches),
+        exportedRooms,
+        'skip',
+      );
       expect(result).toEqual({ imported: 2, skipped: 0, errors: [] });
       const view = target.manager.view();
       const importedRoom = view.rooms[0]!;
@@ -1342,7 +1391,7 @@ describe('SearchManager', () => {
       expect(view.searches.find((entry) => entry.id === 'AbCdEf001')?.roomId).toBe(importedRoom.id);
 
       // Idempotent re-import: same name reused, no duplicate room.
-      target.manager.importSearches(exportedSearches, exportedRooms, 'replace');
+      target.manager.importSearches(asImportEntries(exportedSearches), exportedRooms, 'replace');
       expect(target.manager.view().rooms).toHaveLength(1);
     } finally {
       source.manager.onApplicationShutdown();
@@ -1376,6 +1425,7 @@ describe('SearchManager', () => {
         ARMED_GUARD,
         ALLOW_GATE,
         new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
       );
       reborn.onApplicationBootstrap();
       try {
@@ -1386,6 +1436,191 @@ describe('SearchManager', () => {
       }
     } finally {
       database.$client.close();
+    }
+  });
+});
+
+describe('deal-watch seam (plan 41)', () => {
+  const DEAL_STATE = {
+    watchId: 'w-test-1',
+    mode: 'percent' as const,
+    thresholdValue: 30,
+    unit: 'exalted' as const,
+    definition: { status: { option: 'securable' }, stats: [] },
+    originalSearchId: 'AbCdEf111',
+    originalPriceFilter: null,
+    baseline: null,
+    capBaseline: null,
+    capExalted: 700,
+    derivedCreatedAt: new Date().toISOString(),
+    status: 'active' as const,
+    nextRefreshAt: null,
+  };
+
+  it('swapDealSearch keeps the list slot, re-points hits, and keeps both guards (F17a)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf111', { label: 'first' });
+      await manager.add('AbCdEf222', { label: 'middle' });
+      await manager.add('AbCdEf333', { label: 'last' });
+      manager.updateDealState('AbCdEf222', DEAL_STATE);
+      database.$client
+        .prepare(
+          "INSERT INTO hits (search_id, listing_id, item_name, seller, detected_at) VALUES ('AbCdEf222', 'listing-1', 'Barrage', 's', '2026-07-05T00:00:00Z')",
+        )
+        .run();
+
+      // Same-id swap: a no-op re-derive updates filters/state, never throws (content-addressed ids).
+      const sameId = manager.swapDealSearch('AbCdEf222', {
+        id: 'AbCdEf222',
+        filters: { status: { option: 'securable' }, stats: [], marker: 'same-id' },
+        dealWatch: { ...DEAL_STATE, capExalted: 650 },
+      });
+      expect(sameId.dealWatch?.capExalted).toBe(650);
+
+      // Collision with ANOTHER watched row → 409, nothing mutated.
+      expect(() =>
+        manager.swapDealSearch('AbCdEf222', {
+          id: 'AbCdEf333',
+          filters: {},
+          dealWatch: DEAL_STATE,
+        }),
+      ).toThrow('already watched');
+
+      // Real swap: middle slot keeps its position, hits follow the row.
+      manager.swapDealSearch('AbCdEf222', {
+        id: 'NewDeal99',
+        filters: { status: { option: 'securable' }, stats: [] },
+        dealWatch: DEAL_STATE,
+      });
+      expect(manager.list().map((info) => info.id)).toEqual([
+        'AbCdEf111',
+        'NewDeal99',
+        'AbCdEf333',
+      ]);
+      const rePointed = database.$client
+        .prepare("SELECT search_id FROM hits WHERE listing_id = 'listing-1'")
+        .get() as { search_id: string };
+      expect(rePointed.search_id).toBe('NewDeal99');
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+
+  it('exports a deal row as the portable config subset — no watchId, no runtime state (F8/F17d)', async () => {
+    const { manager } = createManager();
+    try {
+      await manager.add('AbCdEf111', { label: 'deal row' });
+      manager.updateDealState('AbCdEf111', {
+        ...DEAL_STATE,
+        baseline: {
+          amountExalted: 1000,
+          sampleSize: 5,
+          rawLowestExalted: 900,
+          computedAt: '2026-07-05T00:00:00Z',
+          listingsSeen: 10,
+        },
+      });
+      const [exported] = manager.exportSearches();
+      // Exactly the D-dw-10 subset: identity + runtime state stay machine-local.
+      expect(exported?.dealWatch).toEqual({
+        mode: 'percent',
+        thresholdValue: 30,
+        unit: 'exalted',
+        definition: DEAL_STATE.definition,
+        originalSearchId: 'AbCdEf111',
+        originalPriceFilter: null,
+      });
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+
+  it('rejects a manual id edit while deal mode is on (F17b)', async () => {
+    const { manager } = createManager();
+    try {
+      await manager.add('AbCdEf111', { label: 'deal row' });
+      manager.updateDealState('AbCdEf111', DEAL_STATE);
+      await expect(manager.editSearch('AbCdEf111', 'AbCdEf999', {})).rejects.toThrow(
+        'managed by deal-watch',
+      );
+      // A label-only edit (same id) stays allowed.
+      const relabeled = await manager.editSearch('AbCdEf111', 'AbCdEf111', { label: 'renamed' });
+      expect(relabeled.label).toBe('renamed');
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+
+  it('recordHits persists the deal column in the same tx and honors suppressAlert (F17c)', async () => {
+    const { manager, database, wsEngines, hitDecorators, realtimeBus } = createManager();
+    const published: string[] = [];
+    realtimeBus.subscribe((event) => published.push(event.type));
+    try {
+      await manager.add('AbCdEf111', { label: 'deal row' });
+      manager.updateDealState('AbCdEf111', DEAL_STATE);
+      hitDecorators.register({
+        decorate: (listing) => ({
+          event: {
+            type: 'deal',
+            listing,
+            deal: {
+              baselineExalted: 1000,
+              discountPercent: 40,
+              discountExalted: 400,
+              baselineStale: false,
+            },
+          },
+          updatedEvent: {
+            type: 'deal-updated',
+            listing,
+            deal: {
+              baselineExalted: 1000,
+              discountPercent: 40,
+              discountExalted: 400,
+              baselineStale: false,
+            },
+          },
+          hitColumns: {
+            deal: {
+              baselineExalted: 1000,
+              discountPercent: 40,
+              discountExalted: 400,
+              baselineStale: false,
+            },
+          },
+          // The cheap listing alerts; the expensive one is history-only.
+          suppressAlert: (listing.price?.amount ?? 0) > 700,
+        }),
+      });
+
+      const makeListing = (listingId: string, amount: number): Listing => ({
+        listingId,
+        searchId: 'AbCdEf111',
+        itemName: `Gem ${listingId}`,
+        price: { amount, currency: 'exalted' },
+        seller: `seller-${listingId}`,
+        hideoutToken: null,
+        item: null,
+        detectedAt: new Date().toISOString(),
+      });
+      wsEngines[0]!.callbacks!.onListings([
+        makeListing('deal-1', 500),
+        makeListing('quiet-1', 900),
+      ]);
+
+      const rows = database.$client
+        .prepare('SELECT listing_id, deal FROM hits ORDER BY listing_id')
+        .all() as Array<{ listing_id: string; deal: string | null }>;
+      // BOTH listings persisted with the discount context in the same insert…
+      expect(rows.map((row) => row.listing_id)).toEqual(['deal-1', 'quiet-1']);
+      expect(rows.every((row) => row.deal !== null && row.deal.includes('40'))).toBe(true);
+      // …but only the sub-cutoff one published an alert, as a `deal`, never a bare hit.
+      expect(published).toContain('deal');
+      expect(published).not.toContain('hit');
+      expect(published.filter((type) => type === 'deal')).toHaveLength(1);
+    } finally {
+      manager.onApplicationShutdown();
     }
   });
 });

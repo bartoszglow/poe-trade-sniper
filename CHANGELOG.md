@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Deal-watch (server core, plan 41)**: flip any search into deal mode — the app
+  computes a price-fixer-resistant market baseline for the item (median of the
+  cheapest listings after dropping decoys, all prices normalized to exalted),
+  creates its own price-capped search on the trade site (self-generated id,
+  auto-updated in place as the market moves — the row's "open on trade site"
+  always shows the current capped view), and raises distinct deal alerts with the
+  computed discount when a listing undercuts the baseline by your threshold
+  (percent, or an absolute amount in exalted/divine). Baseline history is
+  recorded per watch for price trends. Operator UI controls arrive in the next
+  phase; the API and detection pipeline are fully live.
+
 - **About & Support view** (new nav item): who makes the tool, a calm "support development"
   section with donation buttons, and non-monetary ways to help — plus a GGG fan-tool
   disclaimer. Links live in one config; buttons appear as they're filled in.

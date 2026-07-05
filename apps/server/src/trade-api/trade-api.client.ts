@@ -386,6 +386,39 @@ export class TradeApiClient {
     return { listings, total: searchPayload.total ?? listings.length, rateLimited: false };
   }
 
+  /**
+   * Create (or re-address) a trade-site search from a self-built query — the
+   * deal-watch derive step (#41). The POST response carries a content-addressed
+   * search id: the identical query always maps to the same id, a changed query
+   * mints a new one (api-notes 2026-07-05). 429 → `rateLimited: true` so the
+   * caller re-queues instead of throwing (the governor has already paused).
+   */
+  async createSearch(
+    realm: string,
+    league: string,
+    body: { query: unknown; sort: Record<string, 'asc' | 'desc'> },
+    correlationId: string,
+  ): Promise<{ id: string | null; total: number; rateLimited: boolean }> {
+    const url = `${this.config.POE_BASE_URL}/api/trade2/search/${realm}/${encodeURIComponent(league)}`;
+    const response = await this.request(
+      POLICY_SEARCH,
+      0,
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      correlationId,
+    );
+    if (response.status === 429) return { id: null, total: 0, rateLimited: true };
+    if (!response.ok) {
+      throw new TradeApiError(response.status, `create search: HTTP ${response.status}`);
+    }
+    const payload = (await response.json()) as { id?: string; result?: string[]; total?: number };
+    return { id: payload.id ?? null, total: payload.total ?? 0, rateLimited: false };
+  }
+
   /** Login probe: /my-account answers 200 only for a real logged-in session. */
   async probeMyAccount(correlationId: string): Promise<boolean> {
     const response = await this.request(

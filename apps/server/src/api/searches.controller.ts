@@ -1,12 +1,26 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { z } from 'zod';
 import {
   PURCHASE_MODES,
+  type DealBaselineHistoryEntry,
   type Hit,
   type SearchPreview,
   type SearchRuntimeInfo,
   type SearchesView,
 } from '@poe-sniper/shared';
+import { DealWatchService } from '../deal-watch/deal-watch.service.js';
 import { SearchManager } from '../search/search-manager.js';
 import { parseOrBadRequest } from './request-validation.js';
 
@@ -22,6 +36,13 @@ const addSearchSchema = z.object({
   purchaseMode: purchaseModeSchema.nullable().optional(),
 });
 
+/** Deal-mode config (plan 41): set to enable/edit, null to disable + restore. */
+const dealWatchConfigSchema = z.object({
+  mode: z.enum(['percent', 'absolute']),
+  thresholdValue: z.number().positive(),
+  unit: z.enum(['exalted', 'divine']).default('exalted'),
+});
+
 const updateSearchSchema = z
   .object({
     label: z.string().min(1).max(80).optional(),
@@ -33,6 +54,7 @@ const updateSearchSchema = z
     enabled: z.boolean().optional(),
     /** Archive / restore (#35). */
     archived: z.boolean().optional(),
+    dealWatch: z.union([dealWatchConfigSchema, z.null()]).optional(),
   })
   .refine(
     (body) =>
@@ -42,9 +64,14 @@ const updateSearchSchema = z
       body.autoBuy !== undefined ||
       body.purchaseMode !== undefined ||
       body.enabled !== undefined ||
-      body.archived !== undefined,
+      body.archived !== undefined ||
+      body.dealWatch !== undefined,
     { message: 'nothing to update' },
   );
+
+const dealHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
 
 const previewSearchSchema = z.object({
   input: z.string().min(1),
@@ -76,7 +103,10 @@ const listHitsSchema = z.object({
 
 @Controller()
 export class SearchesController {
-  constructor(@Inject(SearchManager) private readonly searchManager: SearchManager) {}
+  constructor(
+    @Inject(SearchManager) private readonly searchManager: SearchManager,
+    @Inject(DealWatchService) private readonly dealWatch: DealWatchService,
+  ) {}
 
   @Get('searches')
   list(): SearchesView {
@@ -125,17 +155,72 @@ export class SearchesController {
   async update(@Param('id') searchId: string, @Body() body: unknown): Promise<SearchRuntimeInfo> {
     const payload = parseOrBadRequest(updateSearchSchema, body);
     // A search-id change re-resolves the new query (async) — keeps history + settings.
+    // A combined {input, dealWatch} patch applies BOTH: the re-point first, then
+    // the deal config against the NEW id (review F28).
     if (payload.input !== undefined) {
-      return this.searchManager.editSearch(searchId, payload.input, { label: payload.label });
+      const edited = await this.searchManager.editSearch(searchId, payload.input, {
+        label: payload.label,
+      });
+      if (payload.dealWatch === undefined) return edited;
+      return this.dealWatch.applyConfig(edited.id, payload.dealWatch);
     }
-    return this.searchManager.update(searchId, {
-      label: payload.label,
-      autoTravel: payload.autoTravel,
-      autoBuy: payload.autoBuy,
-      purchaseMode: payload.purchaseMode as SearchRuntimeInfo['purchaseMode'],
-      enabled: payload.enabled,
-      archived: payload.archived,
-    });
+    const hasPlainUpdate =
+      payload.label !== undefined ||
+      payload.autoTravel !== undefined ||
+      payload.autoBuy !== undefined ||
+      payload.purchaseMode !== undefined ||
+      payload.enabled !== undefined ||
+      payload.archived !== undefined;
+    let info: SearchRuntimeInfo | null = null;
+    if (hasPlainUpdate) {
+      info = this.searchManager.update(searchId, {
+        label: payload.label,
+        autoTravel: payload.autoTravel,
+        autoBuy: payload.autoBuy,
+        purchaseMode: payload.purchaseMode as SearchRuntimeInfo['purchaseMode'],
+        enabled: payload.enabled,
+        archived: payload.archived,
+      });
+    }
+    // Deal-mode changes go through the deal-watch orchestrator (plan 41): it
+    // owns the enable/edit/disable transforms and their GGG traffic. The deal
+    // part runs AFTER the plain update so a combined PATCH sees final flags.
+    if (payload.dealWatch !== undefined) {
+      info = await this.dealWatch.applyConfig(searchId, payload.dealWatch);
+    }
+    if (info === null) {
+      // Unreachable: the schema refine() rejects an empty patch.
+      throw new HttpException('nothing to update', HttpStatus.BAD_REQUEST);
+    }
+    return info;
+  }
+
+  /** Operator-triggered baseline re-check (cooldown-gated, joins a running one). */
+  @Post('searches/:id/deal-refresh')
+  async dealRefresh(@Param('id') searchId: string): Promise<SearchRuntimeInfo> {
+    const result = await this.dealWatch.manualRefresh(searchId);
+    if (result.kind === 'cooldown') {
+      throw new HttpException(
+        { code: 'deal-refresh-cooldown', retryInMs: result.retryInMs },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    if (result.kind === 'declined') {
+      // Archived/disabled/paused/guard-tripped rows cannot refresh — an explicit
+      // code, never a silent no-op (review F22).
+      throw new HttpException({ code: `deal-refresh-${result.code}` }, HttpStatus.CONFLICT);
+    }
+    return result.info;
+  }
+
+  /** Baseline price history, newest first (plan 41, D-dw-12). */
+  @Get('searches/:id/deal-history')
+  dealHistory(
+    @Param('id') searchId: string,
+    @Query() query: Record<string, string>,
+  ): DealBaselineHistoryEntry[] {
+    const { limit } = parseOrBadRequest(dealHistoryQuerySchema, query);
+    return this.dealWatch.history(searchId, limit);
   }
 
   @Delete('searches/:id')

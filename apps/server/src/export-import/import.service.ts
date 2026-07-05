@@ -1,7 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { PURCHASE_MODES, SEARCH_EXPORT_VERSION } from '@poe-sniper/shared';
-import type { ImportConflictMode, ImportResult, ManagedSearch } from '@poe-sniper/shared';
+import type {
+  DealWatchState,
+  ImportConflictMode,
+  ImportResult,
+  ManagedSearch,
+} from '@poe-sniper/shared';
 import { SearchManager } from '../search/search-manager.js';
 
 /**
@@ -11,6 +17,32 @@ import { SearchManager } from '../search/search-manager.js';
  * corrupts the live query. `.strict()` also rejects extra keys, so no credential can be
  * smuggled in (a search carries none anyway).
  */
+/**
+ * A deal watch as it appears in a v4 file: the CONFIG is contract-validated;
+ * runtime fields are tolerated on read but ALWAYS discarded — an import lands
+ * as a fresh `pending-derive` and re-derives on this machine (D-dw-10).
+ */
+const dealWatchEntrySchema = z
+  .object({
+    /** Machine-local identity — tolerated on read, ALWAYS re-minted on import
+     *  (review F8: reusing it collides with a live watch's history/snapshots). */
+    watchId: z.string().optional(),
+    mode: z.enum(['percent', 'absolute']),
+    thresholdValue: z.number().positive(),
+    unit: z.enum(['exalted', 'divine']),
+    definition: z.record(z.string(), z.unknown()),
+    originalSearchId: z.string().min(1),
+    originalPriceFilter: z.unknown().nullable(),
+    /** Runtime state — accepted from hand-edited files, never imported. */
+    baseline: z.unknown().optional(),
+    capBaseline: z.unknown().optional(),
+    capExalted: z.unknown().optional(),
+    derivedCreatedAt: z.unknown().optional(),
+    status: z.unknown().optional(),
+    nextRefreshAt: z.unknown().optional(),
+  })
+  .strict();
+
 const searchEntrySchema = z
   .object({
     id: z.string().min(1),
@@ -27,6 +59,8 @@ const searchEntrySchema = z
     roomId: z.string().min(1).nullable().optional(),
     /** Archive time (v3, #35); absent in older exports. */
     archivedAt: z.string().min(1).nullable().optional(),
+    /** Deal-watch config (v4, plan 41); absent in older exports. */
+    dealWatch: dealWatchEntrySchema.nullable().optional(),
   })
   .strict();
 
@@ -50,6 +84,29 @@ const envelopeSchema = z
   })
   .strict();
 
+/** Config in, fresh runtime out: an imported watch always starts pending-derive. */
+function rebuildDealWatch(
+  entry: z.infer<typeof dealWatchEntrySchema> | null,
+): DealWatchState | null {
+  if (entry === null) return null;
+  return {
+    // Fresh identity per import (review F8) — never the file's.
+    watchId: randomUUID(),
+    mode: entry.mode,
+    thresholdValue: entry.thresholdValue,
+    unit: entry.unit,
+    definition: entry.definition,
+    originalPriceFilter: entry.originalPriceFilter ?? null,
+    originalSearchId: entry.originalSearchId,
+    baseline: null,
+    capBaseline: null,
+    capExalted: null,
+    derivedCreatedAt: null,
+    status: 'pending-derive',
+    nextRefreshAt: null,
+  };
+}
+
 /** Validates an uploaded export envelope, then restores it via the SearchManager. */
 @Injectable()
 export class ImportService {
@@ -72,6 +129,7 @@ export class ImportService {
       ...entry,
       roomId: entry.roomId ?? null,
       archivedAt: entry.archivedAt ?? null,
+      dealWatch: rebuildDealWatch(entry.dealWatch ?? null),
     })) as unknown as ManagedSearch[];
     const exportedRooms = (parsed.data.rooms ?? []).map((room) => ({
       id: room.id,

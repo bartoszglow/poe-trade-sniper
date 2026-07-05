@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { desc } from 'drizzle-orm';
 import {
   SEARCH_EXPORT_VERSION,
+  type DealHitInfo,
   type ItemDetail,
   type ListingPrice,
   type SearchExportEnvelope,
@@ -23,6 +24,7 @@ const HIT_COLUMNS = [
   'itemLevel',
   'corrupted',
   'mods',
+  'deal_discount_percent',
   'detectedAt',
 ] as const;
 
@@ -43,6 +45,12 @@ const ACTIVITY_COLUMNS = [
 
 function priceText(price: ListingPrice | null): string {
   return price ? `${price.amount} ${price.currency}` : '';
+}
+
+function dealDiscountText(deal: DealHitInfo | null): string {
+  return deal?.discountPercent === null || deal?.discountPercent === undefined
+    ? ''
+    : deal.discountPercent.toFixed(1);
 }
 
 function modsText(item: ItemDetail | null): string {
@@ -90,6 +98,7 @@ export class ExportService {
           itemLevel: item?.itemLevel ?? '',
           corrupted: item?.corrupted ? 'yes' : '',
           mods: modsText(item),
+          deal_discount_percent: dealDiscountText(row.deal as DealHitInfo | null),
           detectedAt: row.detectedAt,
         };
       }),

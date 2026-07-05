@@ -146,7 +146,9 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   private maybeAutoTravel(event: DomainEvent): void {
-    if (event.type !== 'hit') return;
+    // Deal alerts (plan 41) gate exactly like plain hits; the `*-updated`
+    // re-serve twins never trigger actions (offer-registry contract).
+    if (event.type !== 'hit' && event.type !== 'deal') return;
     const { listing } = event;
     if (!listing.hideoutToken) return;
     if (!this.searchManager.isAutoTravelEnabled(listing.searchId)) return;

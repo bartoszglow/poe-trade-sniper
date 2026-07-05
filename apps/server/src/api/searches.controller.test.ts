@@ -1,0 +1,89 @@
+import { HttpException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
+import type { SearchRuntimeInfo } from '@poe-sniper/shared';
+import type { DealWatchService } from '../deal-watch/deal-watch.service.js';
+import type { SearchManager } from '../search/search-manager.js';
+import { SearchesController } from './searches.controller.js';
+
+function runtimeInfo(id: string): SearchRuntimeInfo {
+  return {
+    id,
+    realm: 'poe2',
+    league: 'Standard',
+    label: 'row',
+    autoTravel: false,
+    autoBuy: false,
+    enabled: true,
+    purchaseMode: null,
+    filters: {},
+    addedAt: '2026-07-05T00:00:00Z',
+    roomId: null,
+    archivedAt: null,
+    dealWatch: null,
+    engine: null,
+    status: 'active',
+    statusDetail: null,
+    hitCount: 0,
+    lastHitAt: null,
+  };
+}
+
+function makeController() {
+  const searchManager = {
+    editSearch: vi.fn().mockResolvedValue(runtimeInfo('NewId9999')),
+    update: vi.fn().mockReturnValue(runtimeInfo('same1234')),
+  } as unknown as SearchManager;
+  const dealWatch = {
+    applyConfig: vi.fn().mockResolvedValue(runtimeInfo('NewId9999')),
+    manualRefresh: vi.fn(),
+  } as unknown as DealWatchService;
+  return { controller: new SearchesController(searchManager, dealWatch), searchManager, dealWatch };
+}
+
+describe('SearchesController — deal-watch routes', () => {
+  it('a combined PATCH {input, dealWatch} applies BOTH — deal config against the NEW id (F28)', async () => {
+    const { controller, searchManager, dealWatch } = makeController();
+    await controller.update('old12345', {
+      input: 'NewId9999',
+      dealWatch: { mode: 'percent', thresholdValue: 30 },
+    });
+    expect(searchManager.editSearch).toHaveBeenCalledWith('old12345', 'NewId9999', {
+      label: undefined,
+    });
+    // The deal config lands on the RE-POINTED id, not the stale one.
+    expect(dealWatch.applyConfig).toHaveBeenCalledWith('NewId9999', {
+      mode: 'percent',
+      thresholdValue: 30,
+      unit: 'exalted', // schema default (D-dw-11)
+    });
+  });
+
+  it('an input-only PATCH never touches the deal service', async () => {
+    const { controller, dealWatch } = makeController();
+    await controller.update('old12345', { input: 'NewId9999' });
+    expect(dealWatch.applyConfig).not.toHaveBeenCalled();
+  });
+
+  it('deal-refresh maps cooldown to 429 and declined states to 409 with codes (F22)', async () => {
+    const { controller, dealWatch } = makeController();
+    (dealWatch.manualRefresh as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      kind: 'cooldown',
+      retryInMs: 41_000,
+    });
+    await expect(controller.dealRefresh('abc12345')).rejects.toMatchObject({
+      status: 429,
+      response: { code: 'deal-refresh-cooldown', retryInMs: 41_000 },
+    });
+
+    (dealWatch.manualRefresh as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      kind: 'declined',
+      code: 'paused',
+    });
+    const declined = controller.dealRefresh('abc12345');
+    await expect(declined).rejects.toBeInstanceOf(HttpException);
+    await expect(declined).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'deal-refresh-paused' },
+    });
+  });
+});

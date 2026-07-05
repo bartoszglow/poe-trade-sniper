@@ -18,6 +18,7 @@ const fixtureSearch: ManagedSearch = {
   addedAt: '2026-06-25T00:00:00.000Z',
   roomId: 'room-1',
   archivedAt: null,
+  dealWatch: null,
 };
 
 const fixtureRoom = { id: 'room-1', name: 'Helmets', collapsed: false };
@@ -37,7 +38,7 @@ describe('ExportService', () => {
     try {
       const envelope = service.exportSearchesEnvelope();
       expect(envelope.kind).toBe('poe-sniper-searches');
-      expect(envelope.version).toBe(3);
+      expect(envelope.version).toBe(4);
       expect(typeof envelope.exportedAt).toBe('string');
       expect(envelope.searches).toEqual([fixtureSearch]);
       expect(envelope.rooms).toEqual([fixtureRoom]);

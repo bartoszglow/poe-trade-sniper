@@ -152,6 +152,45 @@ describe('TravelService', () => {
     tokenless.service.onApplicationShutdown();
   });
 
+  it('auto-travels a deal alert with identical gating; deal-updated never triggers (plan 41)', async () => {
+    const dealInfo = {
+      baselineExalted: 1000,
+      discountPercent: 32,
+      discountExalted: 320,
+      baselineStale: false,
+    };
+    const dealOptedIn = createService({ autoTravel: true });
+    dealOptedIn.realtimeBus.publish({
+      type: 'deal',
+      listing: listingWithToken('jwt-deal'),
+      deal: dealInfo,
+    });
+    await flushQueue();
+    expect(dealOptedIn.tradeApi.travel).toHaveBeenCalledTimes(1);
+    expect(dealOptedIn.travelEvents[0]?.source).toBe('auto');
+    dealOptedIn.service.onApplicationShutdown();
+
+    const dealOptedOut = createService({ autoTravel: false });
+    dealOptedOut.realtimeBus.publish({
+      type: 'deal',
+      listing: listingWithToken('jwt-deal'),
+      deal: dealInfo,
+    });
+    await flushQueue();
+    expect(dealOptedOut.tradeApi.travel).not.toHaveBeenCalled();
+    dealOptedOut.service.onApplicationShutdown();
+
+    const reServe = createService({ autoTravel: true });
+    reServe.realtimeBus.publish({
+      type: 'deal-updated',
+      listing: listingWithToken('jwt-deal'),
+      deal: dealInfo,
+    });
+    await flushQueue();
+    expect(reServe.tradeApi.travel).not.toHaveBeenCalled();
+    reServe.service.onApplicationShutdown();
+  });
+
   it('focuses the game as travel starts — auto AND manual (snaps to the game on press)', async () => {
     const auto = createService({ autoTravel: true });
     auto.realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-x') });

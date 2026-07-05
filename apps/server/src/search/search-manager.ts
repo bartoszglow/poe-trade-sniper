@@ -11,9 +11,11 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
 import type {
+  DealWatchState,
   EngineKind,
   EngineStatus,
   ExportedRoom,
+  ExportedSearchEntry,
   Hit,
   ImportConflictMode,
   ImportResult,
@@ -46,7 +48,9 @@ import {
   type TradeSearchRef,
 } from '../trade-api/trade-api.client.js';
 import { offerKey } from '@poe-sniper/shared';
+import { parseDealWatchState } from './deal-watch-state.schema.js';
 import { ENGINE_REGISTRY, type EngineFactory } from './engine-registry.js';
+import { HitDecoratorRegistry } from './hit-decorator.js';
 import { LiveOfferRegistry } from './live-offer-registry.js';
 import { parseSearchInput, queryStatusOption } from './search-input.js';
 import { buildLayout, normalizeLayout, type LayoutSearchState } from './search-layout.js';
@@ -155,6 +159,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private everReceivedHit = false;
   /** Global pause: every enabled search halts as PAUSED until resumed. */
   private detectionPaused = false;
+  /** Deal-row deletion callback (see setDealRowCleanup). */
+  private dealRowCleanup: ((watchId: string) => void) | null = null;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -165,6 +171,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(OutboundGuard) private readonly guard: OutboundGuard,
     @Inject(PermissionGateService) private readonly gate: PermissionGateService,
     @Inject(LiveOfferRegistry) private readonly offerRegistry: LiveOfferRegistry,
+    @Inject(HitDecoratorRegistry) private readonly hitDecorators: HitDecoratorRegistry,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -267,6 +274,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       addedAt: new Date().toISOString(),
       roomId: null,
       archivedAt: null,
+      dealWatch: null,
     };
     this.database
       .insert(searches)
@@ -391,6 +399,13 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // Same trade search — only the label can change here; no GGG call/restart.
       return this.update(searchId, { label: options.label });
     }
+    if ((watcher.row.dealWatch ?? null) !== null) {
+      // The id/query of a deal-mode search is system-managed (plan 41, D-dw-7):
+      // a manual re-point would fight the auto re-derive and lose silently.
+      throw new ConflictException(
+        `search ${searchId} is managed by deal-watch — disable deal mode to edit its id`,
+      );
+    }
     if (this.watchers.has(ref.searchId)) {
       throw new ConflictException(`search ${ref.searchId} is already watched`);
     }
@@ -413,29 +428,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       label: options.label ?? watcher.row.label,
       filters: resolvedQuery,
     };
-    this.database.transaction((tx) => {
-      tx.insert(searches)
-        .values({ ...newRow, filters: resolvedQuery })
-        .run();
-      tx.update(hits).set({ searchId: newRow.id }).where(eq(hits.searchId, searchId)).run();
-      tx.delete(searches).where(eq(searches.id, searchId)).run();
-    });
-
-    this.stopEngines(watcher);
-    const newWatcher = this.createWatcher(newRow);
+    const newWatcher = this.swapWatcherRow(searchId, newRow);
     newWatcher.correlationId = correlationId;
-    newWatcher.hitCount = watcher.hitCount;
-    newWatcher.lastHitAt = watcher.lastHitAt;
-    // Re-point IN PLACE: the watchers Map's insertion order IS the displayed list
-    // order (layoutSearchStates/list iterate its values) and the poll rotation, so a
-    // naive delete + set would drop the edited search to the BOTTOM of its room /
-    // the top level. Rebuild the Map substituting the new id at the old slot so
-    // editing a search's query never reorders it (its DB position is carried on newRow).
-    const reordered = [...this.watchers.entries()].map((entry) =>
-      entry[0] === searchId ? ([newRow.id, newWatcher] as [string, Watcher]) : entry,
-    );
-    this.watchers.clear();
-    for (const [key, value] of reordered) this.watchers.set(key, value);
     if (newRow.archivedAt !== null) {
       // Re-pointed while archived: stays archived (createWatcher marked it).
     } else if (this.detectionPaused) {
@@ -454,7 +448,147 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.stopEngines(watcher);
     this.watchers.delete(searchId);
     this.database.delete(searches).where(eq(searches.id, searchId)).run();
+    const removedWatchId = watcher.row.dealWatch?.watchId;
+    if (removedWatchId !== undefined) this.dealRowCleanup?.(removedWatchId);
     this.publishSearchesChanged();
+  }
+
+  /**
+   * The id-swap transaction shared by editSearch and the deal seam (D-dw-7):
+   * insert the new row, re-point hits, delete the old row (declared FK cascade
+   * never fires — the pragma is OFF), then swap the watcher IN PLACE. The
+   * watchers Map's insertion order IS the displayed list order and the poll
+   * rotation, so a naive delete + set would drop the search to the bottom of
+   * its scope — the Map is rebuilt substituting the new id at the old slot.
+   * Live hit counters carry over. Engines are STOPPED here; the caller owns
+   * validation and restart semantics.
+   */
+  private swapWatcherRow(oldId: string, newRow: ManagedSearch): Watcher {
+    const watcher = this.requireWatcher(oldId);
+    this.database.transaction((tx) => {
+      tx.insert(searches)
+        .values({ ...newRow, filters: newRow.filters })
+        .run();
+      tx.update(hits).set({ searchId: newRow.id }).where(eq(hits.searchId, oldId)).run();
+      tx.delete(searches).where(eq(searches.id, oldId)).run();
+    });
+    this.stopEngines(watcher);
+    const newWatcher = this.createWatcher(newRow);
+    newWatcher.hitCount = watcher.hitCount;
+    newWatcher.lastHitAt = watcher.lastHitAt;
+    const reordered = [...this.watchers.entries()].map((entry) =>
+      entry[0] === oldId ? ([newRow.id, newWatcher] as [string, Watcher]) : entry,
+    );
+    this.watchers.clear();
+    for (const [key, value] of reordered) this.watchers.set(key, value);
+    return newWatcher;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Deal-watch seam (plan 41, D-dw-7) — consumed ONLY by the DealWatchService.
+  // Deal mode transforms the operator's own search in place: the service owns
+  // baselines/caps/queries, this seam owns row/watcher/DB consistency.
+  // ---------------------------------------------------------------------------
+
+  /** Narrow read for the deal decorator/service — null when unknown. */
+  getRow(searchId: string): ManagedSearch | null {
+    return this.watchers.get(searchId)?.row ?? null;
+  }
+
+  /** Rows currently in deal mode (any status), in list order. */
+  dealModeRows(): ManagedSearch[] {
+    return [...this.watchers.values()]
+      .map((watcher) => watcher.row)
+      .filter((row) => (row.dealWatch ?? null) !== null);
+  }
+
+  /** Whether a watcher's live ws is currently connected (deal expiry heuristic). */
+  isWsConnected(searchId: string): boolean {
+    return this.watchers.get(searchId)?.wsConnected ?? false;
+  }
+
+  isDetectionGloballyPaused(): boolean {
+    return this.detectionPaused;
+  }
+
+  /**
+   * Narrow cleanup seam (plan 41, review F2): the deal-watch module registers a
+   * callback invoked with the watchId whenever a deal-mode row is deleted here
+   * (operator DELETE, import replace-mode) so its runtime maps + baseline
+   * history never orphan until the boot sweep. A callback slot, not an event —
+   * exactly one consumer owns deal cleanup.
+   */
+  setDealRowCleanup(cleanup: (watchId: string) => void): void {
+    this.dealRowCleanup = cleanup;
+  }
+
+  /**
+   * Persist a deal-state change that does NOT alter the watched query/id
+   * (baseline refresh, status transition, threshold edit before its re-derive).
+   */
+  updateDealState(searchId: string, dealWatch: DealWatchState | null): SearchRuntimeInfo {
+    const watcher = this.requireWatcher(searchId);
+    watcher.row = { ...watcher.row, dealWatch };
+    this.database.update(searches).set({ dealWatch }).where(eq(searches.id, searchId)).run();
+    this.publishSearchesChanged();
+    return this.toRuntimeInfo(watcher);
+  }
+
+  /**
+   * Swap a deal-mode search onto a new GGG id + watched query (derive /
+   * re-derive / disable-restore):
+   * - `next.id` === current id → filters/state update only (ids are
+   *   content-addressed — an unchanged query is a no-op re-derive,
+   *   api-notes 2026-07-05); engines restart only if the query changed;
+   * - `next.id` collides with ANOTHER watched row → ConflictException (the
+   *   caller maps it to the `derive-conflict` status);
+   * - otherwise the shared swap transaction runs and engines restart via the
+   *   pending/stagger drip — NEVER an immediate start (D-dw-8: deal churn must
+   *   ride the guard-safe drip; a burst of immediate ws connects can trip the
+   *   latched OutboundGuard).
+   */
+  swapDealSearch(
+    currentId: string,
+    next: { id: string; filters: unknown; dealWatch: DealWatchState | null },
+  ): SearchRuntimeInfo {
+    const watcher = this.requireWatcher(currentId);
+    if (next.id === currentId) {
+      const queryChanged = JSON.stringify(watcher.row.filters) !== JSON.stringify(next.filters);
+      watcher.row = { ...watcher.row, filters: next.filters, dealWatch: next.dealWatch };
+      this.database
+        .update(searches)
+        .set({ filters: next.filters, dealWatch: next.dealWatch })
+        .where(eq(searches.id, currentId))
+        .run();
+      if (queryChanged) this.restartViaDrip(watcher);
+      this.publishSearchesChanged();
+      return this.toRuntimeInfo(watcher);
+    }
+    if (this.watchers.has(next.id)) {
+      throw new ConflictException(`search ${next.id} is already watched`);
+    }
+    const newRow: ManagedSearch = {
+      ...watcher.row,
+      id: next.id,
+      filters: next.filters,
+      dealWatch: next.dealWatch,
+    };
+    const newWatcher = this.swapWatcherRow(currentId, newRow);
+    this.restartViaDrip(newWatcher);
+    this.publishSearchesChanged();
+    return this.toRuntimeInfo(newWatcher);
+  }
+
+  /** Stop engines and hand the watcher to the stagger drip (guard-safe restart). */
+  private restartViaDrip(watcher: Watcher): void {
+    this.stopEngines(watcher);
+    if (watcher.row.archivedAt !== null || !watcher.row.enabled) return;
+    if (this.detectionPaused) {
+      this.publishEngineStatus(watcher, 'paused', 'globally paused');
+      return;
+    }
+    this.publishEngineStatus(watcher, 'pending', null);
+    this.startPendingWatchers();
   }
 
   /**
@@ -647,8 +781,29 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /** All configured searches as a round-trippable list (live rows; hold no credentials). */
-  exportSearches(): ManagedSearch[] {
-    return [...this.watchers.values()].map((watcher) => ({ ...watcher.row }));
+  exportSearches(): ExportedSearchEntry[] {
+    // Deal watches export CONFIG only (D-dw-10): baseline/cap/derived-id are
+    // machine-local runtime state, and watchId is a machine-local identity
+    // (history rows key on it) — the import mints a fresh one, so re-importing
+    // a file can never collide with a live watch (review F8). The row id may be
+    // a derived id; the config keeps the operator's original for restore.
+    return [...this.watchers.values()].map((watcher) => {
+      const dealWatch = watcher.row.dealWatch ?? null;
+      return {
+        ...watcher.row,
+        dealWatch:
+          dealWatch === null
+            ? null
+            : {
+                mode: dealWatch.mode,
+                thresholdValue: dealWatch.thresholdValue,
+                unit: dealWatch.unit,
+                definition: dealWatch.definition,
+                originalSearchId: dealWatch.originalSearchId,
+                originalPriceFilter: dealWatch.originalPriceFilter,
+              },
+      };
+    });
   }
 
   /** Rooms as exported alongside the searches (ids correlate memberships in the file). */
@@ -714,6 +869,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
           addedAt: entry.addedAt,
           roomId: entry.roomId !== null ? (roomIdByExportedId.get(entry.roomId) ?? null) : null,
           archivedAt: entry.archivedAt ?? null,
+          // Import always lands as pending-derive (ImportService rebuilt it) —
+          // the drift loop derives fresh on THIS machine (D-dw-10).
+          dealWatch: entry.dealWatch ?? null,
         };
         this.database
           .insert(searches)
@@ -799,6 +957,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       seller: row.seller === '' ? null : row.seller,
       hideoutToken: null, // expired by read time (~300 s TTL) — never persisted
       item: row.item as Hit['item'],
+      deal: (row.deal as Hit['deal']) ?? null,
       detectedAt: row.detectedAt,
     }));
   }
@@ -1135,6 +1294,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     // New offers: one transaction (better-sqlite3 is synchronous) → a single commit/fsync
     // per burst, and no partial DB state if a row throws mid-loop (PERF-4).
     if (fresh.length > 0) {
+      // Decorations are computed BEFORE the insert so their columns (the deal
+      // JSON) land in the same transaction as the hit row (plan 41, D-dw-5).
+      const decorations = new Map(
+        fresh.map((listing) => [listing.listingId, this.hitDecorators.decorate(listing)]),
+      );
       this.database.transaction((tx) => {
         for (const listing of fresh) {
           tx.insert(hits)
@@ -1146,6 +1310,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
               seller: listing.seller ?? '',
               item: listing.item,
               detectedAt: listing.detectedAt,
+              deal: decorations.get(listing.listingId)?.hitColumns?.deal ?? null,
             })
             .run();
         }
@@ -1156,8 +1321,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         watcher.hitCount += 1;
         watcher.lastHitAt = listing.detectedAt;
         this.hitsSincePrune += 1;
-        this.realtimeBus.publish({ type: 'hit', listing });
-        // autoTravel / autoBuy: the Travel + Buy services consume hit/travel events.
+        const decoration = decorations.get(listing.listingId) ?? null;
+        // Suppressed = persisted but silent (deal sub-threshold, D-dw-5).
+        if (decoration?.suppressAlert) continue;
+        this.realtimeBus.publish(decoration ? decoration.event : { type: 'hit', listing });
+        // autoTravel / autoBuy: the Travel + Buy services consume hit/deal/travel events.
       }
       if (this.hitsSincePrune >= PRUNE_EVERY_HITS) {
         this.hitsSincePrune = 0;
@@ -1168,7 +1336,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     // folds it onto the existing entity and moves it to the top. No DB row, no re-action.
     for (const listing of updated) {
       watcher.lastHitAt = listing.detectedAt;
-      this.realtimeBus.publish({ type: 'hit-updated', listing });
+      const decoration = this.hitDecorators.decorate(listing);
+      if (decoration?.suppressAlert) continue;
+      this.realtimeBus.publish(
+        decoration ? decoration.updatedEvent : { type: 'hit-updated', listing },
+      );
     }
   }
 
@@ -1415,7 +1587,18 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // A stale membership (room row gone) self-heals to top-level.
       roomId: row.roomId !== null && this.rooms.has(row.roomId) ? row.roomId : null,
       archivedAt: row.archivedAt,
+      dealWatch: this.readDealWatchColumn(row.id, row.dealWatch),
     };
+  }
+
+  /** Contract-validated deal_watch read (review F11): malformed JSON → ordinary search + warn. */
+  private readDealWatchColumn(searchId: string, value: unknown): DealWatchState | null {
+    if (value === null || value === undefined) return null;
+    const state = parseDealWatchState(value);
+    if (state === null) {
+      this.logger.warn(`search ${searchId}: malformed deal_watch state ignored`);
+    }
+    return state;
   }
 
   private toRef(row: ManagedSearch): TradeSearchRef {
