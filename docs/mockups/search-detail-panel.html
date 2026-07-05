@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mockup — unified search detail panel (plan 42)</title>
+    <style>
+      :root {
+        --surface-0: #0b0a08;
+        --surface-1: #141210;
+        --surface-2: #1d1a16;
+        --surface-3: #262219;
+        --edge: #2e2a22;
+        --edge-strong: #443d2f;
+        --ink: #d6cfc2;
+        --ink-muted: #8d8576;
+        --ink-faint: #5d574c;
+        --gold: #c9a85c;
+        --gold-bright: #e3c87e;
+        --ok: #6fae6f;
+        --warn: #c9974b;
+        --danger: #c25b4e;
+        --info: #6f9ec2;
+        --gem: #1ba29b;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        background: #060505;
+        color: var(--ink);
+        font: 14px/1.5 -apple-system, 'Segoe UI', Roboto, sans-serif;
+        padding: 24px clamp(8px, 3vw, 40px) 80px;
+      }
+      h1 { font-size: 16px; color: var(--gold); margin-bottom: 4px; }
+      .note { color: var(--ink-muted); font-size: 12px; max-width: 860px; margin-bottom: 20px; }
+      .note code { color: var(--gold-bright); }
+
+      /* ---------- search row (header unchanged from today) ---------- */
+      .search-list { display: flex; flex-direction: column; gap: 8px; max-width: 1080px; }
+      .row {
+        background: var(--surface-1);
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+      }
+      .row.lit { border-color: color-mix(in srgb, var(--gold) 60%, transparent); }
+      .row-head {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+        padding: 10px 14px;
+      }
+      .grip { color: var(--ink-faint); cursor: grab; font-size: 15px; }
+      .label { font-weight: 600; }
+      .icon-btn {
+        background: none; border: none; color: var(--ink-faint); cursor: pointer;
+        font-size: 14px; padding: 2px 4px; border-radius: 6px;
+      }
+      .icon-btn:hover { color: var(--gold); }
+      .badge {
+        font-size: 10.5px; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px;
+        border: 1px solid var(--edge-strong); color: var(--ink-muted); white-space: nowrap;
+      }
+      .badge.gold { color: var(--gold-bright); border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+      .badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: color-mix(in srgb, var(--ok) 8%, transparent); }
+      .dot { display: inline-block; width: 6px; height: 6px; border-radius: 999px; margin-right: 6px; }
+      .dot.ok { background: var(--ok); }
+      .meta { color: var(--ink-faint); font-size: 12px; }
+      .spacer { flex: 1; }
+      .toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-muted); letter-spacing: 0.05em; }
+      .switch { width: 26px; height: 15px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--edge-strong); position: relative; }
+      .switch.on { background: color-mix(in srgb, var(--gold) 45%, var(--surface-3)); }
+      .switch::after { content: ''; position: absolute; top: 1px; left: 2px; width: 11px; height: 11px; border-radius: 999px; background: var(--ink); }
+      .switch.on::after { left: auto; right: 2px; background: var(--gold-bright); }
+      .chev { transition: transform 0.15s; display: inline-block; }
+      .row.open .chev { transform: rotate(90deg); }
+
+      /* ---------- expandable detail panel ---------- */
+      .panel { display: none; border-top: 1px solid var(--edge); padding: 14px; }
+      .row.open .panel { display: block; }
+      .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .card {
+        background: var(--surface-2); border: 1px solid var(--edge); border-radius: 8px;
+        padding: 12px 14px;
+      }
+      .card.full { grid-column: 1 / -1; }
+      .card.tbc { border-style: dashed; opacity: 0.85; }
+      .card h3 {
+        font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--ink-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+      }
+      .card h3 .tag { font-size: 10px; color: var(--ink-faint); border: 1px dashed var(--edge-strong); border-radius: 999px; padding: 1px 8px; text-transform: none; letter-spacing: 0; }
+
+      /* item criteria (as today) */
+      .crit { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 12.5px; }
+      .crit div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dotted var(--edge); padding: 3px 0; }
+      .crit span:first-child { color: var(--ink-muted); }
+      .crit .gem { color: var(--gem); }
+
+      /* deal section */
+      .deal-status { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12.5px; }
+      .deal-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+      .field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink-muted); }
+      .field select, .field input {
+        background: var(--surface-1); color: var(--ink); border: 1px solid var(--edge-strong);
+        border-radius: 6px; padding: 5px 8px; font-size: 12.5px; width: 110px;
+      }
+      .field input:focus, .field select:focus { outline: none; border-color: var(--gold); }
+      .cutoff { font-size: 12px; color: var(--ink-muted); }
+      .cutoff b { color: var(--gold-bright); font-weight: 600; }
+      .baseline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface-1); border: 1px solid var(--edge); border-radius: 6px; padding: 8px 10px; }
+      .stat .k { font-size: 10.5px; color: var(--ink-faint); letter-spacing: 0.05em; text-transform: uppercase; }
+      .stat .v { font-size: 15px; color: var(--gold-bright); font-weight: 600; }
+      .stat .v small { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+      .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .btn {
+        background: var(--surface-3); color: var(--ink); border: 1px solid var(--edge-strong);
+        border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+      }
+      .btn:hover { border-color: var(--gold); color: var(--gold-bright); }
+      .btn.primary { background: color-mix(in srgb, var(--gold) 20%, var(--surface-3)); color: var(--gold-bright); }
+      .btn.danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: none; }
+      .hint { font-size: 11px; color: var(--ink-faint); margin-top: 8px; }
+      .empty-deal { color: var(--ink-muted); font-size: 12.5px; margin-bottom: 12px; }
+
+      /* history chart — dataviz: single gold series, thin marks, recessive grid,
+         ringed markers on re-derives, crosshair+tooltip, text in ink tokens */
+      .chart-wrap { position: relative; }
+      .chart-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+      .chart-head .delta { font-size: 12px; color: var(--ok); }
+      .chart-head .range { font-size: 11px; color: var(--ink-faint); }
+      svg.chart { width: 100%; height: 150px; display: block; }
+      .tooltip {
+        position: absolute; pointer-events: none; display: none;
+        background: var(--surface-3); border: 1px solid var(--edge-strong); border-radius: 6px;
+        padding: 5px 9px; font-size: 11.5px; color: var(--ink); white-space: nowrap;
+        transform: translate(-50%, -120%);
+      }
+      .tooltip b { color: var(--gold-bright); }
+      .tooltip .rd { color: var(--warn); }
+      .legend-note { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+      .legend-note .ring { display: inline-block; width: 8px; height: 8px; border-radius: 999px; border: 2px solid var(--warn); background: var(--surface-2); vertical-align: -1px; margin-right: 4px; }
+
+      /* settings (TBC) */
+      .settings-grid { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+      .settings-grid .field input { width: 220px; }
+      .locked { position: relative; }
+      .locked input { color: var(--ink-faint); background: var(--surface-2); }
+      .locked::after { content: '🔒 zarządzane przez deal-watch'; font-size: 10px; color: var(--ink-faint); margin-top: 2px; display: block; }
+
+      /* mobile: stacked, actionable-first */
+      @media (max-width: 760px) {
+        .panel-grid { grid-template-columns: 1fr; }
+        .card.item { order: 3; }
+        .card.deal { order: 1; }
+        .card.history { order: 2; }
+        .card.settings { order: 4; }
+        .row-head { gap: 8px; }
+        .meta { width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Plan 42 — zunifikowany panel searcha (mockup)</h1>
+    <p class="note">
+      Jedna rozwijana sekcja zamiast trzech źródeł prawdy: <code>Przedmiot</code> +
+      <code>Deal price</code> + <code>Historia ceny</code> (+ opcjonalne
+      <code>Ustawienia</code>, przerywana ramka = do potwierdzenia). Chip
+      <code>−15%</code> w nagłówku pozostaje skrótem statusu — klik rozwija panel i
+      przewija do sekcji deal. Desktop: siatka 2-kolumnowa; mobile: kolumna w kolejności
+      deal → historia → przedmiot → ustawienia. Kliknij wiersz, aby zwinąć/rozwinąć;
+      najedź na wykres.
+    </p>
+
+    <div class="search-list">
+      <!-- ============ ROW 1: deal ENABLED, expanded ============ -->
+      <div class="row open" id="row1">
+        <div class="row-head" onclick="toggleRow('row1')">
+          <span class="grip">⋮⋮</span>
+          <button class="icon-btn"><span class="chev">▸</span></button>
+          <span class="label">Twister 21+23%</span>
+          <span class="icon-btn" title="otwórz na trade site">↗</span>
+          <span class="badge ok">ACTIVE</span>
+          <span class="badge gold">WS</span>
+          <span class="badge gold"><span class="dot ok"></span>−15%</span>
+          <span class="meta">k2ZRw9pXt4 · Runes of Aldur · 3 hity · ost. 11:42</span>
+          <span class="spacer"></span>
+          <span class="toggle"><span class="switch on"></span>ACTIVE</span>
+          <span class="toggle"><span class="switch"></span>TRAVEL</span>
+          <span class="toggle"><span class="switch"></span>BUY</span>
+          <span class="icon-btn">🗄</span>
+          <span class="icon-btn" style="color: var(--danger)">✕</span>
+        </div>
+
+        <div class="panel">
+          <div class="panel-grid">
+            <!-- ITEM -->
+            <div class="card item">
+              <h3>Przedmiot</h3>
+              <div class="crit">
+                <div><span>Typ</span><span class="gem">Twister</span></div>
+                <div><span>Status</span><span>Instant buyout</span></div>
+                <div><span>Poziom gemu</span><span>≥ 21</span></div>
+                <div><span>Jakość</span><span>≥ 23%</span></div>
+                <div><span>Sockety</span><span>≥ 5</span></div>
+                <div><span>Liga</span><span>Runes of Aldur</span></div>
+              </div>
+              <p class="hint">Limit ceny z oryginalnego searcha (≤ 20 div) jest zdjęty na czas
+              deal mode i wróci przy wyłączeniu.</p>
+            </div>
+
+            <!-- DEAL -->
+            <div class="card deal">
+              <h3>Deal price <span class="badge ok" style="font-size:10px"><span class="dot ok"></span>aktywny</span></h3>
+              <div class="deal-form">
+                <label class="field">Tryb
+                  <select><option>procentowy</option><option>kwotowy</option></select>
+                </label>
+                <label class="field">Próg
+                  <input value="15" />
+                </label>
+                <label class="field">Jednostka
+                  <select disabled><option>—</option></select>
+                </label>
+                <span class="cutoff">alert, gdy cena ≤ <b>63.6 div</b> <small>(45 421 ex)</small></span>
+              </div>
+              <div class="baseline-grid">
+                <div class="stat"><div class="k">Cena rynkowa</div><div class="v">74.8 div <small>(53 421 ex)</small></div></div>
+                <div class="stat"><div class="k">Najniższa oferta</div><div class="v">71.2 div</div></div>
+                <div class="stat"><div class="k">Próbka</div><div class="v">10 <small>/ 56 ofert</small></div></div>
+                <div class="stat"><div class="k">Odświeżono</div><div class="v" style="color: var(--ink)">14 min <small>temu</small></div></div>
+              </div>
+              <div class="actions">
+                <button class="btn primary">Zapisz próg</button>
+                <button class="btn">Odśwież cenę rynkową</button>
+                <button class="btn danger-ghost">Wyłącz deal mode…</button>
+              </div>
+              <p class="hint">Rynek: wyłącznie instant buyout (D-dw-13). ID searcha aktualizuje
+              się samo przy dryfie &gt;5% — link ↗ zawsze pokazuje aktualne wyszukiwanie.</p>
+            </div>
+
+            <!-- HISTORY -->
+            <div class="card history full">
+              <h3>Historia ceny rynkowej</h3>
+              <div class="chart-wrap">
+                <div class="chart-head">
+                  <span class="delta">▲ +3.4 div w ciągu ostatnich 26 h</span>
+                  <span class="range">26 próbek · co ~1 h · <span class="legend-note"><span class="ring"></span>zmiana limitu (re-derive)</span></span>
+                </div>
+                <svg class="chart" id="chart1" viewBox="0 0 900 150" preserveAspectRatio="none"></svg>
+                <div class="tooltip" id="tip1"></div>
+              </div>
+            </div>
+
+            <!-- SETTINGS (TBC) -->
+            <div class="card settings full tbc">
+              <h3>Ustawienia searcha <span class="tag">do potwierdzenia</span></h3>
+              <div class="settings-grid">
+                <label class="field">Etykieta
+                  <input value="Twister 21+23%" />
+                </label>
+                <label class="field locked">ID / URL wyszukiwania
+                  <input value="k2ZRw9pXt4" disabled />
+                </label>
+                <button class="btn">Zapisz</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ ROW 2: deal DISABLED, expanded (empty-state) ============ -->
+      <div class="row open" id="row2">
+        <div class="row-head" onclick="toggleRow('row2')">
+          <span class="grip">⋮⋮</span>
+          <button class="icon-btn"><span class="chev">▸</span></button>
+          <span class="label">Emerald Jewel 55%</span>
+          <span class="icon-btn" title="otwórz na trade site">↗</span>
+          <span class="badge ok">ACTIVE</span>
+          <span class="badge">POLL</span>
+          <span class="badge">％ DEAL</span>
+          <span class="meta">5nB690rjta · Runes of Aldur · 0 hitów</span>
+          <span class="spacer"></span>
+          <span class="toggle"><span class="switch on"></span>ACTIVE</span>
+          <span class="toggle"><span class="switch"></span>TRAVEL</span>
+          <span class="toggle"><span class="switch"></span>BUY</span>
+          <span class="icon-btn">🗄</span>
+          <span class="icon-btn" style="color: var(--danger)">✕</span>
+        </div>
+
+        <div class="panel">
+          <div class="panel-grid">
+            <div class="card item">
+              <h3>Przedmiot</h3>
+              <div class="crit">
+                <div><span>Typ</span><span class="gem">Emerald Jewel</span></div>
+                <div><span>Status</span><span>Instant buyout</span></div>
+                <div><span>Increased effect</span><span>≥ 55%</span></div>
+                <div><span>Cena</span><span>≤ 80 div</span></div>
+              </div>
+            </div>
+
+            <div class="card deal">
+              <h3>Deal price</h3>
+              <p class="empty-deal">Obserwacja okazji nieaktywna. Ustaw próg, a system sam
+              zbuduje wyszukiwanie z limitem (bez Twojego warunku ceny), policzy cenę rynkową
+              z rynku instant-buyout i będzie ją śledził co godzinę.</p>
+              <div class="deal-form">
+                <label class="field">Tryb
+                  <select><option>procentowy</option><option>kwotowy</option></select>
+                </label>
+                <label class="field">Próg
+                  <input placeholder="np. 30" />
+                </label>
+                <label class="field">Jednostka
+                  <select><option>divine</option><option>exalted</option></select>
+                </label>
+              </div>
+              <div class="actions">
+                <button class="btn primary">Włącz deal mode</button>
+              </div>
+            </div>
+
+            <div class="card history full">
+              <h3>Historia ceny rynkowej</h3>
+              <p class="empty-deal">Historia pojawi się po włączeniu deal mode — jedna próbka
+              na każde odświeżenie ceny rynkowej.</p>
+            </div>
+
+            <div class="card settings full tbc">
+              <h3>Ustawienia searcha <span class="tag">do potwierdzenia</span></h3>
+              <div class="settings-grid">
+                <label class="field">Etykieta
+                  <input value="Emerald Jewel 55%" />
+                </label>
+                <label class="field">ID / URL wyszukiwania
+                  <input value="5nB690rjta" />
+                </label>
+                <button class="btn">Zapisz</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function toggleRow(id) {
+        document.getElementById(id).classList.toggle('open');
+      }
+
+      /* --- price-history chart: single gold series (no legend box needed),
+             2px line, recessive grid, 8px ringed markers on re-derives,
+             crosshair + tooltip (dataviz interaction layer) --- */
+      const samples = [
+        71.1, 71.4, 71.2, 70.9, 71.6, 72.0, 71.8, 72.4, 72.1, 72.9,
+        73.2, 72.8, 73.5, 73.1, 73.9, 74.2, 73.8, 74.5, 74.1, 74.6,
+        74.3, 74.9, 74.4, 75.0, 74.6, 74.8,
+      ].map((v, i) => ({ div: v, rederived: i === 9 || i === 21 }));
+
+      const svg = document.getElementById('chart1');
+      const tip = document.getElementById('tip1');
+      const W = 900, H = 150, PAD = { l: 44, r: 10, t: 10, b: 20 };
+      const lo = Math.min(...samples.map(s => s.div)) - 0.4;
+      const hi = Math.max(...samples.map(s => s.div)) + 0.4;
+      const x = i => PAD.l + (i / (samples.length - 1)) * (W - PAD.l - PAD.r);
+      const y = v => PAD.t + (1 - (v - lo) / (hi - lo)) * (H - PAD.t - PAD.b);
+
+      let g = '';
+      /* recessive grid: 3 horizontal lines + ink-faint y labels */
+      for (const gv of [71, 73, 75]) {
+        g += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(gv)}" y2="${y(gv)}" stroke="var(--edge)" stroke-width="1"/>`;
+        g += `<text x="${PAD.l - 6}" y="${y(gv) + 3}" fill="var(--ink-faint)" font-size="10" text-anchor="end">${gv} div</text>`;
+      }
+      /* area wash 10% + 2px round-cap line */
+      const line = samples.map((s, i) => `${i ? 'L' : 'M'}${x(i)},${y(s.div)}`).join(' ');
+      g += `<path d="${line} L${x(samples.length - 1)},${H - PAD.b} L${x(0)},${H - PAD.b} Z" fill="var(--gold)" opacity="0.09"/>`;
+      g += `<path d="${line}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      /* re-derive markers: >=8px, 2px surface ring (dataviz mark spec) */
+      samples.forEach((s, i) => {
+        if (s.rederived)
+          g += `<circle cx="${x(i)}" cy="${y(s.div)}" r="4.5" fill="var(--warn)" stroke="var(--surface-2)" stroke-width="2"/>`;
+      });
+      /* crosshair */
+      g += `<line id="xh" x1="0" x2="0" y1="${PAD.t}" y2="${H - PAD.b}" stroke="var(--edge-strong)" stroke-width="1" visibility="hidden"/>`;
+      g += `<circle id="hover-pt" r="4" fill="var(--gold-bright)" stroke="var(--surface-2)" stroke-width="2" visibility="hidden"/>`;
+      svg.innerHTML = g;
+
+      const xh = svg.querySelector('#xh');
+      const hp = svg.querySelector('#hover-pt');
+      svg.addEventListener('pointermove', event => {
+        const rect = svg.getBoundingClientRect();
+        const px = ((event.clientX - rect.left) / rect.width) * W;
+        const i = Math.max(0, Math.min(samples.length - 1,
+          Math.round(((px - PAD.l) / (W - PAD.l - PAD.r)) * (samples.length - 1))));
+        const s = samples[i];
+        xh.setAttribute('x1', x(i)); xh.setAttribute('x2', x(i)); xh.setAttribute('visibility', 'visible');
+        hp.setAttribute('cx', x(i)); hp.setAttribute('cy', y(s.div)); hp.setAttribute('visibility', 'visible');
+        tip.style.display = 'block';
+        tip.style.left = `${(x(i) / W) * rect.width}px`;
+        tip.style.top = `${(y(s.div) / H) * rect.height}px`;
+        tip.innerHTML = `<b>${s.div.toFixed(1)} div</b> · ${26 - i} h temu` +
+          (s.rederived ? ' · <span class="rd">zmiana limitu</span>' : '');
+      });
+      svg.addEventListener('pointerleave', () => {
+        xh.setAttribute('visibility', 'hidden');
+        hp.setAttribute('visibility', 'hidden');
+        tip.style.display = 'none';
+      });
+    </script>
+  </body>
+</html>
