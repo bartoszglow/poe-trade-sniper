@@ -40,7 +40,13 @@ export interface UpdateSearchPayload {
    * matters in absolute mode, server defaults it to exalted); null disables
    * and restores the original search id + price filter.
    */
-  dealWatch?: { mode: DealWatchMode; thresholdValue: number; unit?: DealWatchUnit } | null;
+  dealWatch?: {
+    mode: DealWatchMode;
+    thresholdValue: number;
+    unit?: DealWatchUnit;
+    /** D-dw-15: how many cheapest listings the base price is the median of. */
+    baselineSampleSize?: number;
+  } | null;
 }
 
 /** Fetches the watched searches; refetches whenever SSE signals a change. */

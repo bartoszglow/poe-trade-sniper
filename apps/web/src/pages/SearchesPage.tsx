@@ -9,7 +9,6 @@ import {
   GripVertical,
   ListFilter,
   LogIn,
-  Pencil,
   Plus,
   Settings as SettingsIcon,
   Trash2,
@@ -70,6 +69,7 @@ import { useSearches, type AddSearchPayload, type UpdateSearchPayload } from '..
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
+import { formatApproxMarketPrice } from '../lib/market-price';
 import { resolveBuyControl, type BuyControl } from '../lib/resolve-buy-control';
 import { shouldRowClickExpand } from '../lib/row-expand';
 import { duplicatedAddedAts, stableRowKey } from '../lib/search-row-key';
@@ -395,7 +395,6 @@ function SearchRow({
 }) {
   const t = useT();
   const tn = useTn();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   // The unified detail panel (plan 42): the expand/collapse state machine is
   // the shared usePanelExpansion hook; only the scroll target stays local.
   const { panelRendered, panelShown, openPanel: expandPanel, togglePanel } = usePanelExpansion();
@@ -422,6 +421,9 @@ function SearchRow({
     setScrollTarget({ section: 'deal', token: spotlitAt });
   }
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Approximate market price (D-dw-14) — deal rows compose it from their live
+  // baseline server-side, so one field covers every row.
+  const marketPriceLabel = formatApproxMarketPrice(search.marketPrice);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: search.id,
   });
@@ -438,6 +440,9 @@ function SearchRow({
   }
 
   const detailKey = statusDetailKey(search.status, search.statusDetail);
+  // Row is actively detecting unless globally paused or disabled ('stopped') —
+  // drives whether the armed TRAVEL/BUY tags show or collapse to PAUSE.
+  const rowRunning = search.status !== 'paused' && search.status !== 'stopped';
 
   return (
     <li
@@ -479,14 +484,6 @@ function SearchRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-ink">{search.label}</span>
-            <IconButton
-              variant="ghost"
-              aria-label={t('searches.editSearch')}
-              title={t('searches.editSearch')}
-              onClick={() => openPanel('settings')}
-            >
-              <Pencil className="h-3 w-3" />
-            </IconButton>
             <IconLink
               variant="ghost"
               href={tradeSearchPageUrl(search.realm, search.league, search.id)}
@@ -514,9 +511,47 @@ function SearchRow({
             {search.id} · {search.league} · {tn('searches.hitCount', search.hitCount)}
             {search.lastHitAt &&
               ` · ${t('searches.last', { time: new Date(search.lastHitAt).toLocaleTimeString() })}`}
+            {marketPriceLabel !== null && (
+              <Tooltip
+                content={t('searches.marketPriceTip', {
+                  sample: search.marketPrice!.baseline.sampleSize,
+                })}
+              >
+                <span className="ml-1 text-ink-muted"> · {marketPriceLabel}</span>
+              </Tooltip>
+            )}
           </div>
         </div>
         <div className="flex-1" />
+        <DealWatchControl search={search} onExpandDeal={() => openPanel('deal')} />
+        {/* Automation state tags (operator iteration 2026-07-05) — same badge
+            family as WS/POLL. When the row is not detecting (global pause or
+            disabled) the armed TRAVEL/BUY tags collapse to a single PAUSE tag. */}
+        {rowRunning ? (
+          <>
+            {search.autoTravel && (
+              <Tooltip content={t('searches.travelDesc')}>
+                <Badge tone="gold">{t('searches.travelToggle')}</Badge>
+              </Tooltip>
+            )}
+            {search.autoBuy && (
+              <Tooltip content={t('searches.buyDesc')}>
+                <Badge tone="gold">{t('searches.buyToggle')}</Badge>
+              </Tooltip>
+            )}
+          </>
+        ) : (
+          <Badge tone="info">{t('searches.pausedTag')}</Badge>
+        )}
+        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <Switch
+            checked={search.enabled}
+            onChange={(checked) => void run(() => onUpdate({ enabled: checked }))}
+            label={t('searches.activeFor', { label: search.label })}
+            tone={search.status === 'paused' ? 'info' : 'gold'}
+          />
+          {t('searches.activeToggle')}
+        </span>
         <IconButton
           variant="ghost"
           aria-label={panelShown ? t('searches.detailsHide') : t('searches.detailsShow')}
@@ -527,42 +562,6 @@ function SearchRow({
         >
           <ListFilter className="h-4 w-4" />
         </IconButton>
-        <DealWatchControl search={search} onExpandDeal={() => openPanel('deal')} />
-        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
-          <Switch
-            checked={search.enabled}
-            onChange={(checked) => void run(() => onUpdate({ enabled: checked }))}
-            label={t('searches.activeFor', { label: search.label })}
-            tone={search.status === 'paused' ? 'info' : 'gold'}
-          />
-          {t('searches.activeToggle')}
-        </span>
-        {/* TRAVEL/BUY moved into the panel's Automation zone (operator
-            iteration 2026-07-05) — the header keeps ACTIVE + DEAL only. */}
-        <IconButton
-          variant="ghost"
-          aria-label={t('searches.archive', { label: search.label })}
-          title={t('searches.archive', { label: search.label })}
-          onClick={() => void run(() => onUpdate({ archived: true }))}
-        >
-          <Archive className="h-4 w-4" />
-        </IconButton>
-        <IconButton
-          variant="danger"
-          aria-label={t('searches.remove', { label: search.label })}
-          onClick={() => setConfirmingDelete(true)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </IconButton>
-        <ConfirmDialog
-          open={confirmingDelete}
-          title={t('searches.deleteConfirmTitle')}
-          body={t('searches.deleteConfirmBody', { label: search.label })}
-          onClose={() => setConfirmingDelete(false)}
-          actions={[
-            { id: 'delete', label: t('common.delete'), onSelect: () => void run(onRemove) },
-          ]}
-        />
       </div>
       {/* Surface the status detail only when it adds something the badge doesn't
           (see statusDetailKey / STATUS_SHOWS_DETAIL) — active/paused/stopped are
@@ -584,6 +583,7 @@ function SearchRow({
                 detectionPaused={detectionPaused}
                 buyControl={buyControl}
                 onUpdate={onUpdate}
+                onRemove={onRemove}
                 scrollTarget={scrollTarget}
               />
             </div>

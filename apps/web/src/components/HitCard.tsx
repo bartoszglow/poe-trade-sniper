@@ -37,6 +37,9 @@ interface HitCardProps {
   canBuy: boolean;
   /** The source search's label; null when the search is gone (chip hidden). */
   searchLabel: string | null;
+  /** Approx market price of the source item (D-dw-14) — non-deal hits show it
+   *  as buy context; deal hits use their own flip line instead. */
+  marketPriceLabel?: string | null;
   onTravel: () => void;
   onBuy: () => void;
   /** Re-resolve a fresh token server-side, then travel (for aged/failed hits). */
@@ -54,6 +57,7 @@ export function HitCard({
   nowMs,
   canBuy,
   searchLabel,
+  marketPriceLabel = null,
   onTravel,
   onBuy,
   onRetry,
@@ -114,11 +118,19 @@ export function HitCard({
           </>
         )}
       </div>
-      {/* Flip context for deal hits — listed vs expected resale (plan 41). */}
-      {listing.deal && (
+      {/* Flip context for deal hits — listed vs expected resale (plan 41).
+          Non-deal hits show the item's approximate market price instead, so the
+          operator knows what the listed price compares against (D-dw-14). */}
+      {listing.deal ? (
         <div className="mt-0.5 text-[0.7rem] text-ink-muted">
           {composeDealContext(listing.price, listing.deal, t)}
         </div>
+      ) : (
+        marketPriceLabel !== null && (
+          <div className="mt-0.5 text-[0.7rem] text-ink-faint">
+            {t('hitCard.marketContext', { price: marketPriceLabel })}
+          </div>
+        )
       )}
       <div className="mt-1 flex items-center gap-2">
         <PriceTag price={listing.price} />

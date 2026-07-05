@@ -1,30 +1,25 @@
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import type { SearchRuntimeInfo } from '@poe-sniper/shared';
 import { useT } from '../../i18n/i18n';
 import { ApiError } from '../../lib/api';
-import type { BuyControl } from '../../lib/resolve-buy-control';
 import { draftsNeedReseed, type SettingsDraftAnchor } from '../../lib/settings-drafts';
 import type { UpdateSearchPayload } from '../../hooks/useSearches';
 import { Button } from '../Button';
-import { Switch } from '../Switch';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { TextInput } from '../TextInput';
 
 interface SettingsCardProps {
   search: SearchRuntimeInfo;
-  detectionPaused: boolean;
-  buyControl: BuyControl;
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
+  onRemove: () => Promise<void>;
 }
 
 /**
  * The unified panel's search-settings section (plan 42, Q1) — the former edit
- * modal inlined: label + id/URL with Save on its own bottom-right row, plus the
- * AUTOMATION zone that used to crowd the row header (operator iteration
- * 2026-07-05): the TRAVEL/BUY opt-ins with one-line explanations. The toggles
- * apply INSTANTLY (they are not part of the Save form) — the hairline divider
- * separates the two behaviors.
+ * modal inlined: label + id/URL, with the row's lifecycle actions on the bottom
+ * bar (operator iteration 2026-07-05: Archive + Delete moved off the row header
+ * to the left, Save right, dirty-gated). Delete keeps its ConfirmDialog.
  *
  * While deal mode is on the system owns the row's id (plan 41, D-dw-7): the id
  * input locks and Save sends label-only — a re-derive can swap `search.id`
@@ -34,18 +29,30 @@ interface SettingsCardProps {
  * sibling card restores the original id, and a stale draft would silently
  * re-point the search to the dead auto id.
  */
-export function SettingsCard({ search, detectionPaused, buyControl, onUpdate }: SettingsCardProps) {
+export function SettingsCard({ search, onUpdate, onRemove }: SettingsCardProps) {
   const t = useT();
   const dealManaged = search.dealWatch !== null;
   const [draftLabel, setDraftLabel] = useState(search.label);
   const [draftInput, setDraftInput] = useState(search.id);
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<SettingsDraftAnchor>({ id: search.id, dealManaged });
   if (draftsNeedReseed(anchor, { id: search.id, dealManaged })) {
     setAnchor({ id: search.id, dealManaged });
     setDraftLabel(search.label);
     setDraftInput(search.id);
+  }
+
+  async function run(action: () => Promise<void>): Promise<void> {
+    setErrorMessage(null);
+    try {
+      await action();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+      );
+    }
   }
 
   async function save(): Promise<void> {
@@ -60,27 +67,8 @@ export function SettingsCard({ search, detectionPaused, buyControl, onUpdate }: 
     const payload: UpdateSearchPayload =
       dealManaged || input === search.id ? { label } : { label, input };
     setSaving(true);
-    setErrorMessage(null);
-    try {
-      await onUpdate(payload);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function toggle(payload: UpdateSearchPayload): Promise<void> {
-    setErrorMessage(null);
-    try {
-      await onUpdate(payload);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
-      );
-    }
+    await run(() => onUpdate(payload));
+    setSaving(false);
   }
 
   const labelDirty = draftLabel.trim() !== '' && draftLabel.trim() !== search.label;
@@ -93,7 +81,7 @@ export function SettingsCard({ search, detectionPaused, buyControl, onUpdate }: 
         {t('searchPanel.settings')}
       </h3>
       {/* Two equal fields side-by-side (stacked when narrow), each with a
-          reserved hint line; Save sits on its own bottom row, right-aligned. */}
+          reserved hint line. */}
       <div className="mt-3 grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] tracking-wide text-ink-muted">
@@ -124,64 +112,35 @@ export function SettingsCard({ search, detectionPaused, buyControl, onUpdate }: 
           </span>
         </label>
       </div>
-      <div className="mt-1 flex justify-end">
+      {/* Lifecycle bar: destructive actions left, Save right (operator
+          iteration 2026-07-05 — off the row header, into the panel). */}
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={() => void run(() => onUpdate({ archived: true }))}>
+            {t('searches.archiveAction')}
+          </Button>
+          <Button
+            variant="ghost"
+            className="text-danger hover:border-danger/60 hover:text-danger"
+            onClick={() => setConfirmingDelete(true)}
+          >
+            {t('common.delete')}
+          </Button>
+        </div>
         <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
           {t('common.save')}
         </Button>
       </div>
 
-      {/* AUTOMATION — instant per-search opt-ins (hard rule 5), moved here from
-          the row header (operator iteration 2026-07-05). Not part of the Save
-          form: each switch persists the moment it flips. */}
-      <div className="mt-3 border-t border-edge pt-3">
-        <h4 className="text-[11px] font-medium tracking-wide text-ink-muted uppercase">
-          {t('searchPanel.automation')}
-        </h4>
-        <div
-          className={`mt-2 flex flex-col gap-2.5 transition-opacity ${
-            detectionPaused ? 'opacity-40' : ''
-          }`}
-          title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
-        >
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="flex items-center gap-1.5 text-xs text-ink-muted">
-              <Switch
-                checked={search.autoTravel}
-                onChange={(checked) => void toggle({ autoTravel: checked })}
-                label={t('searches.autoFor', { label: search.label })}
-              />
-              {t('searches.travelToggle')}
-            </span>
-            <span className="text-[11px] text-ink-faint">{t('searches.travelDesc')}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="flex items-center gap-1.5 text-xs text-ink-muted">
-              <Switch
-                checked={buyControl.checked}
-                disabled={!buyControl.enabled}
-                onChange={(checked) => void toggle({ autoBuy: checked })}
-                label={t('searches.buyFor', { label: search.label })}
-                tone="gold"
-              />
-              {t('searches.buyToggle')}
-            </span>
-            <span className="text-[11px] text-ink-faint">{t('searches.buyDesc')}</span>
-            {buyControl.note &&
-              (buyControl.note === 'searches.buyNeedsPermission' ? (
-                <Link
-                  to="/settings"
-                  className="text-[11px] text-ink-faint underline underline-offset-2 hover:text-ink"
-                >
-                  {t(buyControl.note)}
-                </Link>
-              ) : (
-                <span className="text-[11px] text-ink-faint">{t(buyControl.note)}</span>
-              ))}
-          </div>
-        </div>
-      </div>
-
       {errorMessage !== null && <p className="mt-2 text-xs text-danger">{errorMessage}</p>}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t('searches.deleteConfirmTitle')}
+        body={t('searches.deleteConfirmBody', { label: search.label })}
+        onClose={() => setConfirmingDelete(false)}
+        actions={[{ id: 'delete', label: t('common.delete'), onSelect: () => void run(onRemove) }]}
+      />
     </section>
   );
 }

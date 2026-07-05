@@ -10,6 +10,7 @@ import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT } from '../i18n/i18n';
 import { apiSend } from '../lib/api';
+import { formatApproxMarketPrice, marketPriceForListing } from '../lib/market-price';
 import { spotlightSearch } from '../lib/search-spotlight';
 
 /** Client-side mirror of the server's stale-token guard (240 s). */
@@ -162,6 +163,9 @@ export function HitsPanel({ onHide }: { onHide: () => void }) {
                 searchLabel={
                   searches.find((search) => search.id === listing.searchId)?.label ?? null
                 }
+                marketPriceLabel={formatApproxMarketPrice(
+                  marketPriceForListing(listing.searchId, searches),
+                )}
                 onTravel={() => travel(listing)}
                 onBuy={() => buy(listing)}
                 onRetry={() => retry(listing)}

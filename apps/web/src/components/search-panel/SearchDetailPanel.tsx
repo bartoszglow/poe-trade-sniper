@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SearchRuntimeInfo } from '@poe-sniper/shared';
 import type { UpdateSearchPayload } from '../../hooks/useSearches';
 import type { BuyControl } from '../../lib/resolve-buy-control';
+import { AutomationCard } from './AutomationCard';
 import { DealHistoryCard } from './DealHistoryCard';
 import { DealPriceCard } from './DealPriceCard';
 import { ItemCard } from './ItemCard';
@@ -22,6 +23,8 @@ interface SearchDetailPanelProps {
   /** Buy-switch gating resolved at page level (permission/platform notes). */
   buyControl: BuyControl;
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
+  /** Delete this row (the settings card owns the confirm + action now). */
+  onRemove: () => Promise<void>;
   /** Set when the panel was opened via the DEAL chip / pencil / locate (Q3). */
   scrollTarget: PanelScrollTarget | null;
 }
@@ -39,6 +42,7 @@ export function SearchDetailPanel({
   detectionPaused,
   buyControl,
   onUpdate,
+  onRemove,
   scrollTarget,
 }: SearchDetailPanelProps) {
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -66,12 +70,16 @@ export function SearchDetailPanel({
   }, [scrollTarget]);
 
   // DOM order is the mobile reading/tab order — actionable-first
-  // (deal → history → item → settings). Desktop re-places item into the left
-  // column via lg:order (the mouse-heavy context gets the reordered layout, so
-  // keyboard/AT order stays natural on mobile — WCAG 2.4.3).
+  // (deal → history → automation → item → settings). Desktop uses explicit
+  // grid placement (lg:col-start/row-start): left column = automation then
+  // item, right column = deal spanning both rows, then history + settings full
+  // width. Keeping keyboard/AT order natural on mobile (WCAG 2.4.3).
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <div ref={dealRef} className="min-w-0 lg:order-2">
+      <div
+        ref={dealRef}
+        className="min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start"
+      >
         <DealPriceCard
           search={search}
           detectionPaused={detectionPaused}
@@ -80,19 +88,22 @@ export function SearchDetailPanel({
           onHistoryStale={() => setHistoryReloadToken((token) => token + 1)}
         />
       </div>
-      <div className="min-w-0 lg:order-3 lg:col-span-2">
+      <div className="min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-3">
         <DealHistoryCard search={search} nowMs={nowMs} reloadToken={historyReloadToken} />
       </div>
-      <div className="min-w-0 lg:order-1">
-        <ItemCard search={search} />
-      </div>
-      <div ref={settingsRef} className="min-w-0 lg:order-4 lg:col-span-2">
-        <SettingsCard
+      <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+        <AutomationCard
           search={search}
           detectionPaused={detectionPaused}
           buyControl={buyControl}
           onUpdate={onUpdate}
         />
+      </div>
+      <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+        <ItemCard search={search} />
+      </div>
+      <div ref={settingsRef} className="min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-4">
+        <SettingsCard search={search} onUpdate={onUpdate} onRemove={onRemove} />
       </div>
     </div>
   );

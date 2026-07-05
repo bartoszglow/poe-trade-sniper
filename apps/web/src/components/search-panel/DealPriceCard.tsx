@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import type { DealWatchMode, DealWatchUnit, SearchRuntimeInfo } from '@poe-sniper/shared';
+import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEFAULT_BASELINE_SAMPLE_SIZE,
+  type DealWatchMode,
+  type DealWatchUnit,
+  type SearchRuntimeInfo,
+} from '@poe-sniper/shared';
 import { useT } from '../../i18n/i18n';
 import type { MessageKey } from '../../i18n/messages';
 import { ApiError } from '../../lib/api';
@@ -93,14 +100,18 @@ export function DealPriceCard({
 }: DealPriceCardProps) {
   const t = useT();
   const state = search.dealWatch;
-  /** Display-only divine rate, snapshotted server-side at the last refresh. */
-  const divineRate = state?.divinePriceExalted ?? null;
+  /** Display-only divine rate, snapshotted server-side at the last refresh;
+   *  in enable state the market snapshot's rate stands in (D-dw-14). */
+  const divineRate = state?.divinePriceExalted ?? search.marketPrice?.divinePriceExalted ?? null;
 
   const [draftMode, setDraftMode] = useState<DealWatchMode>(state?.mode ?? 'percent');
   const [draftThreshold, setDraftThreshold] = useState(
     state !== null ? String(state.thresholdValue) : '30',
   );
   const [draftUnit, setDraftUnit] = useState<DealWatchUnit>(state?.unit ?? 'exalted');
+  const [draftSampleSize, setDraftSampleSize] = useState(
+    String(state?.baselineSampleSize ?? DEFAULT_BASELINE_SAMPLE_SIZE),
+  );
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
@@ -115,13 +126,34 @@ export function DealPriceCard({
     parsedThreshold > 0 &&
     (draftMode !== 'percent' || parsedThreshold < 100);
 
-  const baselineExalted = state?.baseline?.amountExalted ?? null;
+  const parsedSampleSize = Number(draftSampleSize);
+  const sampleSizeValid =
+    Number.isInteger(parsedSampleSize) &&
+    parsedSampleSize >= BASELINE_SAMPLE_SIZE_MIN &&
+    parsedSampleSize <= BASELINE_SAMPLE_SIZE_MAX;
+
+  // Enable state has no deal baseline yet — the market snapshot (D-dw-14) drives
+  // the cutoff preview so the operator sees the would-be buy-below beforehand.
+  const baselineExalted =
+    state?.baseline?.amountExalted ?? search.marketPrice?.baseline.amountExalted ?? null;
   const cutoffExalted = thresholdValid
     ? computeClientCutoffExalted(
         { mode: draftMode, thresholdValue: parsedThreshold, unit: draftUnit },
         baselineExalted,
       )
     : null;
+
+  // The ACTIVE buy-below price (persisted config, not the draft): the server's
+  // capExalted is the exact derived cutoff (incl. divine conversion + margin);
+  // the client-side math only covers the gap before the first derive lands.
+  const persistedCutoffExalted =
+    state === null
+      ? null
+      : (state.capExalted ??
+        computeClientCutoffExalted(
+          { mode: state.mode, thresholdValue: state.thresholdValue, unit: state.unit },
+          baselineExalted,
+        ));
 
   const broadQuery = !dealQueryPinsItem(dealDefinitionOf(state, search.filters));
   const statusDisplay = state !== null ? DEAL_STATUS_DISPLAY[state.status] : null;
@@ -135,7 +167,8 @@ export function DealPriceCard({
     state === null ||
     draftMode !== state.mode ||
     parsedThreshold !== state.thresholdValue ||
-    (draftMode === 'absolute' && draftUnit !== state.unit);
+    (draftMode === 'absolute' && draftUnit !== state.unit) ||
+    (sampleSizeValid && parsedSampleSize !== state.baselineSampleSize);
 
   function showError(error: unknown): void {
     // Coded refusals (stackable item, watch cap) map to their catalog message —
@@ -153,15 +186,7 @@ export function DealPriceCard({
   }
 
   async function save(): Promise<void> {
-    if (!thresholdValid) return;
-    // Idle Save is a no-op: an unchanged config must not spend GGG budget
-    // (editConfig schedules a debounced re-derive regardless).
-    const unchanged =
-      state !== null &&
-      draftMode === state.mode &&
-      parsedThreshold === state.thresholdValue &&
-      (draftMode !== 'absolute' || draftUnit === state.unit);
-    if (unchanged) return;
+    if (!thresholdValid || !sampleSizeValid || !dirty) return;
     setSaving(true);
     setErrorMessage(null);
     try {
@@ -170,8 +195,17 @@ export function DealPriceCard({
       await onUpdate({
         dealWatch:
           draftMode === 'absolute'
-            ? { mode: draftMode, thresholdValue: parsedThreshold, unit: draftUnit }
-            : { mode: draftMode, thresholdValue: parsedThreshold },
+            ? {
+                mode: draftMode,
+                thresholdValue: parsedThreshold,
+                unit: draftUnit,
+                baselineSampleSize: parsedSampleSize,
+              }
+            : {
+                mode: draftMode,
+                thresholdValue: parsedThreshold,
+                baselineSampleSize: parsedSampleSize,
+              },
       });
       onHistoryStale();
     } catch (error) {
@@ -228,6 +262,19 @@ export function DealPriceCard({
         {state === null && (
           <p className="text-xs leading-snug text-ink-muted">{t('dealWatch.enableIntro')}</p>
         )}
+        {/* Enable state: show the already-known market price (D-dw-14) so the
+            operator sees what a cutoff would compare against BEFORE enabling. */}
+        {state === null && search.marketPrice !== null && (
+          <p className="text-xs text-ink-muted">
+            {t('dealWatch.enableMarket', {
+              price: formatExaltedAmount(
+                search.marketPrice.baseline.amountExalted,
+                search.marketPrice.divinePriceExalted,
+              ),
+              time: formatRelativeMagnitude(search.marketPrice.baseline.computedAt, nowMs),
+            })}
+          </p>
+        )}
         {broadQuery && (
           <p className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
             {t('dealWatch.broadQuery')}
@@ -278,7 +325,28 @@ export function DealPriceCard({
             </div>
           </Field>
         </div>
-        {thresholdValid && (
+        {/* Sample-size knob (D-dw-15): how many cheapest listings the base price
+            is the median of — thin markets want ~5, liquid ones 10-20. */}
+        <div className="flex items-center gap-2 text-xs text-ink-muted">
+          <span>{t('dealWatch.sampleSizePrefix')}</span>
+          <input
+            type="number"
+            min={BASELINE_SAMPLE_SIZE_MIN}
+            max={BASELINE_SAMPLE_SIZE_MAX}
+            step={1}
+            value={draftSampleSize}
+            onChange={(changeEvent) => setDraftSampleSize(changeEvent.target.value)}
+            aria-label={t('dealWatch.sampleSizeAria')}
+            className={`w-14 rounded-md border bg-surface-2 px-2 py-1 text-right font-mono text-sm text-ink focus:border-gold focus:outline-none ${
+              sampleSizeValid ? 'border-edge' : 'border-danger'
+            }`}
+          />
+          <span>{t('dealWatch.sampleSizeSuffix')}</span>
+        </div>
+
+        {/* The alert line previews the DRAFT config — once saved, the BUY BELOW
+            stat carries the same number, so a clean form drops the duplicate. */}
+        {thresholdValid && dirty && (
           <p className="text-xs text-ink-muted">
             {cutoffExalted !== null
               ? t('dealWatch.summaryCutoff', {
@@ -290,13 +358,13 @@ export function DealPriceCard({
           </p>
         )}
 
-        {/* Baseline block — manage mode only */}
+        {/* Baseline stats — plain on the card surface (no nested frames) */}
         {state !== null && (
-          <div className="rounded-md border border-edge bg-surface-1 p-3">
+          <div>
             {state.baseline !== null ? (
               <>
-                <dl className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
-                  <div className="rounded border border-edge bg-surface-2 px-2.5 py-2">
+                <dl className="grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-x-5 gap-y-3">
+                  <div>
                     <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
                       {t('dealWatch.baselineValue')}
                     </dt>
@@ -304,7 +372,7 @@ export function DealPriceCard({
                       {renderDetailedAmount(state.baseline.amountExalted, divineRate)}
                     </dd>
                   </div>
-                  <div className="rounded border border-edge bg-surface-2 px-2.5 py-2">
+                  <div>
                     <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
                       {t('dealWatch.rawLowest')}
                     </dt>
@@ -312,21 +380,25 @@ export function DealPriceCard({
                       {renderDetailedAmount(state.baseline.rawLowestExalted, divineRate)}
                     </dd>
                   </div>
-                  <div className="rounded border border-edge bg-surface-2 px-2.5 py-2">
-                    <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
-                      {t('dealWatch.sampleLabel')}
-                    </dt>
-                    <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-ink">
-                      {t('dealWatch.sampleOf', {
-                        sample: state.baseline.sampleSize,
-                        seen: state.baseline.listingsSeen,
-                      })}
-                    </dd>
-                  </div>
+                  {persistedCutoffExalted !== null && (
+                    <div>
+                      <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
+                        {t('dealWatch.buyBelow')}
+                      </dt>
+                      <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-gold-bright">
+                        {renderDetailedAmount(persistedCutoffExalted, divineRate)}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
                 <p className="mt-2 text-[11px] text-ink-faint">
                   {t('dealWatch.checkedAgo', {
                     time: formatRelativeMagnitude(state.baseline.computedAt, nowMs),
+                  })}
+                  {' · '}
+                  {t('dealWatch.sampleOf', {
+                    sample: state.baseline.sampleSize,
+                    seen: state.baseline.listingsSeen,
                   })}
                 </p>
               </>
@@ -356,9 +428,10 @@ export function DealPriceCard({
         {declinedKey !== null && <p className="text-xs text-warn">{t(declinedKey)}</p>}
         {errorMessage !== null && <p className="text-xs text-danger">{errorMessage}</p>}
 
-        {/* Actions: refresh (ghost) → save (primary) on the left; the
-            destructive disable pushed to the right, visually separated. */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Actions: refresh left · destructive disable centered between the two
+            safe actions · save bottom-right (operator layout). Enable mode has
+            only Save, kept right via ml-auto. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {state !== null && (
             <Button
               variant="ghost"
@@ -371,22 +444,23 @@ export function DealPriceCard({
                 : t('dealWatch.refreshCta')}
             </Button>
           )}
-          <Button
-            variant="primary"
-            disabled={saving || !thresholdValid || !dirty}
-            onClick={() => void save()}
-          >
-            {state !== null ? t('common.save') : t('dealWatch.enableCta')}
-          </Button>
           {state !== null && (
             <Button
               variant="ghost"
-              className="ml-auto text-danger hover:text-danger"
+              className="text-danger hover:text-danger"
               onClick={() => setConfirmingDisable(true)}
             >
               {t('dealWatch.disableCta')}
             </Button>
           )}
+          <Button
+            variant="primary"
+            className={state === null ? 'ml-auto' : undefined}
+            disabled={saving || !thresholdValid || !sampleSizeValid || !dirty}
+            onClick={() => void save()}
+          >
+            {state !== null ? t('common.save') : t('dealWatch.enableCta')}
+          </Button>
         </div>
       </div>
 

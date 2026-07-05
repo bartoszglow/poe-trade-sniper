@@ -75,17 +75,26 @@ describe('exalted amount formatters', () => {
   });
 
   it('never divides by a degenerate rate', () => {
-    expect(formatExaltedAmount(53421, 0)).toBe('53421 ex');
-    expect(formatExaltedAmount(53421, -5)).toBe('53421 ex');
+    expect(formatExaltedAmount(53421, 0)).toBe('53.4k ex');
+    expect(formatExaltedAmount(53421, -5)).toBe('53.4k ex');
   });
 
   it('pairs the divine primary with the exact exalted secondary', () => {
     expect(formatExaltedDetailed(53421, 714.3)).toEqual({
       primary: '74.8 div',
-      secondary: '53421 ex',
+      secondary: '53.4k ex',
     });
     expect(formatExaltedDetailed(516, 714.3)).toEqual({ primary: '516 ex', secondary: null });
-    expect(formatExaltedDetailed(53421, null)).toEqual({ primary: '53421 ex', secondary: null });
+    expect(formatExaltedDetailed(53421, null)).toEqual({ primary: '53.4k ex', secondary: null });
+  });
+
+  it('rounds exalted thousands to k with a trimmed decimal (operator request)', () => {
+    expect(formatExaltedAmount(999, null)).toBe('999 ex');
+    expect(formatExaltedAmount(1000, null)).toBe('1k ex');
+    expect(formatExaltedAmount(1049, null)).toBe('1k ex');
+    expect(formatExaltedAmount(1140, null)).toBe('1.1k ex');
+    expect(formatExaltedAmount(52660, null)).toBe('52.7k ex');
+    expect(formatSignedExaltedAmount(1140, null)).toBe('+1.1k ex');
   });
 
   it('signs trend deltas and neutralizes a rounded-to-zero delta', () => {

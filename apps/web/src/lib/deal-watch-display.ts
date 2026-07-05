@@ -122,7 +122,22 @@ function formatDivineAmount(amountExalted: number, divinePriceExalted: number): 
   return `${Number((amountExalted / divinePriceExalted).toFixed(1)).toString()} div`;
 }
 
-/** Magnitude-aware amount: `74.8 div` at ≥1 divine, else `516 ex`. */
+/**
+ * Exalted magnitude text: ≥1000 rounds to thousands with a trimmed '.0'
+ * ('1.1k', '52.7k', '1k') — five-digit exalted amounts are unreadable in the
+ * tight stat strips (operator request 2026-07-05). Below 1000 the existing
+ * magnitude rounding applies unchanged.
+ */
+function formatExaltedMagnitude(amount: number): string {
+  const magnitude = Math.abs(amount);
+  if (magnitude >= 1_000) {
+    const sign = amount < 0 ? '-' : '';
+    return `${sign}${Number((magnitude / 1_000).toFixed(1)).toString()}k`;
+  }
+  return formatPriceAmount(amount);
+}
+
+/** Magnitude-aware amount: `74.8 div` at ≥1 divine, else `516 ex` / `1.1k ex`. */
 export function formatExaltedAmount(
   amountExalted: number,
   divinePriceExalted: number | null,
@@ -130,7 +145,7 @@ export function formatExaltedAmount(
   if (crossesDivine(amountExalted, divinePriceExalted)) {
     return formatDivineAmount(amountExalted, divinePriceExalted);
   }
-  return `${formatPriceAmount(amountExalted)} ex`;
+  return `${formatExaltedMagnitude(amountExalted)} ex`;
 }
 
 /**
@@ -144,10 +159,10 @@ export function formatExaltedDetailed(
   if (crossesDivine(amountExalted, divinePriceExalted)) {
     return {
       primary: formatDivineAmount(amountExalted, divinePriceExalted),
-      secondary: `${formatPriceAmount(amountExalted)} ex`,
+      secondary: `${formatExaltedMagnitude(amountExalted)} ex`,
     };
   }
-  return { primary: `${formatPriceAmount(amountExalted)} ex`, secondary: null };
+  return { primary: `${formatExaltedMagnitude(amountExalted)} ex`, secondary: null };
 }
 
 /** Signed magnitude-aware delta for trend labels: `+2.3 div`, `−8 ex`, `0 ex`. */
@@ -159,7 +174,7 @@ export function formatSignedExaltedAmount(
     const magnitudeText = formatDivineAmount(Math.abs(amountExalted), divinePriceExalted);
     return `${amountExalted > 0 ? '+' : MINUS_SIGN}${magnitudeText}`;
   }
-  const magnitudeText = formatPriceAmount(Math.abs(amountExalted));
+  const magnitudeText = formatExaltedMagnitude(Math.abs(amountExalted));
   // A tiny delta can round to "0" — show it unsigned rather than as "+0"/"−0".
   if (magnitudeText === '0') return '0 ex';
   const sign = amountExalted > 0 ? '+' : MINUS_SIGN;
