@@ -1,4 +1,4 @@
-import { offerKey, type Listing } from '@poe-sniper/shared';
+import { offerKey, type DealHitInfo, type Listing } from '@poe-sniper/shared';
 
 // The offer-identity key is the single source of truth in @poe-sniper/shared — the
 // server's LiveOfferRegistry groups by the SAME key, so feed + server never diverge.
@@ -16,21 +16,30 @@ export { offerKey };
 export interface LiveHit extends Listing {
   /** All ids served for this offer, newest first; `listingId` === `listingIds[0]`. */
   listingIds: string[];
+  /** Discount context for deal-mode hits; null/absent = an ordinary hit (plan 41). */
+  deal?: DealHitInfo | null;
 }
 
 /**
  * Fold a freshly detected listing into the newest-first feed: it REPLACES any existing
  * entity for the same offer (merging the differing ids, newest first) and moves to the
- * top, instead of stacking a duplicate card. Bounded to `cap`.
+ * top, instead of stacking a duplicate card. Bounded to `cap`. Deal context MERGES:
+ * a later plain re-serve without `deal` keeps the entity's existing deal fields
+ * (plan 41 Web UI — a deal card must not lose its discount on a fold).
  */
-export function collapseHit(feed: LiveHit[], listing: Listing, cap: number): LiveHit[] {
+export function collapseHit(
+  feed: LiveHit[],
+  listing: Listing,
+  cap: number,
+  deal?: DealHitInfo | null,
+): LiveHit[] {
   const key = offerKey(listing);
   const existing = feed.find((hit) => offerKey(hit) === key);
   const listingIds = [
     listing.listingId,
     ...(existing?.listingIds ?? []).filter((id) => id !== listing.listingId),
   ];
-  const entity: LiveHit = { ...listing, listingIds };
+  const entity: LiveHit = { ...listing, listingIds, deal: deal ?? existing?.deal ?? null };
   return [entity, ...feed.filter((hit) => offerKey(hit) !== key)].slice(0, cap);
 }
 

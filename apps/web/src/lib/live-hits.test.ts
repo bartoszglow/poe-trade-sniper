@@ -74,6 +74,53 @@ describe('collapseHit', () => {
     expect(again[0]?.listingIds).toEqual(['id-1']);
   });
 
+  it('attaches deal context when the fold carries it', () => {
+    const dealInfo = {
+      baselineExalted: 516,
+      discountPercent: 32,
+      discountExalted: 156,
+      baselineStale: false,
+    };
+    const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100, dealInfo);
+    expect(feed[0]?.deal).toEqual(dealInfo);
+  });
+
+  it('preserves existing deal context when a later re-serve lacks it (merge, not replace)', () => {
+    const dealInfo = {
+      baselineExalted: 516,
+      discountPercent: 32,
+      discountExalted: 156,
+      baselineStale: false,
+    };
+    const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100, dealInfo);
+    const folded = collapseHit(feed, makeListing({ listingId: 'id-2' }), 100);
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.deal).toEqual(dealInfo);
+  });
+
+  it('replaces deal context when the newer serve carries fresh discount math', () => {
+    const staleInfo = {
+      baselineExalted: 516,
+      discountPercent: 32,
+      discountExalted: 156,
+      baselineStale: true,
+    };
+    const freshInfo = {
+      baselineExalted: 500,
+      discountPercent: 28,
+      discountExalted: 140,
+      baselineStale: false,
+    };
+    const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100, staleInfo);
+    const folded = collapseHit(feed, makeListing({ listingId: 'id-2' }), 100, freshInfo);
+    expect(folded[0]?.deal).toEqual(freshInfo);
+  });
+
+  it('keeps deal null for ordinary hits', () => {
+    const feed = collapseHit([], makeListing({ listingId: 'id-1' }), 100);
+    expect(feed[0]?.deal).toBeNull();
+  });
+
   it('honours the cap', () => {
     let feed: LiveHit[] = [];
     for (let index = 0; index < 5; index += 1) {

@@ -92,22 +92,35 @@ function assertNever(event: never): never {
 function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamState {
   switch (event.type) {
     case 'hit':
-      // A NEW offer: fold into the feed AND stamp the search's last-hit time (the ~60s
-      // row highlight on the Searches view keys off this).
+    case 'deal':
+      // A NEW offer (deal = a deal-mode hit carrying discount context): fold into the
+      // feed AND stamp the search's last-hit time (the ~60s row highlight on the
+      // Searches view keys off this).
       return {
         ...state,
-        liveHits: collapseHit(state.liveHits, event.listing, LIVE_HITS_CAP),
+        liveHits: collapseHit(
+          state.liveHits,
+          event.listing,
+          LIVE_HITS_CAP,
+          event.type === 'deal' ? event.deal : undefined,
+        ),
         lastHitAtBySearchId: {
           ...state.lastHitAtBySearchId,
           [event.listing.searchId]: event.listing.detectedAt,
         },
       };
     case 'hit-updated':
+    case 'deal-updated':
       // The same offer re-served by GGG under a fresh id — fold it (move to top), but it
       // is NOT a new finding, so it doesn't refresh the highlight.
       return {
         ...state,
-        liveHits: collapseHit(state.liveHits, event.listing, LIVE_HITS_CAP),
+        liveHits: collapseHit(
+          state.liveHits,
+          event.listing,
+          LIVE_HITS_CAP,
+          event.type === 'deal-updated' ? event.deal : undefined,
+        ),
       };
     case 'engine-status':
     case 'searches-changed':
@@ -168,7 +181,9 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (event.type === 'heartbeat') return;
-      if (event.type === 'hit') {
+      // Phase 2 gives deals their own sound variant + notification body; until then a
+      // deal alerts exactly like a hit.
+      if (event.type === 'hit' || event.type === 'deal') {
         if (isHitSoundEnabled()) playHitSound();
         if (isNotifyEnabled()) {
           const { listing } = event;
