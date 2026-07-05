@@ -412,6 +412,8 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 | `DEAL_REDERIVE_DEBOUNCE_MS`       | 5 000             | Threshold-edit re-derive debounce                                   |
 | `DEAL_MANUAL_REFRESH_COOLDOWN_MS` | 60 000            | Manual refresh per-search cooldown                                  |
 | `DEAL_CAP_MARGIN_RATIO`           | 0                 | Extra GGG-cap headroom above cutoff (Q3)                            |
+| `DEAL_BASELINE_HISTORY_MAX`       | 500               | Rolling per-watch cap on baseline-history rows (D-dw-12)            |
+| `DEAL_QUEUE_TICK_MS`              | 30 000            | Deal queue beat (due-refresh scan + queued-job pickup)              |
 
 ### Failure modes (honest degradation, `DealWatchStatusCode`)
 
@@ -477,6 +479,25 @@ for deal searches" is parked.
   suspicious-discount flag; tray/background notifications (90_future_ideas.md
   candidates).
 
+## Phase 1 as-built deviations (2026-07-05, recorded per the plan-24 pattern)
+
+- **Pre-derive rows decorate as ordinary hits, not `deal`** — before the first
+  successful swap the row still watches the operator's ORIGINAL query, so
+  labelling those listings as deals would be wrong. "Never a bare hit" holds
+  from the first derive onward.
+- **`unsupported-item` gate deferred to Phase 2** — the stackable check needs a
+  dictionary category lookup (`TradeDataService` is not exported from
+  PriceCheckModule); the status code ships now, the gate lands with the UI
+  warning. Until then the operator can enable deal mode on a stackable search
+  and gets honest-but-wrong baselines — Phase 2 closes this.
+- **Insufficient-data at refresh keeps the old baseline+cap running** (alerts
+  continue, status flags the condition); only enable-time insufficiency skips
+  the derive entirely.
+- **`enable` is synchronous through the queue** — the PATCH answers after the
+  first baseline+derive round trip with the real resulting status.
+- **Cap floor**: `max(1, round(cutoff))` exalted so sub-1ex cutoffs still POST
+  a valid cap.
+
 ## Decisions
 
 - **D-dw-1 (v3, operator, 2026-07-05)** — Deal mode is an in-place transform of the
@@ -515,7 +536,24 @@ for deal searches" is parked.
   `'exalted'`) that drives display AND the absolute-threshold interpretation
   ("5 div taniej" = unit `divine`, converted via the live DivinePrice rate).
   This replaces the earlier free-form `thresholdCurrency` (and its `divine`
-  default) — a two-value enum, not an arbitrary currency string.
+  default) — a two-value enum, not an arbitrary currency string. As-built type
+  names (supersede the earlier data-model sketch): `unit`, `capExalted`,
+  `rawLowestExalted`, `DealWatchState` in `packages/shared/src/deal-watch.ts`;
+  the whole state lives in the nullable `searches.deal_watch` JSON column
+  (migration 0011, together with the `hits.deal` JSON column).
+- **D-dw-12 (operator request, 2026-07-05)** — baseline price history: every
+  successful baseline refresh appends one row to a `deal_baseline_history`
+  table (migration 0012: `watch_id`, `amount_exalted`, `raw_lowest_exalted`,
+  `sample_size`, `rederived` flag, `computed_at`; index on
+  `(watch_id, computed_at)`), keyed by a stable `watchId` uuid inside the deal
+  config — the search's GGG id churns on re-derive, so history must NOT key on
+  it. Retention: `DEAL_BASELINE_HISTORY_MAX` newest rows per watch (default
+  500 ≈ 3 weeks hourly), hits-style pruning; history is deleted when the watch
+  is disabled/removed. Surfaces: a trend section in the DealWatchModal
+  (sparkline + change-since-yesterday) and, in the Activity feed, an entry only
+  for re-derive events ("baseline 520 → 490 ex, cap updated") — hourly no-op
+  checks never spam the feed (Phase 2 renders both; Phase 1 ships table +
+  writes + `GET /api/searches/:id/deal-history`).
 
 ## Open questions
 
