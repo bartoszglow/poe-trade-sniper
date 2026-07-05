@@ -73,6 +73,12 @@ describe('withPriceCap', () => {
     expect(capped.filters.misc_filters).toEqual(cappedQuery.filters.misc_filters);
   });
 
+  it('watches the instant-buyout market only (D-dw-13), whatever the definition status', () => {
+    const anyStatusDefinition = { ...uncappedQuery, status: { option: 'any' } };
+    const capped = withPriceCap(anyStatusDefinition, 516) as typeof cappedQuery;
+    expect(capped.status).toEqual({ option: 'securable' });
+  });
+
   it('builds the filter envelope from scratch for a bare definition', () => {
     const capped = withPriceCap({ type: 'Barrage' }, 100) as {
       filters: { trade_filters: { filters: { price: { max: number } }; disabled: boolean } };
@@ -83,14 +89,20 @@ describe('withPriceCap', () => {
 });
 
 describe('baselineQuery', () => {
-  it('keeps the definition status and never carries a price filter', () => {
-    // Forcing `online` here missed the offline-seller instant-buyout market —
-    // 2 vs 56 listings on identical constraints (api-notes 2026-07-05). The
-    // baseline must sample the same status the watch buys under.
+  it('samples the instant-buyout market only and never carries a price filter', () => {
+    // D-dw-13: `online` starved the sample (2 vs 56 on identical constraints,
+    // api-notes 2026-07-05), and inheriting an 'any' status would sample the
+    // manipulation-prone non-instant listings — securable is forced.
     const { definition } = stripPriceFilter(cappedQuery);
     const baseline = baselineQuery(definition) as typeof cappedQuery;
     expect(baseline.status).toEqual({ option: 'securable' });
     expect(baseline.filters).not.toHaveProperty('trade_filters');
+  });
+
+  it('forces securable even when the definition status is broader', () => {
+    const anyStatusDefinition = { ...uncappedQuery, status: { option: 'any' } };
+    const baseline = baselineQuery(anyStatusDefinition) as typeof cappedQuery;
+    expect(baseline.status).toEqual({ option: 'securable' });
   });
 });
 

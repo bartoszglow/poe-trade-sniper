@@ -57,13 +57,25 @@ export function stripPriceFilter(query: unknown): {
 }
 
 /**
- * The watched deal query: definition + the auto-cap. The cap deliberately has
- * NO currency `option` — an option-less price filter is value-converted by GGG
- * across all listing currencies in the league base (exalted), while an explicit
- * option matches that single currency literally (D-dw-6, api-notes 2026-07-05).
+ * Deal mode trades ONLY the instant-buyout market (D-dw-13, operator decision
+ * 2026-07-05): non-instant listings are where price manipulators park fake
+ * lowballs they never honor, and a deal must be instantly buyable to flip.
+ * `securable` is the one verified status mapping (api-notes). Applied to both
+ * the baseline sample and the watched capped query; the stored definition
+ * keeps the ORIGINAL status untouched so disable restores faithfully.
+ */
+const DEAL_MARKET_STATUS = { option: 'securable' } as const;
+
+/**
+ * The watched deal query: definition + the auto-cap, instant-buyout only
+ * (D-dw-13). The cap deliberately has NO currency `option` — an option-less
+ * price filter is value-converted by GGG across all listing currencies in the
+ * league base (exalted), while an explicit option matches that single currency
+ * literally (D-dw-6, api-notes 2026-07-05).
  */
 export function withPriceCap(definition: unknown, capExalted: number): unknown {
   const base = isRecord(definition) ? cloneQuery(definition) : {};
+  base['status'] = { ...DEAL_MARKET_STATUS };
   const filterGroups = isRecord(base['filters']) ? base['filters'] : {};
   const tradeFilters = isRecord(filterGroups['trade_filters']) ? filterGroups['trade_filters'] : {};
   const tradeFilterEntries = isRecord(tradeFilters['filters']) ? tradeFilters['filters'] : {};
@@ -76,16 +88,19 @@ export function withPriceCap(definition: unknown, capExalted: number): unknown {
 }
 
 /**
- * The baseline query: the definition, price-free, with its OWN status kept.
- * Forcing `status {option:'online'}` here was wrong: trade2's status domain is
- * the purchase-type set, and on identical constraints `online` returned 2
- * listings where the definition's `securable` returned 56 (Twister evidence,
- * api-notes 2026-07-05) — instant-buyout listings from offline sellers ARE the
- * operator's purchasable market, so the baseline must sample the same status
- * the watch buys under.
+ * The baseline query: the definition, price-free, instant-buyout only
+ * (D-dw-13). History of this line: forcing `status {option:'online'}` starved
+ * baselines (2 vs 56 listings on identical constraints — trade2's status
+ * domain is the purchase-type set and offline-seller instant-buyout listings
+ * ARE the market, api-notes 2026-07-05); inheriting the definition's status
+ * was right for securable searches but let an 'any'-status search sample the
+ * manipulation-prone non-instant listings. `securable` is both the verified
+ * mapping and the only market a deal can actually be flipped from.
  */
 export function baselineQuery(definition: unknown): unknown {
-  return isRecord(definition) ? cloneQuery(definition) : {};
+  const base = isRecord(definition) ? cloneQuery(definition) : {};
+  base['status'] = { ...DEAL_MARKET_STATUS };
+  return base;
 }
 
 /** The pre-deal query for disable: definition + the snapshotted price filter. */

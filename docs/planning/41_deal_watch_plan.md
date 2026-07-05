@@ -585,6 +585,15 @@ for deal searches" is parked.
   `rawLowestExalted`, `DealWatchState` in `packages/shared/src/deal-watch.ts`;
   the whole state lives in the nullable `searches.deal_watch` JSON column
   (migration 0011, together with the `hits.deal` JSON column).
+- **D-dw-13 (operator, 2026-07-05, live-validation session)** — deal mode
+  samples and watches ONLY the instant-buyout market: `status
+{option:'securable'}` is forced onto both the baseline query and the watched
+  capped query, whatever the definition carries. Rationale: non-instant
+  listings are where manipulators park fake lowballs they never honor (they
+  would poison the baseline), and a deal must be instantly buyable to flip.
+  The stored definition keeps the ORIGINAL status untouched — disable restores
+  faithfully. (Supersedes both "force online" — starved samples, 2 vs 56 — and
+  the brief "inherit definition status" fix from earlier the same day.)
 - **D-dw-12 (operator request, 2026-07-05)** — baseline price history: every
   successful baseline refresh appends one row to a `deal_baseline_history`
   table (migration 0012: `watch_id`, `amount_exalted`, `raw_lowest_exalted`,
