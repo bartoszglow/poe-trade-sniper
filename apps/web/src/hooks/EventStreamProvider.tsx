@@ -15,7 +15,8 @@ import type {
   TravelFailureReason,
 } from '@poe-sniper/shared';
 import { translateStatic } from '../i18n/i18n';
-import { isHitSoundEnabled, playHitSound } from '../lib/hit-sound';
+import { composeDealNotification } from '../lib/deal-display';
+import { isHitSoundEnabled, playDealSound, playHitSound } from '../lib/hit-sound';
 import { collapseHit, type LiveHit } from '../lib/live-hits';
 import { isNotifyEnabled, showSystemNotification } from '../lib/notifications';
 
@@ -181,9 +182,7 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (event.type === 'heartbeat') return;
-      // Phase 2 gives deals their own sound variant + notification body; until then a
-      // deal alerts exactly like a hit.
-      if (event.type === 'hit' || event.type === 'deal') {
+      if (event.type === 'hit') {
         if (isHitSoundEnabled()) playHitSound();
         if (isNotifyEnabled()) {
           const { listing } = event;
@@ -195,6 +194,21 @@ export function EventStreamProvider({ children }: { children: ReactNode }) {
             translateStatic('notify.hitTitle', { item: listing.itemName }),
             `${price} · ${listing.seller ?? '?'}`,
           );
+        }
+      }
+      if (event.type === 'deal') {
+        // Deals are time-critical (plan 41): a distinct three-tone, hotter chirp and a
+        // notification carrying the flip context — same toggles as hit alerts.
+        if (isHitSoundEnabled()) playDealSound();
+        if (isNotifyEnabled()) {
+          // translateStatic: this callback lives outside the React tree.
+          const { title, body } = composeDealNotification(
+            event.listing.itemName,
+            event.listing.price,
+            event.deal,
+            translateStatic,
+          );
+          showSystemNotification(title, body);
         }
       }
       if (event.type === 'buy' && isNotifyEnabled()) {

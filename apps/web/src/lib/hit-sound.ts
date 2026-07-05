@@ -1,13 +1,30 @@
 /**
- * Hit alert sound — synthesized (no asset), two quick rising tones.
- * Browsers gate audio behind a user gesture; the Settings "test" button
- * doubles as the unlock.
+ * Alert sounds — synthesized (no asset). Hits chirp two quick rising tones;
+ * deals (plan 41) add a third rising tone at a slightly hotter peak — they are
+ * time-critical, the operator asked for marked + louder. Both share the enable
+ * toggle and stored volume. Browsers gate audio behind a user gesture; the
+ * Settings "test" button doubles as the unlock.
  */
 const SOUND_STORAGE_KEY = 'sniper.hitSound';
 const VOLUME_STORAGE_KEY = 'sniper.hitSoundVolume';
 
 /** Synth peak gain at 100 % volume — the loudness the app shipped with. */
 const PEAK_GAIN = 0.18;
+/** Deal chirp peak vs the hit chirp — capped at ×1.25, still volume-scaled. */
+const DEAL_GAIN_RATIO = 1.25;
+
+/** Tone schedule: [offsetSeconds, frequencyHz] pairs, played as one chirp. */
+type ToneSchedule = ReadonlyArray<readonly [number, number]>;
+
+const HIT_TONES: ToneSchedule = [
+  [0, 880],
+  [0.12, 1320],
+];
+const DEAL_TONES: ToneSchedule = [
+  [0, 880],
+  [0.12, 1320],
+  [0.24, 1760],
+];
 
 export function isHitSoundEnabled(): boolean {
   return localStorage.getItem(SOUND_STORAGE_KEY) !== '0';
@@ -30,16 +47,12 @@ export function setHitSoundVolume(volumePercent: number): void {
 
 let audioContext: AudioContext | null = null;
 
-export function playHitSound(): void {
+function playTones(tones: ToneSchedule, peakGain: number): void {
   try {
-    const peak = PEAK_GAIN * (getHitSoundVolume() / 100);
+    const peak = peakGain * (getHitSoundVolume() / 100);
     if (peak <= 0) return;
     audioContext ??= new AudioContext();
     const startAt = audioContext.currentTime;
-    const tones: Array<[number, number]> = [
-      [0, 880],
-      [0.12, 1320],
-    ];
     for (const [offsetSeconds, frequency] of tones) {
       const oscillator = audioContext.createOscillator();
       const gain = audioContext.createGain();
@@ -53,6 +66,15 @@ export function playHitSound(): void {
       oscillator.stop(startAt + offsetSeconds + 0.14);
     }
   } catch {
-    // Audio not unlocked yet — silently skip; the hit still shows visually.
+    // Audio not unlocked yet — silently skip; the alert still shows visually.
   }
+}
+
+export function playHitSound(): void {
+  playTones(HIT_TONES, PEAK_GAIN);
+}
+
+/** Deal alert: the hit chirp + a third rising tone, slightly louder (plan 41). */
+export function playDealSound(): void {
+  playTones(DEAL_TONES, PEAK_GAIN * DEAL_GAIN_RATIO);
 }

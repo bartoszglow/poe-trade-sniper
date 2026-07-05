@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { Hit } from '@poe-sniper/shared';
+import { DealBadge } from '../components/DealBadge';
 import { Field } from '../components/Field';
 import { ItemDetailView } from '../components/ItemDetailView';
 import { PriceTag } from '../components/PriceTag';
@@ -187,6 +188,7 @@ export function HitsPage() {
                       {new Date(hit.detectedAt).toLocaleString()}
                     </span>
                     <RarityName name={hit.itemName} rarity={hit.item?.rarity ?? null} />
+                    {hit.deal && <DealBadge deal={hit.deal} />}
                     <div className="flex-1" />
                     <PriceTag price={hit.price} />
                     {hit.seller && (

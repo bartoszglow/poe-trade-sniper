@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Coins, ShoppingCart, Zap, type LucideIcon } from 'lucide-react';
+import { BadgePercent, Coins, ShoppingCart, Zap, type LucideIcon } from 'lucide-react';
 import { tradeSearchPageUrl } from '@poe-sniper/shared';
 import { ActivityFeedCard } from '../components/ActivityFeedCard';
 import { useActivityFeed, type FeedKind } from '../hooks/useActivityFeed';
@@ -14,10 +14,11 @@ const TICK_MS = 5_000;
 
 const KIND_CHIPS: Array<{ kind: FeedKind; icon: LucideIcon; labelKey: MessageKey }> = [
   { kind: 'hit', icon: Zap, labelKey: 'activity.kind.hit' },
+  { kind: 'deal', icon: BadgePercent, labelKey: 'activity.kind.deal' },
   { kind: 'price-check', icon: Coins, labelKey: 'activity.kind.priceCheck' },
   { kind: 'activity', icon: ShoppingCart, labelKey: 'activity.kind.buy' },
 ];
-const ALL_KINDS: FeedKind[] = ['hit', 'price-check', 'activity'];
+const ALL_KINDS: FeedKind[] = ['hit', 'deal', 'price-check', 'activity'];
 
 /**
  * The unified Activity feed (#39): one chronological timeline of hits + price checks
@@ -88,7 +89,7 @@ export function ActivityPage() {
         <ul className="flex flex-col gap-2">
           {shown.map((entry) => {
             const searchId =
-              entry.kind === 'hit'
+              entry.kind === 'hit' || entry.kind === 'deal'
                 ? entry.hit.searchId
                 : entry.kind === 'activity'
                   ? entry.record.searchId

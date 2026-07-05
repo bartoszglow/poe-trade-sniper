@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Deal-watch UI (plan 41, Phase 2)**: the operator surface for deal mode — a
+  gold threshold chip with a live status dot on each search row, and a deal
+  modal with the threshold/mode/unit editor, a market-baseline card (robust
+  price, raw lowest, sample size, staleness), a baseline-history sparkline with
+  cap-move markers, a detection-honesty line (live socket vs poll), and a
+  cooldown-aware "refresh market price" action. Deal hits render with a
+  discount badge and a "listed X · resale ≈ Y" flip context in the live panel,
+  the Hits history and the Activity feed (new "deals" filter chip), and fire a
+  distinct three-tone alert plus a richer system notification. Stack-priced
+  items (currency, essences…) are refused with a clear message until per-unit
+  pricing ships. Full English + Polish.
 - **Deal-watch (server core, plan 41)**: flip any search into deal mode — the app
   computes a price-fixer-resistant market baseline for the item (median of the
   cheapest listings after dropping decoys, all prices normalized to exalted),
@@ -17,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   always shows the current capped view), and raises distinct deal alerts with the
   computed discount when a listing undercuts the baseline by your threshold
   (percent, or an absolute amount in exalted/divine). Baseline history is
-  recorded per watch for price trends. Operator UI controls arrive in the next
-  phase; the API and detection pipeline are fully live.
+  recorded per watch for price trends. The operator controls shipped alongside —
+  see the "Deal-watch UI" entry above.
 
 - **About & Support view** (new nav item): who makes the tool, a calm "support development"
   section with donation buttons, and non-monetary ways to help — plus a GGG fan-tool

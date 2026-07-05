@@ -9,6 +9,12 @@ export class ApiError extends Error {
      * user (hard rule: translate errors, never surface raw technical strings).
      */
     readonly userFacing: boolean = false,
+    /**
+     * Machine-readable error code from the response body (`{code: '…'}`) when the
+     * server answered with one — callers map known codes to i18n messages
+     * (e.g. the deal-watch 409s). Never rendered raw.
+     */
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -41,13 +47,16 @@ export async function apiSend<ResponseBody>(
   const text = await response.text();
   const payload = text ? (JSON.parse(text) as unknown) : null;
   if (!response.ok) {
-    const serverMessage = (payload as { message?: string } | null)?.message;
+    const body = payload as { message?: string; code?: unknown } | null;
+    const serverMessage = body?.message;
+    const serverCode = typeof body?.code === 'string' ? body.code : null;
     // userFacing only when the server actually gave us a message — the fallback is
     // a raw route+status that the UI must not show.
     throw new ApiError(
       response.status,
       serverMessage ?? `${method} ${path} → ${response.status}`,
       serverMessage != null,
+      serverCode,
     );
   }
   return payload as ResponseBody;

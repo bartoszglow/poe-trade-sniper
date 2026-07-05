@@ -48,6 +48,7 @@ import {
 import { Badge, type BadgeTone } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DealWatchControl } from '../components/DealWatchControl';
 import { Field } from '../components/Field';
 import { IconButton, IconLink } from '../components/IconButton';
 import { Modal } from '../components/Modal';
@@ -60,7 +61,7 @@ import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useDetection } from '../hooks/useDetection';
 import { useEventStream } from '../hooks/EventStreamProvider';
-import { useSearches, type AddSearchPayload } from '../hooks/useSearches';
+import { useSearches, type AddSearchPayload, type UpdateSearchPayload } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
@@ -376,14 +377,7 @@ function SearchRow({
   /** Global detection pause — TRAVEL/BUY are inert then, so they grey out
    *  (still togglable: configuring while paused is fine, nothing fires). */
   detectionPaused: boolean;
-  onUpdate: (payload: {
-    autoTravel?: boolean;
-    autoBuy?: boolean;
-    enabled?: boolean;
-    label?: string;
-    input?: string;
-    archived?: boolean;
-  }) => Promise<void>;
+  onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
   onRemove: () => Promise<void>;
   /** Report criteria-panel open/close up to the page so an open panel keeps its
    *  auto-expanded room from folding out from under it (D-room-3). */
@@ -407,6 +401,12 @@ function SearchRow({
     id: search.id,
   });
 
+  // While deal mode is on the system owns the row's id (plan 41, D-dw-7): the
+  // edit modal locks the id/URL input and saves label-only — never `input`,
+  // because a re-derive can swap `search.id` mid-edit and the server 409s
+  // manual id changes for deal-mode rows anyway.
+  const dealManaged = search.dealWatch !== null;
+
   function startEditing(): void {
     setDraftLabel(search.label);
     setDraftInput(search.id);
@@ -418,6 +418,11 @@ function SearchRow({
     const input = draftInput.trim();
     if (!label || !input) return;
     setEditing(false);
+    if (dealManaged) {
+      if (label === search.label) return;
+      await run(() => onUpdate({ label }));
+      return;
+    }
     // Nothing changed → skip the round-trip. A changed `input` re-points the row
     // (the server keeps the hit history); an unchanged id is treated as label-only.
     if (label === search.label && input === search.id) return;
@@ -461,9 +466,13 @@ function SearchRow({
               onChange={(changeEvent) => setDraftLabel(changeEvent.target.value)}
             />
           </Field>
-          <Field label={t('searches.editSearchField')} hint={t('searches.editSearchHint')}>
+          <Field
+            label={t('searches.editSearchField')}
+            hint={t(dealManaged ? 'dealWatch.editIdLocked' : 'searches.editSearchHint')}
+          >
             <TextInput
               value={draftInput}
+              disabled={dealManaged}
               onChange={(changeEvent) => setDraftInput(changeEvent.target.value)}
             />
           </Field>
@@ -543,6 +552,7 @@ function SearchRow({
         >
           <ListFilter className="h-4 w-4" />
         </IconButton>
+        <DealWatchControl search={search} detectionPaused={detectionPaused} onUpdate={onUpdate} />
         <span className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Switch
             checked={search.enabled}
@@ -1062,7 +1072,9 @@ export function SearchesPage() {
   // room's items read as paused, matching the global detection toggle (#15).
   const renderSearchRow = (search: SearchRuntimeInfo, extraPaused = false) => (
     <SearchRow
-      key={search.id}
+      // Keyed by the swap-stable watchId for deal rows: a re-derive replaces
+      // search.id, and an id-based key would unmount an open modal mid-edit.
+      key={search.dealWatch?.watchId ?? search.id}
       search={search}
       highlighted={isSearchLit(search.id)}
       detectionPaused={paused || extraPaused}
@@ -1211,7 +1223,7 @@ export function SearchesPage() {
               <ul className="flex flex-col gap-2">
                 {archivedSearches.map((search) => (
                   <ArchivedSearchRow
-                    key={search.id}
+                    key={search.dealWatch?.watchId ?? search.id}
                     search={search}
                     highlighted={isSearchLit(search.id)}
                     onRestore={() => update(search.id, { archived: false })}

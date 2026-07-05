@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  DealWatchMode,
+  DealWatchUnit,
   PurchaseMode,
   RoomDeleteMode,
   RoomInfo,
@@ -33,6 +35,12 @@ export interface UpdateSearchPayload {
   enabled?: boolean;
   /** Archive / restore (#35) — archived searches keep everything for a restore. */
   archived?: boolean;
+  /**
+   * Deal-watch config (plan 41): an object enables/edits deal mode (unit only
+   * matters in absolute mode, server defaults it to exalted); null disables
+   * and restores the original search id + price filter.
+   */
+  dealWatch?: { mode: DealWatchMode; thresholdValue: number; unit?: DealWatchUnit } | null;
 }
 
 /** Fetches the watched searches; refetches whenever SSE signals a change. */

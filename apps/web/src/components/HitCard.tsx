@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { RotateCcw, ShoppingCart, Zap } from 'lucide-react';
-import type { Listing } from '@poe-sniper/shared';
+import type { DealHitInfo, Listing } from '@poe-sniper/shared';
 import type { BuyState, TravelState } from '../hooks/EventStreamProvider';
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
+import { composeDealContext } from '../lib/deal-display';
 import { travelFailureDisplay } from '../lib/travel-failure-display';
 import { Button } from './Button';
+import { DealBadge } from './DealBadge';
 import { PriceTag } from './PriceTag';
 import { RarityName } from './RarityName';
 import { formatRelativeMagnitude } from '../lib/relative-time';
@@ -21,7 +23,8 @@ const BUY_PHASE_DISPLAY: Partial<Record<BuyState['phase'], { key: MessageKey; to
 };
 
 interface HitCardProps {
-  listing: Listing;
+  /** The folded feed entity — deal-mode hits carry their discount context (plan 41). */
+  listing: Listing & { deal?: DealHitInfo | null };
   travelState: TravelState | undefined;
   buyState: BuyState | undefined;
   /** Tokens die at ~300 s; the button greys out client-side at 240 s. */
@@ -91,6 +94,7 @@ export function HitCard({
           {new Date(listing.detectedAt).toLocaleTimeString()}
         </span>
         <RarityName name={listing.itemName} rarity={listing.item?.rarity ?? null} />
+        {listing.deal && <DealBadge deal={listing.deal} />}
         {searchLabel !== null && (
           <>
             <div className="flex-1" />
@@ -110,6 +114,12 @@ export function HitCard({
           </>
         )}
       </div>
+      {/* Flip context for deal hits — listed vs expected resale (plan 41). */}
+      {listing.deal && (
+        <div className="mt-0.5 text-[0.7rem] text-ink-muted">
+          {composeDealContext(listing.price, listing.deal, t)}
+        </div>
+      )}
       <div className="mt-1 flex items-center gap-2">
         <PriceTag price={listing.price} />
         {listing.seller && (

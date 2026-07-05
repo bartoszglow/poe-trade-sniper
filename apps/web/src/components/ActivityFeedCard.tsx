@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  BadgePercent,
   ChevronDown,
   ChevronRight,
   Coins,
@@ -11,10 +12,12 @@ import {
 import type { ActivityOutcome, ActivityStep, ActivityStepKind } from '@poe-sniper/shared';
 import { useT } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
+import { composeDealContext } from '../lib/deal-display';
 import { formatRelativeMagnitude } from '../lib/relative-time';
 import { travelFailureDisplay } from '../lib/travel-failure-display';
 import type { FeedEntry, FeedKind } from '../hooks/useActivityFeed';
 import { Badge, type BadgeTone } from './Badge';
+import { DealBadge } from './DealBadge';
 import { ItemDetailView } from './ItemDetailView';
 import { PriceCheckResultView } from './PriceCheckResultView';
 import { PriceTag } from './PriceTag';
@@ -23,6 +26,7 @@ import { RarityName } from './RarityName';
 /** Per-kind icon + accent bar (open/closed — a new event kind = a new entry). */
 const KIND: Record<FeedKind, { icon: LucideIcon; accent: string }> = {
   hit: { icon: Zap, accent: 'bg-gold' },
+  deal: { icon: BadgePercent, accent: 'bg-warn' },
   'price-check': { icon: Coins, accent: 'bg-info' },
   activity: { icon: ShoppingCart, accent: 'bg-ok' },
 };
@@ -131,10 +135,16 @@ export function ActivityFeedCard({
   const Icon = KIND[entry.kind].icon;
   const failed = entry.kind === 'activity' && FAILURE_OUTCOMES.has(entry.record.outcome);
   const accent = failed ? 'bg-danger' : KIND[entry.kind].accent;
+  // A 'deal' entry is a hit row with discount context — it shares the hit arms below
+  // (`kind === 'hit' || kind === 'deal'`), plus a discount badge + flip-context line.
   const item =
-    entry.kind === 'hit' ? entry.hit.item : entry.kind === 'activity' ? entry.record.item : null;
+    entry.kind === 'hit' || entry.kind === 'deal'
+      ? entry.hit.item
+      : entry.kind === 'activity'
+        ? entry.record.item
+        : null;
   const at =
-    entry.kind === 'hit'
+    entry.kind === 'hit' || entry.kind === 'deal'
       ? entry.hit.detectedAt
       : entry.kind === 'activity'
         ? entry.record.startedAt
@@ -209,10 +219,11 @@ export function ActivityFeedCard({
   }
 
   function renderSummary() {
-    if (entry.kind === 'hit') {
+    if (entry.kind === 'hit' || entry.kind === 'deal') {
       return (
         <>
           <RarityName name={entry.hit.itemName} rarity={entry.hit.item?.rarity ?? null} />
+          {entry.hit.deal && <DealBadge deal={entry.hit.deal} />}
           <div className="flex-1" />
           <PriceTag price={entry.hit.price} />
           {sourceChip()}
@@ -259,7 +270,7 @@ export function ActivityFeedCard({
     if (entry.kind === 'price-check') {
       return <PriceCheckResultView result={entry.entry.result} maxListings={5} />;
     }
-    if (entry.kind === 'hit') {
+    if (entry.kind === 'hit' || entry.kind === 'deal') {
       return (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
@@ -283,6 +294,12 @@ export function ActivityFeedCard({
               </a>
             )}
           </div>
+          {/* Flip context for deal hits — listed vs expected resale (plan 41). */}
+          {entry.hit.deal && (
+            <div className="text-xs text-warn">
+              {composeDealContext(entry.hit.price, entry.hit.deal, t)}
+            </div>
+          )}
           {itemDetailToggle()}
         </div>
       );

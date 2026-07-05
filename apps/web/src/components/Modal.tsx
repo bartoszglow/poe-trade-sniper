@@ -1,12 +1,22 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+/** Dialog width cap — an enum, not ad-hoc classes at call sites. */
+export type ModalSize = 'md' | 'lg';
+
+const SIZE_CLASSES: Record<ModalSize, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+};
+
 interface ModalProps {
   open: boolean;
   /** Accessible name for the dialog (announced to screen readers). */
   label: string;
   onClose: () => void;
   children: ReactNode;
+  /** Width cap; default 'md'. Both stay fluid (full width minus margin) on phones. */
+  size?: ModalSize;
 }
 
 /**
@@ -15,7 +25,7 @@ interface ModalProps {
  * width with a margin on phones, capped on desktop. The caller composes the
  * content (header, form, actions) as children.
  */
-export function Modal({ open, label, onClose, children }: ModalProps) {
+export function Modal({ open, label, onClose, children, size = 'md' }: ModalProps) {
   // Only an overlay interaction that BOTH starts and ends on the overlay itself
   // dismisses the dialog. Without this, a click's target is the common ancestor of
   // press+release, so a text-selection drag that begins inside an input and releases
@@ -47,7 +57,7 @@ export function Modal({ open, label, onClose, children }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="w-full max-w-md rounded-lg border border-edge bg-surface-1 shadow-xl"
+        className={`w-full ${SIZE_CLASSES[size]} rounded-lg border border-edge bg-surface-1 shadow-xl`}
       >
         {children}
       </div>
