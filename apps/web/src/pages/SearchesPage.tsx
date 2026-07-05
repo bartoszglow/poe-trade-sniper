@@ -332,7 +332,7 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
       }}
       className="rounded-lg border border-edge bg-surface-1 p-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t('searches.fieldInput')} hint={t('searches.fieldInputHint')}>
           <TextInput
             value={input}
