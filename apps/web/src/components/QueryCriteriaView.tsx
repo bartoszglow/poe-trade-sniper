@@ -52,15 +52,29 @@ function hasAnyContent(criteria: ParsedCriteria): boolean {
 
 /**
  * Humanized rendering of a resolved trade query — the "what does this search
- * actually match" panel, laid out as group boxes in a responsive grid
- * (1 → 2 → 3 columns). Unrecognized parts render raw (lib/query-criteria never
- * drops data); stat ids resolve via the cached dictionary, falling back to raw
- * ids while it loads.
+ * actually match" panel, laid out as group boxes in an INTRINSIC grid: column
+ * count follows the container's available width (auto-fit), not the viewport,
+ * so the same component packs 1 column in the panel's half-width cell and 3-4
+ * in the full-width add-form preview. Unrecognized parts render raw
+ * (lib/query-criteria never drops data); stat ids resolve via the cached
+ * dictionary, falling back to raw ids while it loads.
  */
-export function QueryCriteriaView({ query }: { query: unknown }) {
+export function QueryCriteriaView({
+  query,
+  divineRate = null,
+  /** Hide the "Item" group chip — its host already frames the section (plan 42). */
+  hideItemLabel = false,
+}: {
+  query: unknown;
+  divineRate?: number | null;
+  hideItemLabel?: boolean;
+}) {
   const t = useT();
   const statsById = useStatsDictionary();
-  const criteria = useMemo(() => parseQueryCriteria(query, statsById), [query, statsById]);
+  const criteria = useMemo(
+    () => parseQueryCriteria(query, statsById, divineRate),
+    [query, statsById, divineRate],
+  );
 
   if (!hasAnyContent(criteria)) {
     return <p className="text-xs text-ink-faint">{t('criteria.empty')}</p>;
@@ -83,9 +97,9 @@ export function QueryCriteriaView({ query }: { query: unknown }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-x-2 gap-y-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-x-2.5 gap-y-5">
       {criteria.itemRows.length > 0 && (
-        <DetailCard title={t('criteria.item')}>
+        <DetailCard title={hideItemLabel ? undefined : t('criteria.item')}>
           <DetailRows rows={toRows(criteria.itemRows, disabledTag)} />
         </DetailCard>
       )}

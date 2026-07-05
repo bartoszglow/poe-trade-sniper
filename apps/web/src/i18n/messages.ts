@@ -342,6 +342,7 @@ export const EN = {
   'searches.editSearch': 'Edit search',
   'searches.openOnTradeSite': 'Open this search on the trade site',
   'searches.editLabelField': 'Label',
+  'searches.editLabelHint': 'Display name only — the search is unchanged.',
   'searches.editSearchField': 'Search (id or trade URL)',
   'searches.editSearchHint': 'Re-points this row to a new search — your hits stay.',
   'searches.empty': 'No watched searches yet — paste a trade search id or URL above.',
@@ -550,6 +551,8 @@ export const EN = {
   'dealWatch.warnInsufficient':
     'Too few usable listings — alerts stay off until the market gives more data.',
   'dealWatch.trendEmpty': 'No history yet — a sample lands with each market check.',
+  'dealWatch.trendGrowing':
+    'One sample so far — the trend chart appears with the next market checks (~hourly).',
   'dealWatch.trendSince': '{change} over the last {time}',
   'dealWatch.trendRederived': 'markers = cap updates',
   'dealWatch.detectionWs': 'Live websocket — instant alerts',
@@ -929,6 +932,7 @@ export const PL: Record<MessageKey, string> = {
   'searches.editSearch': 'Edytuj search',
   'searches.openOnTradeSite': 'Otwórz ten search na stronie handlu',
   'searches.editLabelField': 'Etykieta',
+  'searches.editLabelHint': 'Tylko nazwa wyświetlana — search bez zmian.',
   'searches.editSearchField': 'Search (id lub URL handlu)',
   'searches.editSearchHint': 'Przekierowuje wiersz na nowy search — trafienia pozostają.',
   'searches.empty': 'Brak obserwowanych wyszukiwań — wklej powyżej id lub URL wyszukiwania.',
@@ -1140,6 +1144,8 @@ export const PL: Record<MessageKey, string> = {
   'dealWatch.warnInsufficient':
     'Za mało użytecznych ofert — alerty wstrzymane, dopóki rynek nie da więcej danych.',
   'dealWatch.trendEmpty': 'Brak historii — próbka pojawia się po każdym sprawdzeniu rynku.',
+  'dealWatch.trendGrowing':
+    'Na razie jedna próbka — wykres trendu pojawi się po kolejnych sprawdzeniach rynku (~co godzinę).',
   'dealWatch.trendSince': '{change} w ciągu ostatnich {time}',
   'dealWatch.trendRederived': 'znaczniki = aktualizacje limitu',
   'dealWatch.detectionWs': 'Websocket na żywo — natychmiastowe alerty',

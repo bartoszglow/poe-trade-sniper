@@ -9,12 +9,18 @@ import { detailRowLayout, type DetailRowData } from '../lib/detail-layout';
  * layout to the CARD's own width (not the viewport's) — see {@link DetailRows}.
  * Arrange several in a responsive grid; the grid's `gap-y` clears the raised label.
  */
-export function DetailCard({ title, children }: { title: string; children: ReactNode }) {
+export function DetailCard({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <div className="@container relative rounded-md border border-edge bg-surface-2 px-3 pt-3.5 pb-3">
-      <span className="absolute -top-2 left-2.5 rounded bg-surface-3 px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-widest text-ink-muted uppercase">
-        {title}
-      </span>
+    <div
+      className={`@container relative rounded-md border border-edge bg-surface-2 px-3 pb-3 ${
+        title ? 'pt-3.5' : 'pt-3'
+      }`}
+    >
+      {title && (
+        <span className="absolute -top-2 left-2.5 rounded bg-surface-3 px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-widest text-ink-muted uppercase">
+          {title}
+        </span>
+      )}
       {children}
     </div>
   );

@@ -62,6 +62,17 @@ panel and scrolls to the deal card (no popup).
   (~200 ms ease-out via the grid 0fr→1fr technique, well under 0.5 s);
   prefers-reduced-motion disables the animation.
 
+## Styling note (2026-07-05)
+
+Live styling iteration (operator screenshots) supersedes the mockup's rough
+look: item criteria render borderless with an intrinsic auto-fit column grid
+(column count follows the panel cell width, not the viewport) and no "Item"
+heading; the deal-mode auto-cap shows divine-aware in the criteria; the deal
+form is mode-70% / threshold-30% with an integrated `%`/unit suffix; status is
+a quiet dot+label, not a filled pill; baseline values are stat tiles; the
+history chart shows a compact one-liner below 2 samples; settings is an aligned
+field grid with per-field hint lines and a baseline-aligned Save.
+
 ## Phasing
 
 1. Extract DealWatchModal internals → section components (no behavior change).

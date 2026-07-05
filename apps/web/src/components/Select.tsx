@@ -15,6 +15,19 @@ export interface SelectOption {
   label: string;
 }
 
+/**
+ * `default` = the standalone bordered control; `bare` = chromeless trigger for
+ * embedding inside another bordered field (e.g. a unit suffix attached to a
+ * number input) — the HOST box owns border/background/focus ring.
+ */
+export type SelectVariant = 'default' | 'bare';
+
+const TRIGGER_CLASSES: Record<SelectVariant, string> = {
+  default:
+    'flex w-full items-center justify-between gap-2 rounded-md border border-edge bg-surface-2 px-2 py-1.5 text-left text-sm text-ink focus:border-gold focus:outline-none disabled:opacity-50',
+  bare: 'flex w-full items-center justify-between gap-1 rounded px-1.5 py-1.5 text-left text-sm text-ink-muted hover:text-ink focus:outline-none disabled:opacity-50',
+};
+
 interface SelectProps {
   value: string;
   onChange: (value: string) => void;
@@ -24,6 +37,7 @@ interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  variant?: SelectVariant;
 }
 
 export function Select({
@@ -35,6 +49,7 @@ export function Select({
   placeholder,
   disabled,
   className = '',
+  variant = 'default',
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -102,7 +117,7 @@ export function Select({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-edge bg-surface-2 px-2 py-1.5 text-left text-sm text-ink focus:border-gold focus:outline-none disabled:opacity-50"
+        className={TRIGGER_CLASSES[variant]}
       >
         <span className={`truncate ${current ? '' : 'text-ink-faint'}`}>
           {current?.label ?? placeholder ?? ''}

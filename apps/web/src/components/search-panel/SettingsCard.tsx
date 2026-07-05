@@ -1,11 +1,11 @@
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 import type { SearchRuntimeInfo } from '@poe-sniper/shared';
 import { useT } from '../../i18n/i18n';
 import { ApiError } from '../../lib/api';
 import { draftsNeedReseed, type SettingsDraftAnchor } from '../../lib/settings-drafts';
 import type { UpdateSearchPayload } from '../../hooks/useSearches';
 import { Button } from '../Button';
-import { Field } from '../Field';
 import { TextInput } from '../TextInput';
 
 interface SettingsCardProps {
@@ -62,39 +62,56 @@ export function SettingsCard({ search, onUpdate }: SettingsCardProps) {
     }
   }
 
+  const labelDirty = draftLabel.trim() !== '' && draftLabel.trim() !== search.label;
+  const idDirty = !dealManaged && draftInput.trim() !== '' && draftInput.trim() !== search.id;
+  const canSave = !saving && (labelDirty || idDirty);
+
   return (
     <section className="rounded-md border border-edge bg-surface-2 p-3">
       <h3 className="text-xs font-medium tracking-wide text-ink-muted uppercase">
         {t('searchPanel.settings')}
       </h3>
-      <div className="mt-2 flex flex-wrap items-end gap-3">
-        <Field label={t('searches.editLabelField')}>
+      {/* Two equal fields side-by-side (stacked when narrow), each with a
+          reserved hint line so the Save button aligns to a single baseline. */}
+      <div className="mt-3 grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] tracking-wide text-ink-muted">
+            {t('searches.editLabelField')}
+          </span>
           <TextInput
             value={draftLabel}
             onChange={(changeEvent) => setDraftLabel(changeEvent.target.value)}
-            className="w-56"
+            className="w-full"
           />
-        </Field>
-        <Field
-          label={t('searches.editSearchField')}
-          hint={t(dealManaged ? 'dealWatch.editIdLocked' : 'searches.editSearchHint')}
-        >
+          <span className="min-h-[1rem] text-[11px] text-ink-faint">
+            {t('searches.editLabelHint')}
+          </span>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="flex items-center gap-1 text-[11px] tracking-wide text-ink-muted">
+            {t('searches.editSearchField')}
+            {dealManaged && <Lock className="h-3 w-3 text-ink-faint" aria-hidden />}
+          </span>
           <TextInput
             value={dealManaged ? search.id : draftInput}
             disabled={dealManaged}
             onChange={(changeEvent) => setDraftInput(changeEvent.target.value)}
-            className="w-56"
+            className={`w-full font-mono ${dealManaged ? 'text-ink-faint' : ''}`}
           />
-        </Field>
-        <Button
-          variant="primary"
-          disabled={saving || !draftLabel.trim() || (!dealManaged && !draftInput.trim())}
-          onClick={() => void save()}
-        >
-          {t('common.save')}
-        </Button>
+          <span className="min-h-[1rem] text-[11px] text-ink-faint">
+            {t(dealManaged ? 'dealWatch.editIdLocked' : 'searches.editSearchHint')}
+          </span>
+        </label>
+        <div className="flex flex-col gap-1">
+          <span className="hidden text-[11px] sm:block" aria-hidden>
+            &nbsp;
+          </span>
+          <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
+            {t('common.save')}
+          </Button>
+        </div>
       </div>
-      {errorMessage !== null && <p className="mt-1.5 text-xs text-danger">{errorMessage}</p>}
+      {errorMessage !== null && <p className="mt-1 text-xs text-danger">{errorMessage}</p>}
     </section>
   );
 }

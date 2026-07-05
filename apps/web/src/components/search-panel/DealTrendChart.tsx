@@ -57,6 +57,13 @@ export function DealTrendChart({ entries, nowMs, divinePriceExalted }: DealTrend
     return <p className="text-xs text-ink-faint">{t('dealWatch.trendEmpty')}</p>;
   }
 
+  // A one-point series is not a chart: a lone dot in an empty plot with a
+  // "0 ex over 2m · 1 sample" header reads as broken. Show a compact line
+  // until a second market check gives the trend something to draw.
+  if (entries.length < 2) {
+    return <p className="text-xs text-ink-faint">{t('dealWatch.trendGrowing')}</p>;
+  }
+
   const geometry =
     containerWidth > 0
       ? buildDealTrendGeometry(entries, {

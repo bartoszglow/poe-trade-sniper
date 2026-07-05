@@ -6,6 +6,7 @@ import type { MessageKey } from '../../i18n/messages';
 import { ApiError } from '../../lib/api';
 import { requestDealRefresh, type DealRefreshDeclinedCode } from '../../lib/deal-watch-api';
 import {
+  DEAL_DOT_CLASSES,
   DEAL_PATCH_ERROR_KEYS,
   DEAL_STATUS_DISPLAY,
   computeClientCutoffExalted,
@@ -17,15 +18,14 @@ import {
 import { formatPriceAmount } from '../../lib/format-price';
 import { formatRelativeMagnitude } from '../../lib/relative-time';
 import type { UpdateSearchPayload } from '../../hooks/useSearches';
-import { Badge } from '../Badge';
 import { Button } from '../Button';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Field } from '../Field';
 import { Select } from '../Select';
 
-/** PriceCheckEditor number-input pattern, sized for the primary threshold field. */
+/** Bare number input for the composite threshold field — the wrapper owns the box. */
 const NUMBER_INPUT_CLASS =
-  'w-24 rounded border border-edge bg-surface-2 px-1.5 py-1 text-right font-mono text-sm text-ink focus:border-gold focus:outline-none';
+  'min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right font-mono text-sm text-ink focus:outline-none';
 
 /** Detection-honesty line: a poll-served deal search is blind for sniping. */
 type DealDetectionKind = 'ws' | 'poll' | 'none';
@@ -129,6 +129,14 @@ export function DealPriceCard({
   const cooldownSecondsLeft =
     refreshRetryAtMs !== null ? Math.max(0, Math.ceil((refreshRetryAtMs - nowMs) / 1_000)) : 0;
 
+  // Save is gated on a dirty form: enabling is always actionable, but an
+  // unchanged config must not offer a Save that would spend GGG budget.
+  const dirty =
+    state === null ||
+    draftMode !== state.mode ||
+    parsedThreshold !== state.thresholdValue ||
+    (draftMode === 'absolute' && draftUnit !== state.unit);
+
   function showError(error: unknown): void {
     // Coded refusals (stackable item, watch cap) map to their catalog message —
     // the operator must never read a generic failure for an intended 409.
@@ -206,20 +214,29 @@ export function DealPriceCard({
           {t('searchPanel.deal')}
         </h3>
         {statusDisplay !== null && (
-          <Badge tone={statusDisplay.tone}>{t(statusDisplay.labelKey)}</Badge>
+          <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <span
+              aria-hidden
+              className={`inline-block h-1.5 w-1.5 rounded-full ${DEAL_DOT_CLASSES[statusDisplay.dotState]}`}
+            />
+            {t(statusDisplay.labelKey)}
+          </span>
         )}
       </div>
 
-      <div className="mt-2 space-y-3">
-        {state === null && <p className="text-xs text-ink-muted">{t('dealWatch.enableIntro')}</p>}
+      <div className="mt-3 space-y-3">
+        {state === null && (
+          <p className="text-xs leading-snug text-ink-muted">{t('dealWatch.enableIntro')}</p>
+        )}
         {broadQuery && (
           <p className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
             {t('dealWatch.broadQuery')}
           </p>
         )}
 
-        {/* Threshold configuration */}
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/* Threshold configuration: mode 70% + a composite threshold field 30%
+            with the unit/`%` as an integrated suffix (operator layout). */}
+        <div className="grid grid-cols-[7fr_3fr] gap-2">
           <Field label={t('dealWatch.modeLabel')}>
             <Select
               value={draftMode}
@@ -231,7 +248,7 @@ export function DealPriceCard({
             />
           </Field>
           <Field label={t('dealWatch.thresholdLabel')}>
-            <span className="flex items-center gap-2">
+            <div className="flex items-stretch rounded-md border border-edge bg-surface-2 focus-within:border-gold">
               <input
                 type="number"
                 min={0}
@@ -239,22 +256,27 @@ export function DealPriceCard({
                 value={draftThreshold}
                 onChange={(changeEvent) => setDraftThreshold(changeEvent.target.value)}
                 className={NUMBER_INPUT_CLASS}
+                aria-label={t('dealWatch.thresholdLabel')}
               />
-              {draftMode === 'percent' && <span className="text-sm text-ink-muted">%</span>}
-            </span>
+              {draftMode === 'percent' ? (
+                <span className="flex items-center border-l border-edge px-2 text-sm text-ink-muted">
+                  %
+                </span>
+              ) : (
+                <Select
+                  variant="bare"
+                  className="border-l border-edge"
+                  value={draftUnit}
+                  onChange={(value) => setDraftUnit(value === 'divine' ? 'divine' : 'exalted')}
+                  ariaLabel={t('dealWatch.unitLabel')}
+                  options={[
+                    { value: 'exalted', label: t('dealWatch.unit.exalted') },
+                    { value: 'divine', label: t('dealWatch.unit.divine') },
+                  ]}
+                />
+              )}
+            </div>
           </Field>
-          {draftMode === 'absolute' && (
-            <Field label={t('dealWatch.unitLabel')}>
-              <Select
-                value={draftUnit}
-                onChange={(value) => setDraftUnit(value === 'divine' ? 'divine' : 'exalted')}
-                options={[
-                  { value: 'exalted', label: t('dealWatch.unit.exalted') },
-                  { value: 'divine', label: t('dealWatch.unit.divine') },
-                ]}
-              />
-            </Field>
-          )}
         </div>
         {thresholdValid && (
           <p className="text-xs text-ink-muted">
@@ -273,22 +295,28 @@ export function DealPriceCard({
           <div className="rounded-md border border-edge bg-surface-1 p-3">
             {state.baseline !== null ? (
               <>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
-                  <div>
-                    <dt className="text-ink-faint">{t('dealWatch.baselineValue')}</dt>
-                    <dd className="font-medium text-ink">
+                <dl className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
+                  <div className="rounded border border-edge bg-surface-2 px-2.5 py-2">
+                    <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
+                      {t('dealWatch.baselineValue')}
+                    </dt>
+                    <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-gold-bright">
                       {renderDetailedAmount(state.baseline.amountExalted, divineRate)}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-ink-faint">{t('dealWatch.rawLowest')}</dt>
-                    <dd className="text-ink">
+                  <div className="rounded border border-edge bg-surface-2 px-2.5 py-2">
+                    <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
+                      {t('dealWatch.rawLowest')}
+                    </dt>
+                    <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-ink">
                       {renderDetailedAmount(state.baseline.rawLowestExalted, divineRate)}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-ink-faint">{t('dealWatch.sampleLabel')}</dt>
-                    <dd className="text-ink">
+                  <div className="rounded border border-edge bg-surface-2 px-2.5 py-2">
+                    <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
+                      {t('dealWatch.sampleLabel')}
+                    </dt>
+                    <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-ink">
                       {t('dealWatch.sampleOf', {
                         sample: state.baseline.sampleSize,
                         seen: state.baseline.listingsSeen,
@@ -296,7 +324,7 @@ export function DealPriceCard({
                     </dd>
                   </div>
                 </dl>
-                <p className="mt-1.5 text-xs text-ink-faint">
+                <p className="mt-2 text-[11px] text-ink-faint">
                   {t('dealWatch.checkedAgo', {
                     time: formatRelativeMagnitude(state.baseline.computedAt, nowMs),
                   })}
@@ -328,31 +356,36 @@ export function DealPriceCard({
         {declinedKey !== null && <p className="text-xs text-warn">{t(declinedKey)}</p>}
         {errorMessage !== null && <p className="text-xs text-danger">{errorMessage}</p>}
 
-        {/* Actions */}
+        {/* Actions: refresh (ghost) → save (primary) on the left; the
+            destructive disable pushed to the right, visually separated. */}
         <div className="flex flex-wrap items-center gap-2">
+          {state !== null && (
+            <Button
+              variant="ghost"
+              disabled={refreshBusy || cooldownSecondsLeft > 0}
+              onClick={() => void runManualRefresh()}
+            >
+              <RefreshCw className="h-4 w-4" />
+              {cooldownSecondsLeft > 0
+                ? t('dealWatch.refreshCooldown', { seconds: cooldownSecondsLeft })
+                : t('dealWatch.refreshCta')}
+            </Button>
+          )}
           <Button
             variant="primary"
-            disabled={saving || !thresholdValid}
+            disabled={saving || !thresholdValid || !dirty}
             onClick={() => void save()}
           >
             {state !== null ? t('common.save') : t('dealWatch.enableCta')}
           </Button>
           {state !== null && (
-            <>
-              <Button
-                variant="ghost"
-                disabled={refreshBusy || cooldownSecondsLeft > 0}
-                onClick={() => void runManualRefresh()}
-              >
-                <RefreshCw className="h-4 w-4" />
-                {cooldownSecondsLeft > 0
-                  ? t('dealWatch.refreshCooldown', { seconds: cooldownSecondsLeft })
-                  : t('dealWatch.refreshCta')}
-              </Button>
-              <Button variant="danger" onClick={() => setConfirmingDisable(true)}>
-                {t('dealWatch.disableCta')}
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              className="ml-auto text-danger hover:text-danger"
+              onClick={() => setConfirmingDisable(true)}
+            >
+              {t('dealWatch.disableCta')}
+            </Button>
           )}
         </div>
       </div>

@@ -137,15 +137,39 @@ export function formatFilterValue(value: unknown): string {
 }
 
 /**
- * Price reads as a range with the currency last: `≤ 100 exalted`, `5–40 divine`.
- * The currency lives in `option` and is often absent (no currency picked) —
- * then we show the bare bound, never an invented unit.
+ * A bare exalted amount rendered divine-aware for deal-mode auto-caps
+ * (option-less prices are value-converted in exalted, plan 41 D-dw-6). Kept
+ * inline — not imported from deal-watch-display — to avoid a dependency cycle
+ * (that module imports parseQueryCriteria). `≥ 1 divine → "26.3 div"`, else ex.
  */
-function formatPrice(value: unknown): string {
+function formatBareExalted(amountExalted: number, divineRate: number): string {
+  if (amountExalted < divineRate) return `${Math.round(amountExalted)} ex`;
+  const divine = amountExalted / divineRate;
+  const rounded = Number(divine.toFixed(1));
+  return `${rounded} div (${Math.round(amountExalted)} ex)`;
+}
+
+/**
+ * Price reads as a range with the currency last: `≤ 100 exalted`, `5–40 divine`.
+ * The currency lives in `option` and is often absent (no currency picked). A
+ * bare bound normally shows as-is; but when `divineRate` is supplied (deal-mode
+ * ItemCard) an option-less single bound is a value-converted exalted cap, so it
+ * renders divine-aware instead of an unreadable five-figure exalted number.
+ */
+function formatPrice(value: unknown, divineRate: number | null): string {
   if (!isRecord(value)) return formatFilterValue(value);
   const min = value['min'];
   const max = value['max'];
-  const currency = present(value['option']) ? scalarText(value['option']) : '';
+  const hasOption = present(value['option']);
+  const currency = hasOption ? scalarText(value['option']) : '';
+  // Deal-mode auto-cap: option-less single bound + a known divine rate.
+  if (divineRate !== null && divineRate > 0 && !hasOption) {
+    const sole = present(max) && !present(min) ? max : present(min) && !present(max) ? min : null;
+    if (typeof sole === 'number' && Number.isFinite(sole)) {
+      const prefix = present(max) ? '≤ ' : '≥ ';
+      return `${prefix}${formatBareExalted(sole, divineRate)}`;
+    }
+  }
   let range = '';
   if (present(min) && present(max)) range = `${scalarText(min)}–${scalarText(max)}`;
   else if (present(max)) range = `≤ ${scalarText(max)}`;
@@ -193,6 +217,8 @@ function parseStatGroups(stats: unknown, statsById: Map<string, string> | null):
 export function parseQueryCriteria(
   query: unknown,
   statsById: Map<string, string> | null,
+  /** When set, an option-less price bound renders divine-aware (deal-mode cap). */
+  divineRate: number | null = null,
 ): ParsedCriteria {
   const parsed: ParsedCriteria = {
     itemRows: [],
@@ -232,7 +258,7 @@ export function parseQueryCriteria(
       const inner = isRecord(group['filters']) ? group['filters'] : {};
       for (const [filterKey, filterValue] of Object.entries(inner)) {
         if (groupKey === 'trade_filters' && filterKey === 'price') {
-          parsed.price = formatPrice(filterValue);
+          parsed.price = formatPrice(filterValue, divineRate);
           continue;
         }
         rows.push({
