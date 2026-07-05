@@ -32,6 +32,7 @@ const PERCENT_CONFIG: DealWatchConfigInput = {
   mode: 'percent',
   thresholdValue: 30,
   unit: 'exalted',
+  baselineSampleSize: 10,
 };
 
 function makeRow(overrides: Partial<ManagedSearch> = {}): ManagedSearch {
@@ -72,18 +73,29 @@ function createHarness(
     itemCategory?: string | null;
     /** True = every dictionary lookup rejects (offline / no cache / no session). */
     dictionaryUnavailable?: boolean;
+    /** Pre-existing market snapshot on the row (D-dw-14 enable-reuse path). */
+    marketSnapshot?: import('@poe-sniper/shared').MarketPriceSnapshot | null;
   } = {},
 ) {
   const row = makeRow();
   const store = { row };
 
   const pauseState = { paused: options.paused ?? false };
+  const marketStore: { snapshot: import('@poe-sniper/shared').MarketPriceSnapshot | null } = {
+    snapshot: options.marketSnapshot ?? null,
+  };
   const searchManager = {
     getRow: vi.fn((searchId: string) => (store.row.id === searchId ? store.row : null)),
     dealModeRows: vi.fn(() => (store.row.dealWatch !== null ? [store.row] : [])),
     isWsConnected: vi.fn(() => true),
     isDetectionGloballyPaused: vi.fn(() => pauseState.paused),
     setDealRowCleanup: vi.fn(),
+    getMarketSnapshot: vi.fn(() => marketStore.snapshot),
+    updateMarketSnapshot: vi.fn(
+      (_searchId: string, snapshot: import('@poe-sniper/shared').MarketPriceSnapshot | null) => {
+        marketStore.snapshot = snapshot;
+      },
+    ),
     updateDealState: vi.fn((searchId: string, dealWatch: DealWatchState | null) => {
       store.row = { ...store.row, dealWatch };
       return {
@@ -289,6 +301,7 @@ describe('DealWatchService', () => {
         mode: 'percent',
         thresholdValue: 10,
         unit: 'exalted',
+        baselineSampleSize: 10,
         definition: {},
         originalSearchId: 'busy0001',
         originalPriceFilter: null,
@@ -326,6 +339,7 @@ describe('DealWatchService', () => {
         mode: 'percent',
         thresholdValue: 10,
         unit: 'exalted',
+        baselineSampleSize: 10,
         definition: {},
         originalSearchId: 'refused1',
         originalPriceFilter: null,
@@ -669,6 +683,7 @@ describe('DealWatchService', () => {
       mode: 'percent',
       thresholdValue: 30,
       unit: 'exalted',
+      baselineSampleSize: 10,
       definition: {},
       originalSearchId: 'x',
       originalPriceFilter: null,
@@ -714,6 +729,7 @@ describe('DealWatchService', () => {
       mode: 'percent',
       thresholdValue: 40,
       unit: 'exalted',
+      baselineSampleSize: 10,
     });
     expect(store.row.dealWatch?.thresholdValue).toBe(40);
     expect(searchManager.swapDealSearch).not.toHaveBeenCalled();
@@ -721,5 +737,62 @@ describe('DealWatchService', () => {
     await vi.runAllTimersAsync();
     // Debounce fired → re-derive queued + processed: cap now 1000 × 0.60.
     expect(store.row.dealWatch?.capExalted).toBe(600);
+  });
+
+  it('enable reuses a fresh market snapshot: no baseline GGG spend, snapshot cleared (D-dw-14)', async () => {
+    const freshSnapshot = {
+      baseline: {
+        amountExalted: 1000,
+        sampleSize: 6,
+        rawLowestExalted: 950,
+        computedAt: new Date().toISOString(),
+        listingsSeen: 10,
+      },
+      divinePriceExalted: 714,
+      nextCheckAt: null,
+    };
+    const { service, store, baselineService, searchManager, tradeApi } = createHarness({
+      marketSnapshot: freshSnapshot,
+    });
+    await service.applyConfig('orig1234', PERCENT_CONFIG);
+    // Baseline came from the snapshot — the only GGG spend is the derive POST.
+    expect(baselineService.computeBaseline).not.toHaveBeenCalled();
+    expect(tradeApi.createSearch).toHaveBeenCalledOnce();
+    expect(store.row.dealWatch?.baseline?.amountExalted).toBe(1000);
+    expect(store.row.dealWatch?.status).toBe('active');
+    // The market snapshot column cleared — the deal baseline owns display now.
+    expect(searchManager.updateMarketSnapshot).toHaveBeenCalledWith('orig1234', null);
+  });
+
+  it('enable ignores a STALE market snapshot and computes a fresh baseline', async () => {
+    const staleSnapshot = {
+      baseline: {
+        amountExalted: 1234,
+        sampleSize: 6,
+        rawLowestExalted: 950,
+        computedAt: new Date(Date.now() - 3_600_000).toISOString(),
+        listingsSeen: 10,
+      },
+      divinePriceExalted: 714,
+      nextCheckAt: null,
+    };
+    const { service, store, baselineService } = createHarness({ marketSnapshot: staleSnapshot });
+    await service.applyConfig('orig1234', PERCENT_CONFIG);
+    expect(baselineService.computeBaseline).toHaveBeenCalledOnce();
+    expect(store.row.dealWatch?.baseline?.amountExalted).toBe(1000);
+  });
+
+  it('disable hands the last deal baseline back as the market snapshot (D-dw-14)', async () => {
+    const { service, store, searchManager } = createHarness({ resolveOriginal: 'alive' });
+    await service.applyConfig('orig1234', PERCENT_CONFIG);
+    (searchManager.updateMarketSnapshot as ReturnType<typeof vi.fn>).mockClear();
+    await service.applyConfig(store.row.id, null);
+    expect(store.row.dealWatch).toBeNull();
+    const snapshotCalls = (searchManager.updateMarketSnapshot as ReturnType<typeof vi.fn>).mock
+      .calls as Array<[string, import('@poe-sniper/shared').MarketPriceSnapshot | null]>;
+    const handback = snapshotCalls[snapshotCalls.length - 1];
+    expect(handback?.[0]).toBe('orig1234');
+    expect(handback?.[1]?.baseline.amountExalted).toBe(1000);
+    expect(handback?.[1]?.nextCheckAt).toBeNull();
   });
 });

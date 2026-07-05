@@ -77,6 +77,9 @@ export class GuardTrippedError extends Error {
 export type FetchFunction = typeof fetch;
 export const HTTP_FETCH = Symbol('HTTP_FETCH');
 
+/** /api/trade2/fetch hard cap per call (api-notes, verified 2026-06-11). */
+const FETCH_IDS_PER_CALL = 10;
+
 /** Rate-limit policy keys — search/fetch/whisper/account budgets are separate. */
 const POLICY_SEARCH = 'search';
 const POLICY_FETCH = 'fetch';
@@ -359,30 +362,40 @@ export class TradeApiClient {
     if (ids.length === 0 || !searchPayload.id) {
       return { listings: [], total: searchPayload.total ?? 0, rateLimited: false };
     }
-    const fetchUrl = `${this.config.POE_BASE_URL}/api/trade2/fetch/${ids.join(',')}?query=${searchPayload.id}&realm=${realm}`;
-    const fetchResponse = await this.request(
-      POLICY_FETCH,
-      this.config.FETCH_SPACING_MS,
-      fetchUrl,
-      {},
-      correlationId,
-    );
-    if (fetchResponse.status === 429) return { listings: [], total: 0, rateLimited: true };
-    if (!fetchResponse.ok) {
-      throw new TradeApiError(fetchResponse.status, `price fetch: HTTP ${fetchResponse.status}`);
+    // /fetch accepts at most 10 ids per call (api-notes, verified 2026-06-11) —
+    // a deeper sample (D-dw-15, up to 20) chunks into spaced calls like the
+    // detection path's fetchListings; a mid-chunk 429 degrades to rateLimited
+    // with whatever chunks already landed discarded (the caller retries whole).
+    const listings: RawTradeListing[] = [];
+    for (let offset = 0; offset < ids.length; offset += FETCH_IDS_PER_CALL) {
+      const chunk = ids.slice(offset, offset + FETCH_IDS_PER_CALL);
+      const fetchUrl = `${this.config.POE_BASE_URL}/api/trade2/fetch/${chunk.join(',')}?query=${searchPayload.id}&realm=${realm}`;
+      const fetchResponse = await this.request(
+        POLICY_FETCH,
+        this.config.FETCH_SPACING_MS,
+        fetchUrl,
+        {},
+        correlationId,
+      );
+      if (fetchResponse.status === 429) return { listings: [], total: 0, rateLimited: true };
+      if (!fetchResponse.ok) {
+        throw new TradeApiError(fetchResponse.status, `price fetch: HTTP ${fetchResponse.status}`);
+      }
+      const fetchPayload = (await fetchResponse.json()) as { result?: RawTradeResult[] };
+      for (const entry of fetchPayload.result ?? []) {
+        listings.push({
+          price: entry?.listing?.price
+            ? {
+                amount: entry.listing.price.amount ?? 0,
+                currency: entry.listing.price.currency ?? '',
+              }
+            : null,
+          seller: entry?.listing?.account?.name ?? null,
+          indexedAt: entry?.listing?.indexed ?? null,
+          whisper: entry?.listing?.whisper ?? null,
+        });
+      }
     }
-    const fetchPayload = (await fetchResponse.json()) as { result?: RawTradeResult[] };
-    const listings: RawTradeListing[] = (fetchPayload.result ?? []).map((entry) => ({
-      price: entry?.listing?.price
-        ? {
-            amount: entry.listing.price.amount ?? 0,
-            currency: entry.listing.price.currency ?? '',
-          }
-        : null,
-      seller: entry?.listing?.account?.name ?? null,
-      indexedAt: entry?.listing?.indexed ?? null,
-      whisper: entry?.listing?.whisper ?? null,
-    }));
     return { listings, total: searchPayload.total ?? listings.length, rateLimited: false };
   }
 

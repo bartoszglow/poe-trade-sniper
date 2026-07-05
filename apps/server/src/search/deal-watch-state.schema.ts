@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import type { DealWatchState } from '@poe-sniper/shared';
+import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEFAULT_BASELINE_SAMPLE_SIZE,
+  type DealWatchState,
+} from '@poe-sniper/shared';
 
 const dealBaselineSchema = z.object({
   amountExalted: z.number(),
@@ -30,6 +35,13 @@ const dealWatchStateSchema = z.object({
   mode: z.enum(['percent', 'absolute']),
   thresholdValue: z.number().positive(),
   unit: z.enum(['exalted', 'divine']),
+  /** Absent in pre-knob persisted states (D-dw-15) — defaults to the old depth. */
+  baselineSampleSize: z
+    .number()
+    .int()
+    .min(BASELINE_SAMPLE_SIZE_MIN)
+    .max(BASELINE_SAMPLE_SIZE_MAX)
+    .default(DEFAULT_BASELINE_SAMPLE_SIZE),
   definition: z.record(z.string(), z.unknown()),
   originalSearchId: z.string().min(1),
   originalPriceFilter: z.unknown(),

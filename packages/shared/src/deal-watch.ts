@@ -61,6 +61,11 @@ export interface DealBaseline {
   listingsSeen: number;
 }
 
+/** Valid range + default for {@link DealWatchConfig.baselineSampleSize} (D-dw-15). */
+export const BASELINE_SAMPLE_SIZE_MIN = 3;
+export const BASELINE_SAMPLE_SIZE_MAX = 20;
+export const DEFAULT_BASELINE_SAMPLE_SIZE = 10;
+
 /** Operator-set deal configuration — the part that travels in export/import (D-dw-10). */
 export interface DealWatchConfig {
   /**
@@ -74,6 +79,12 @@ export interface DealWatchConfig {
   thresholdValue: number;
   /** Display + absolute-threshold unit (D-dw-11). */
   unit: DealWatchUnit;
+  /**
+   * How many of the CHEAPEST usable listings the base price is the median of
+   * (D-dw-15, operator-tunable per item: thin markets want ~5, liquid ones 10-20).
+   * Also the fetch depth of each market check. Valid 3..20, default 10.
+   */
+  baselineSampleSize: number;
   /** The operator's trade query minus its price filter — baseline + derive source (opaque here). */
   definition: unknown;
   /** The pre-transform search id, restored on disable. */
@@ -115,6 +126,21 @@ export interface DealBaselineHistoryEntry {
   /** True when this refresh moved the cap (re-derive) — the Activity-feed subset. */
   rederived: boolean;
   computedAt: string;
+}
+
+/**
+ * Approximate market price of a search's item (D-dw-14): the same robust
+ * baseline the deal watch uses, computed hourly for EVERY active search so the
+ * operator always knows what a purchase price compares against. Display-grade,
+ * best-effort data — no status machinery; null means "not known (yet)".
+ * Deal-mode rows serve this from their own `DealWatchState.baseline`.
+ */
+export interface MarketPriceSnapshot {
+  baseline: DealBaseline;
+  /** Divine rate at check time — display conversion (D-dw-11). */
+  divinePriceExalted: number | null;
+  /** ISO-8601 time of the next scheduled check; null when not scheduled. */
+  nextCheckAt: string | null;
 }
 
 /**

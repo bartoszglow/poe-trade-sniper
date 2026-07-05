@@ -227,6 +227,61 @@ describe('TradeApiClient.travel', () => {
   });
 });
 
+describe('TradeApiClient.priceSearch chunking (D-dw-15)', () => {
+  const SEARCH_IDS = Array.from({ length: 20 }, (_, index) => `id${index}`);
+
+  function fetchEntry(amount: number) {
+    return { listing: { price: { amount, currency: 'exalted' }, account: { name: 's#1' } } };
+  }
+
+  it('splits a >10-id fetch into ≤10-id calls (api-notes: max 10 per /fetch)', async () => {
+    const fetchStub = vi.fn((url: string) => {
+      const address = url;
+      if (address.includes('/api/trade2/search/')) {
+        return Promise.resolve(jsonResponse({ id: 'q1', result: SEARCH_IDS, total: 20 }));
+      }
+      const idCount = address.split('/fetch/')[1]!.split('?')[0]!.split(',').length;
+      expect(idCount).toBeLessThanOrEqual(10);
+      return Promise.resolve(
+        jsonResponse({ result: Array.from({ length: idCount }, (_, i) => fetchEntry(700 + i)) }),
+      );
+    }) as unknown as FetchFunction;
+    const { client, database } = createClient(fetchStub);
+    try {
+      const result = await client.priceSearch('poe2', 'League', { query: {} }, 20, 'cid');
+      expect(result.rateLimited).toBe(false);
+      expect(result.listings).toHaveLength(20);
+      // 1 search POST + 2 fetch chunks.
+      expect(fetchStub).toHaveBeenCalledTimes(3);
+    } finally {
+      database.$client.close();
+    }
+  });
+
+  it('degrades to rateLimited on a 429 mid-chunk', async () => {
+    let fetchCalls = 0;
+    const fetchStub = vi.fn((url: string) => {
+      const address = url;
+      if (address.includes('/api/trade2/search/')) {
+        return Promise.resolve(jsonResponse({ id: 'q1', result: SEARCH_IDS, total: 20 }));
+      }
+      fetchCalls += 1;
+      if (fetchCalls === 2) {
+        return Promise.resolve(jsonResponse({}, 429, { 'Retry-After': '0' }));
+      }
+      return Promise.resolve(jsonResponse({ result: [fetchEntry(700)] }));
+    }) as unknown as FetchFunction;
+    const { client, database } = createClient(fetchStub);
+    try {
+      const result = await client.priceSearch('poe2', 'League', { query: {} }, 20, 'cid');
+      expect(result.rateLimited).toBe(true);
+      expect(result.listings).toHaveLength(0);
+    } finally {
+      database.$client.close();
+    }
+  });
+});
+
 describe('applyPurchaseMode', () => {
   it('overrides status for the verified instant mapping', () => {
     const application = applyPurchaseMode({ status: { option: 'any' }, q: 1 }, 'instant');

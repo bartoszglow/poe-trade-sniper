@@ -59,8 +59,6 @@ export const envSchema = z.object({
   /** Forced re-derive age for the derived id — bounds id lifetime even in a flat
    *  market (id aging is TODO(verify), P0.2b — keep conservative until it lands). */
   DEAL_MAX_ID_AGE_MS: z.coerce.number().int().min(3_600_000).default(259_200_000),
-  /** Baseline = median of the cheapest K usable survivors after the outlier drop. */
-  DEAL_BASELINE_K: z.coerce.number().int().min(1).default(3),
   /** A listing below ratio × sample median is a price-fixer decoy — dropped. */
   DEAL_OUTLIER_RATIO: z.coerce.number().min(0).max(1).default(0.5),
   /** Fewer usable listings than this → insufficient-data (no baseline, no alerts). */
@@ -80,6 +78,18 @@ export const envSchema = z.object({
   DEAL_BASELINE_HISTORY_MAX: z.coerce.number().int().min(50).default(500),
   /** Deal queue beat — due-refresh scans + queued jobs are picked up on this cadence. */
   DEAL_QUEUE_TICK_MS: z.coerce.number().int().min(5_000).default(30_000),
+  // --- Universal market price (D-dw-14) ---
+  /** Killswitch for the hourly market checks on non-deal searches. */
+  MARKET_CHECK_ENABLED: z
+    .string()
+    .default('true')
+    .transform((value) => value !== 'false' && value !== '0'),
+  /** Market-price check cadence per active search (relative + jittered, R7). */
+  MARKET_CHECK_INTERVAL_MS: z.coerce.number().int().min(900_000).default(3_600_000),
+  /** Jitter ratio on the market-check schedule — no fleet-wide pattern. */
+  MARKET_CHECK_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.15),
+  /** A market snapshot fresher than this seeds a deal enable for free (no GGG spend). */
+  MARKET_SNAPSHOT_REUSE_MS: z.coerce.number().int().min(0).default(900_000),
   /** Hard deadline for every outbound GGG call (AbortController). */
   OUTBOUND_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15_000),
   /**

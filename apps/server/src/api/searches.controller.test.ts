@@ -25,6 +25,7 @@ function runtimeInfo(id: string): SearchRuntimeInfo {
     statusDetail: null,
     hitCount: 0,
     lastHitAt: null,
+    marketPrice: null,
   };
 }
 
@@ -55,6 +56,7 @@ describe('SearchesController — deal-watch routes', () => {
       mode: 'percent',
       thresholdValue: 30,
       unit: 'exalted', // schema default (D-dw-11)
+      baselineSampleSize: 10, // schema default (D-dw-15)
     });
   });
 
@@ -62,6 +64,29 @@ describe('SearchesController — deal-watch routes', () => {
     const { controller, dealWatch } = makeController();
     await controller.update('old12345', { input: 'NewId9999' });
     expect(dealWatch.applyConfig).not.toHaveBeenCalled();
+  });
+
+  it('validates baselineSampleSize into 3..20 (D-dw-15)', async () => {
+    const { controller, dealWatch } = makeController();
+    await expect(
+      controller.update('old12345', {
+        dealWatch: { mode: 'percent', thresholdValue: 30, baselineSampleSize: 2 },
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      controller.update('old12345', {
+        dealWatch: { mode: 'percent', thresholdValue: 30, baselineSampleSize: 21 },
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(dealWatch.applyConfig).not.toHaveBeenCalled();
+
+    await controller.update('old12345', {
+      dealWatch: { mode: 'percent', thresholdValue: 30, baselineSampleSize: 5 },
+    });
+    expect(dealWatch.applyConfig).toHaveBeenCalledWith(
+      'old12345',
+      expect.objectContaining({ baselineSampleSize: 5 }),
+    );
   });
 
   it('deal-refresh maps cooldown to 429 and declined states to 409 with codes (F22)', async () => {

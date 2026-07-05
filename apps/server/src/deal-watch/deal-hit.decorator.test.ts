@@ -11,6 +11,7 @@ function dealState(overrides: Partial<DealWatchState> = {}): DealWatchState {
     mode: 'percent',
     thresholdValue: 30,
     unit: 'exalted',
+    baselineSampleSize: 10,
     definition: {},
     originalSearchId: 'orig',
     originalPriceFilter: null,

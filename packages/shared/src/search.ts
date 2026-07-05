@@ -1,4 +1,4 @@
-import type { DealWatchState } from './deal-watch.js';
+import type { DealWatchState, MarketPriceSnapshot } from './deal-watch.js';
 
 /** Trade realm as used in pathofexile.com trade2 URLs. */
 export type Realm = 'poe2';
@@ -133,6 +133,12 @@ export interface SearchRuntimeInfo extends ManagedSearch {
   statusDetail: string | null;
   hitCount: number;
   lastHitAt: string | null;
+  /**
+   * Approximate market price of the item (D-dw-14) — deal rows serve their
+   * live baseline, ordinary rows the hourly market check. Runtime-only:
+   * deliberately NOT on ManagedSearch, so exports never carry it.
+   */
+  marketPrice: MarketPriceSnapshot | null;
 }
 
 /**

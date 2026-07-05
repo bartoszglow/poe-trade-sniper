@@ -32,6 +32,10 @@ export const searches = sqliteTable('searches', {
    *  ordinary search. Plan 41 D-dw-4: 1:1 lifecycle with the row, carried
    *  through id swaps. */
   dealWatch: text('deal_watch', { mode: 'json' }),
+  /** Hourly market-price snapshot for NON-deal rows (MarketPriceSnapshot in
+   *  packages/shared; D-dw-14) — deal rows serve display from their own
+   *  baseline. Runtime state: never exported, cleared on id re-points. */
+  marketPrice: text('market_price', { mode: 'json' }),
 });
 
 /** Named groups of searches on the Searches view (#33). One level deep. */

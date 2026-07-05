@@ -23,7 +23,6 @@ import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import { dealBaselineHistory } from '../db/schema.js';
 import { OutboundGuard } from '../guard/outbound-guard.js';
-import { STACK_PRICED_CATEGORY_KEYWORDS } from '../price-check/query-builder.js';
 import { TradeDataService } from '../price-check/trade-data.service.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { HitDecoratorRegistry } from '../search/hit-decorator.js';
@@ -38,12 +37,15 @@ import {
   stripPriceFilter,
   withPriceCap,
 } from './deal-query.js';
+import { stackableCategoryFor } from './stackable-gate.js';
 
 /** Operator-editable deal config (the PATCH payload subset). */
 export interface DealWatchConfigInput {
   mode: DealWatchMode;
   thresholdValue: number;
   unit: DealWatchUnit;
+  /** D-dw-15 sample-size knob — validated 3..20 at the controller edge. */
+  baselineSampleSize: number;
 }
 
 export type ManualRefreshResult =
@@ -58,6 +60,9 @@ interface DealJob {
   forceRederive: boolean;
   /** True = this job completes a disable (restore + clear) under the queue's serialization. */
   disable: boolean;
+  /** True = the enable was seeded from a fresh market snapshot (D-dw-14) —
+   *  skip the baseline GGG spend when the seeded baseline is still fresh. */
+  reuseBaseline: boolean;
   settlers: Array<() => void>;
 }
 
@@ -258,6 +263,7 @@ export class DealWatchService
       mode: configInput.mode,
       thresholdValue: configInput.thresholdValue,
       unit: configInput.unit,
+      baselineSampleSize: configInput.baselineSampleSize,
       definition,
       originalSearchId: row.id,
       originalPriceFilter,
@@ -283,13 +289,26 @@ export class DealWatchService
       );
       throw new ConflictException({ code: 'deal-unsupported-item' });
     }
+    // A fresh hourly market snapshot (D-dw-14) seeds the baseline for free —
+    // the first derive then skips its GGG spend. The snapshot column clears:
+    // the deal baseline owns display from here on.
+    const marketSnapshot = this.searchManager.getMarketSnapshot(row.id);
+    const reuseBaseline =
+      marketSnapshot !== null &&
+      Date.now() - Date.parse(marketSnapshot.baseline.computedAt) <=
+        this.config.MARKET_SNAPSHOT_REUSE_MS;
+    if (reuseBaseline) {
+      state.baseline = marketSnapshot.baseline;
+      state.divinePriceExalted = marketSnapshot.divinePriceExalted;
+    }
+    this.searchManager.updateMarketSnapshot(row.id, null);
     // Persist FIRST so the operator sees pending-derive even if the first
     // derive is slow/declined; the row still watches its original query until
     // the swap lands (the decorator treats pre-derive rows as ordinary). Under
     // pause/guard the queue settles immediately and this state IS the answer.
     this.searchManager.updateDealState(row.id, state);
     this.seedSnapshot(state);
-    await this.enqueueAndWait(state.watchId, { forceRederive: true });
+    await this.enqueueAndWait(state.watchId, { forceRederive: true, reuseBaseline });
     const current = this.rowByWatchId(state.watchId) ?? row;
     return this.runtimeInfo(current.id);
   }
@@ -306,6 +325,9 @@ export class DealWatchService
       mode: configInput.mode,
       thresholdValue: configInput.thresholdValue,
       unit: configInput.unit,
+      // A sample-size change is picked up by the NEXT scheduled refresh — it
+      // must not force an immediate GGG spend (D-dw-15).
+      baselineSampleSize: configInput.baselineSampleSize,
       status:
         state.status === 'restore-pending'
           ? state.baseline === null
@@ -402,24 +424,29 @@ export class DealWatchService
   // The serialized job queue (one derive/refresh in flight process-wide)
   // -------------------------------------------------------------------------
 
-  private enqueue(watchId: string, options: { forceRederive?: boolean; disable?: boolean }): void {
+  private enqueue(
+    watchId: string,
+    options: { forceRederive?: boolean; disable?: boolean; reuseBaseline?: boolean },
+  ): void {
     const existing = this.pendingJobs.get(watchId);
     if (existing) {
       existing.forceRederive = existing.forceRederive || (options.forceRederive ?? false);
       existing.disable = existing.disable || (options.disable ?? false);
+      existing.reuseBaseline = existing.reuseBaseline || (options.reuseBaseline ?? false);
       return;
     }
     this.pendingJobs.set(watchId, {
       watchId,
       forceRederive: options.forceRederive ?? false,
       disable: options.disable ?? false,
+      reuseBaseline: options.reuseBaseline ?? false,
       settlers: [],
     });
   }
 
   private enqueueAndWait(
     watchId: string,
-    options: { forceRederive?: boolean; disable?: boolean },
+    options: { forceRederive?: boolean; disable?: boolean; reuseBaseline?: boolean },
   ): Promise<void> {
     this.enqueue(watchId, options);
     const job = this.pendingJobs.get(watchId)!;
@@ -544,6 +571,16 @@ export class DealWatchService
         filters: restored,
         dealWatch: null,
       });
+      // The last deal baseline IS a valid market price — hand it to the
+      // universal loop so the row keeps its display for free (D-dw-14); the
+      // loop reschedules from its computedAt on discovery.
+      if (state.baseline !== null) {
+        this.searchManager.updateMarketSnapshot(info.id, {
+          baseline: state.baseline,
+          divinePriceExalted: state.divinePriceExalted,
+          nextCheckAt: null,
+        });
+      }
       this.forgetWatch(state.watchId);
       this.disableResults.set(job.watchId, info.id);
     } catch (error) {
@@ -600,12 +637,26 @@ export class DealWatchService
       }
     }
 
-    const computation = await this.baselineService.computeBaseline(
-      state.definition,
-      row.realm,
-      row.league,
-      correlationId,
-    );
+    // Seeded from a fresh market snapshot (D-dw-14): the baseline is already
+    // current — skip the GGG spend. The decorator's rate map stays empty until
+    // the next scheduled refresh (documented seedSnapshot posture).
+    const computation: BaselineComputation =
+      job.reuseBaseline &&
+      state.baseline !== null &&
+      Date.now() - Date.parse(state.baseline.computedAt) <= this.config.MARKET_SNAPSHOT_REUSE_MS
+        ? {
+            kind: 'ok',
+            baseline: state.baseline,
+            ratesByApiId: null,
+            divinePriceExalted: state.divinePriceExalted,
+          }
+        : await this.baselineService.computeBaseline(
+            state.definition,
+            row.realm,
+            row.league,
+            correlationId,
+            state.baselineSampleSize,
+          );
     // Post-await revalidation: the world may have moved while we awaited GGG.
     const currentRow = this.rowByWatchId(job.watchId);
     if (currentRow === null || currentRow.id !== searchIdAtStart) return;
@@ -770,18 +821,11 @@ export class DealWatchService
    * enable — the gate is best-effort, the broad-query UI warning is the net.
    */
   private async stackableCategoryFor(definition: unknown): Promise<string | null> {
-    for (const candidate of queryItemNames(definition)) {
-      try {
-        const category = await this.tradeData.categoryForItemName(candidate);
-        if (category !== null && isStackPricedCategory(category)) return category;
-      } catch (error) {
-        this.logger.warn(
-          `stackable gate skipped for '${candidate}' (dictionary unavailable): ${String(error)}`,
-        );
-        return null;
-      }
-    }
-    return null;
+    return stackableCategoryFor(this.tradeData, definition, (candidate, error) => {
+      this.logger.warn(
+        `stackable gate skipped for '${candidate}' (dictionary unavailable): ${String(error)}`,
+      );
+    });
   }
 
   private snapshotForSearch(searchId: string): DealRuntimeSnapshot | null {
@@ -921,32 +965,3 @@ export class DealWatchService
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** True when a dictionary category names a stack-priced family (set shared with price-check). */
-function isStackPricedCategory(category: string): boolean {
-  const categoryLower = category.toLowerCase();
-  return STACK_PRICED_CATEGORY_KEYWORDS.some((keyword) => categoryLower.includes(keyword));
-}
-
-function isJsonRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * The query's top-level `name`/`type` fields as dictionary-lookup candidates.
- * Both fields appear either as a plain string or as an `{option, …}` envelope
- * (evidenced query shapes, api-notes + apps/web/src/lib/query-criteria.ts).
- */
-function queryItemNames(definition: unknown): string[] {
-  if (!isJsonRecord(definition)) return [];
-  const candidates: string[] = [];
-  for (const field of ['name', 'type'] as const) {
-    const value = definition[field];
-    if (typeof value === 'string') {
-      candidates.push(value);
-    } else if (isJsonRecord(value) && typeof value['option'] === 'string') {
-      candidates.push(value['option']);
-    }
-  }
-  return candidates;
-}

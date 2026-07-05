@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { PURCHASE_MODES, SEARCH_EXPORT_VERSION } from '@poe-sniper/shared';
+import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEFAULT_BASELINE_SAMPLE_SIZE,
+  PURCHASE_MODES,
+  SEARCH_EXPORT_VERSION,
+} from '@poe-sniper/shared';
 import type {
   DealWatchState,
   ImportConflictMode,
@@ -30,6 +36,13 @@ const dealWatchEntrySchema = z
     mode: z.enum(['percent', 'absolute']),
     thresholdValue: z.number().positive(),
     unit: z.enum(['exalted', 'divine']),
+    /** Absent in pre-knob exports (D-dw-15) — defaults to the old fixed depth. */
+    baselineSampleSize: z
+      .number()
+      .int()
+      .min(BASELINE_SAMPLE_SIZE_MIN)
+      .max(BASELINE_SAMPLE_SIZE_MAX)
+      .default(DEFAULT_BASELINE_SAMPLE_SIZE),
     definition: z.record(z.string(), z.unknown()),
     originalSearchId: z.string().min(1),
     originalPriceFilter: z.unknown().nullable(),
@@ -95,6 +108,7 @@ function rebuildDealWatch(
     mode: entry.mode,
     thresholdValue: entry.thresholdValue,
     unit: entry.unit,
+    baselineSampleSize: entry.baselineSampleSize,
     definition: entry.definition,
     originalPriceFilter: entry.originalPriceFilter ?? null,
     originalSearchId: entry.originalSearchId,

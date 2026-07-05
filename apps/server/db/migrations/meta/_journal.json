@@ -92,6 +92,13 @@
       "when": 1783208258954,
       "tag": "0012_deal_baseline_history",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1783251771745,
+      "tag": "0013_market_price",
+      "breakpoints": true
     }
   ]
 }

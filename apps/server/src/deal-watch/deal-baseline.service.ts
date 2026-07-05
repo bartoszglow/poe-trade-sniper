@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { DealBaseline } from '@poe-sniper/shared';
+import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEFAULT_BASELINE_SAMPLE_SIZE,
+  type DealBaseline,
+} from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { convertToExalted } from '../market-data/currency-rates.js';
 import { Poe2ScoutClient } from '../market-data/poe2scout.client.js';
@@ -33,9 +38,11 @@ export type BaselineComputation =
 
 /**
  * Computes the price-fixer-resistant market baseline for a deal watch
- * (plan 41, D-dw-2): cheapest ≤10 online listings, normalized to exalted via
- * poe2scout rates, leading outliers dropped, median of the cheapest K
- * survivors. Detection always outranks this work via the headroom gate.
+ * (plan 41, D-dw-2 statistic + D-dw-15 operator-tunable depth): the cheapest N
+ * instant-buyout listings (N = the watch's baselineSampleSize), normalized to
+ * exalted via poe2scout rates, leading outliers dropped, baseline = median of
+ * the cheapest N survivors. Detection always outranks this work via the
+ * headroom gate.
  */
 @Injectable()
 export class DealBaselineService {
@@ -53,7 +60,14 @@ export class DealBaselineService {
     realm: string,
     league: string,
     correlationId: string = randomUUID(),
+    sampleSize: number = DEFAULT_BASELINE_SAMPLE_SIZE,
   ): Promise<BaselineComputation> {
+    // Persisted states are zod-validated, but the clamp keeps a hand-edited
+    // import or a future caller from turning the knob into a fetch amplifier.
+    const clampedSampleSize = Math.min(
+      BASELINE_SAMPLE_SIZE_MAX,
+      Math.max(BASELINE_SAMPLE_SIZE_MIN, Math.round(sampleSize)),
+    );
     if (this.governor.minHeadroom([...BASELINE_POLICIES]) < this.config.DEAL_MIN_HEADROOM) {
       return { kind: 'budget-low' };
     }
@@ -61,7 +75,7 @@ export class DealBaselineService {
       realm,
       league,
       { query: baselineQuery(definition), sort: { price: 'asc' } },
-      10,
+      clampedSampleSize,
       correlationId,
     );
     if (search.rateLimited) return { kind: 'rate-limited' };
@@ -78,7 +92,10 @@ export class DealBaselineService {
       if (exalted !== null) usable.push(exalted);
     }
     const listingsSeen = search.listings.length;
-    if (usable.length < this.config.DEAL_MIN_SAMPLE) {
+    // D-dw-15: a deliberately small sample (thin market) lowers the floor too —
+    // an operator asking for N=3 accepts a 3-listing market.
+    const insufficiencyFloor = Math.min(this.config.DEAL_MIN_SAMPLE, clampedSampleSize);
+    if (usable.length < insufficiencyFloor) {
       return {
         kind: 'insufficient',
         listingsSeen,
@@ -107,9 +124,11 @@ export class DealBaselineService {
         divinePriceExalted,
       };
     }
-    const cheapestK = survivors.slice(0, Math.min(this.config.DEAL_BASELINE_K, survivors.length));
+    // D-dw-15: the base price is the median of the N cheapest survivors — N is
+    // the operator's per-watch knob (supersedes the fixed median-of-K default).
+    const cheapestSample = survivors.slice(0, Math.min(clampedSampleSize, survivors.length));
     const baseline: DealBaseline = {
-      amountExalted: median(cheapestK),
+      amountExalted: median(cheapestSample),
       sampleSize: survivors.length,
       // The true raw cheapest usable listing, decoys included — display-only,
       // so the operator SEES the decoy the outlier drop removed (review F10).

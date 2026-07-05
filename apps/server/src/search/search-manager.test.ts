@@ -1447,6 +1447,7 @@ describe('deal-watch seam (plan 41)', () => {
     mode: 'percent' as const,
     thresholdValue: 30,
     unit: 'exalted' as const,
+    baselineSampleSize: 10,
     definition: { status: { option: 'securable' }, stats: [] },
     originalSearchId: 'AbCdEf111',
     originalPriceFilter: null,
@@ -1529,6 +1530,7 @@ describe('deal-watch seam (plan 41)', () => {
         mode: 'percent',
         thresholdValue: 30,
         unit: 'exalted',
+        baselineSampleSize: 10,
         definition: DEAL_STATE.definition,
         originalSearchId: 'AbCdEf111',
         originalPriceFilter: null,
@@ -1624,6 +1626,89 @@ describe('deal-watch seam (plan 41)', () => {
       expect(published).toContain('deal');
       expect(published).not.toContain('hit');
       expect(published.filter((type) => type === 'deal')).toHaveLength(1);
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+});
+
+describe('market-price seam (D-dw-14)', () => {
+  const SNAPSHOT = {
+    baseline: {
+      amountExalted: 500,
+      sampleSize: 5,
+      rawLowestExalted: 480,
+      computedAt: '2026-07-05T10:00:00Z',
+      listingsSeen: 10,
+    },
+    divinePriceExalted: 714,
+    nextCheckAt: '2026-07-05T11:00:00Z',
+  };
+
+  it('persists a snapshot, serves it on the runtime info, and clears it', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf111', { label: 'plain row' });
+      manager.updateMarketSnapshot('AbCdEf111', SNAPSHOT);
+      expect(manager.list()[0]?.marketPrice).toEqual(SNAPSHOT);
+      const persisted = database.$client
+        .prepare("SELECT market_price FROM searches WHERE id = 'AbCdEf111'")
+        .get() as { market_price: string };
+      expect(JSON.parse(persisted.market_price)).toEqual(SNAPSHOT);
+
+      manager.updateMarketSnapshot('AbCdEf111', null);
+      expect(manager.list()[0]?.marketPrice).toBeNull();
+      // Unknown row: silent no-op — the check may finish after a delete.
+      manager.updateMarketSnapshot('gone-row-1', SNAPSHOT);
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+
+  it('a deal row composes marketPrice from its own baseline, not the column', async () => {
+    const { manager } = createManager();
+    try {
+      await manager.add('AbCdEf111', { label: 'deal row' });
+      manager.updateDealState('AbCdEf111', {
+        watchId: 'w-market-1',
+        mode: 'percent',
+        thresholdValue: 30,
+        unit: 'exalted',
+        baselineSampleSize: 10,
+        definition: {},
+        originalSearchId: 'AbCdEf111',
+        originalPriceFilter: null,
+        baseline: SNAPSHOT.baseline,
+        capBaseline: SNAPSHOT.baseline,
+        capExalted: 350,
+        derivedCreatedAt: '2026-07-05T10:00:00Z',
+        status: 'active',
+        nextRefreshAt: '2026-07-05T11:30:00Z',
+        divinePriceExalted: 700,
+      });
+      const info = manager.list()[0];
+      expect(info?.marketPrice).toEqual({
+        baseline: SNAPSHOT.baseline,
+        divinePriceExalted: 700,
+        nextCheckAt: '2026-07-05T11:30:00Z',
+      });
+      expect(manager.marketCheckCandidates()).toHaveLength(0);
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+
+  it('candidates exclude archived and disabled rows', async () => {
+    const { manager } = createManager();
+    try {
+      await manager.add('AbCdEf111', { label: 'active' });
+      await manager.add('AbCdEf222', { label: 'disabled' });
+      await manager.add('AbCdEf333', { label: 'archived' });
+      manager.update('AbCdEf222', { enabled: false });
+      manager.update('AbCdEf333', { archived: true });
+      expect(manager.marketCheckCandidates().map((candidate) => candidate.row.id)).toEqual([
+        'AbCdEf111',
+      ]);
     } finally {
       manager.onApplicationShutdown();
     }

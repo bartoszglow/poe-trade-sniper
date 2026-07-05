@@ -21,7 +21,6 @@ function createService(options: {
 }) {
   const config = loadConfig({
     DEAL_MIN_SAMPLE: '3',
-    DEAL_BASELINE_K: '3',
     DEAL_OUTLIER_RATIO: '0.5',
     ...options.configOverrides,
   });
@@ -77,8 +76,8 @@ describe('DealBaselineService.computeBaseline', () => {
     expect(JSON.stringify(body.query)).not.toContain('price');
   });
 
-  it('computes the median of the cheapest K usable listings, cross-currency', async () => {
-    const { service } = createService({
+  it('computes the median of the cheapest N usable listings, cross-currency (D-dw-15)', async () => {
+    const { service, priceSearch } = createService({
       listings: [
         listing(700, 'exalted'),
         listing(1, 'divine'), // 700 exalted
@@ -87,14 +86,56 @@ describe('DealBaselineService.computeBaseline', () => {
         listing(2, 'divine'), // 1400 exalted
       ],
     });
-    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League');
+    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 3);
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
-    // Sorted: 700, 700, 750, 800, 1400 → cheapest 3 → median 700.
+    // Sorted: 700, 700, 750, 800, 1400 → cheapest N=3 → median 700.
     expect(result.baseline.amountExalted).toBe(700);
     expect(result.baseline.rawLowestExalted).toBe(700);
     expect(result.baseline.sampleSize).toBe(5);
     expect(result.baseline.listingsSeen).toBe(5);
+    // N is also the fetch depth (the priceSearch limit argument).
+    expect(priceSearch.mock.calls[0]![3]).toBe(3);
+  });
+
+  it('N larger than the usable pool medians the whole pool (D-dw-15)', async () => {
+    const { service, priceSearch } = createService({
+      listings: [
+        listing(700, 'exalted'),
+        listing(1, 'divine'), // 700 exalted
+        listing(750, 'exalted'),
+        listing(800, 'exalted'),
+        listing(2, 'divine'), // 1400 exalted
+      ],
+    });
+    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 20);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    // All 5 usable → median 750; fetch depth carried the full N.
+    expect(result.baseline.amountExalted).toBe(750);
+    expect(priceSearch.mock.calls[0]![3]).toBe(20);
+  });
+
+  it('a deliberately small N lowers the insufficiency floor for thin markets (D-dw-15)', async () => {
+    const { service } = createService({
+      listings: [listing(700, 'exalted'), listing(720, 'exalted'), listing(740, 'exalted')],
+      // Global floor 5, but the operator chose N=3 — a 3-listing market is accepted.
+      configOverrides: { DEAL_MIN_SAMPLE: '5' },
+    });
+    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 3);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.baseline.amountExalted).toBe(720);
+  });
+
+  it('clamps an out-of-range sample size into 3..20', async () => {
+    const { service, priceSearch } = createService({
+      listings: [listing(700, 'exalted'), listing(720, 'exalted'), listing(740, 'exalted')],
+    });
+    await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 50);
+    expect(priceSearch.mock.calls[0]![3]).toBe(20);
+    await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 1);
+    expect(priceSearch.mock.calls[1]![3]).toBe(3);
   });
 
   it('drops price-fixer outliers below ratio × median (the 1-mirror decoy inverse)', async () => {
@@ -113,8 +154,9 @@ describe('DealBaselineService.computeBaseline', () => {
     // rawLowest shows the RAW cheapest usable — the decoy itself — so the
     // operator sees what the outlier drop removed (review F10); the baseline
     // math never uses it.
+    // Default N=10 medians all 4 survivors: (700 + 710) / 2.
     expect(result.baseline.rawLowestExalted).toBe(10);
-    expect(result.baseline.amountExalted).toBe(700);
+    expect(result.baseline.amountExalted).toBe(705);
     expect(result.baseline.sampleSize).toBe(4);
   });
 
@@ -157,16 +199,16 @@ describe('DealBaselineService.computeBaseline', () => {
       // decoys to the outlier drop must NOT un-baseline a liquid item.
       configOverrides: { DEAL_MIN_SAMPLE: '5' },
     });
-    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League');
+    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 3);
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
-    // Survivors {2, 3, 1000, 1010} → cheapest 3 → median 3.
+    // Survivors {2, 3, 1000, 1010} → cheapest N=3 → median 3.
     expect(result.baseline.amountExalted).toBe(3);
     expect(result.baseline.sampleSize).toBe(4);
     expect(result.baseline.rawLowestExalted).toBe(1);
   });
 
-  it('computes an even-length median (both the sample and cheapest-K, F17h)', async () => {
+  it('computes an even-length median (both the sample and cheapest-N, F17h)', async () => {
     const { service } = createService({
       listings: [
         listing(600, 'exalted'),
@@ -174,12 +216,12 @@ describe('DealBaselineService.computeBaseline', () => {
         listing(800, 'exalted'),
         listing(900, 'exalted'),
       ],
-      // K=2 forces an even cheapest-K median: (600 + 700) / 2.
-      configOverrides: { DEAL_MIN_SAMPLE: '4', DEAL_BASELINE_K: '2' },
+      configOverrides: { DEAL_MIN_SAMPLE: '4' },
     });
-    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League');
+    // N=4 → even median of the cheapest four: (700 + 800) / 2.
+    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League', undefined, 4);
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
-    expect(result.baseline.amountExalted).toBe(650);
+    expect(result.baseline.amountExalted).toBe(750);
   });
 });

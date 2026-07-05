@@ -87,6 +87,8 @@ describe('ImportService', () => {
       mode: 'percent',
       thresholdValue: 30,
       unit: 'exalted',
+      // Absent in the (pre-knob) file → the old fixed depth (D-dw-15).
+      baselineSampleSize: 10,
       definition: { type: 'Barrage' },
       originalSearchId: 'orig1',
       originalPriceFilter: { max: 5, option: 'divine' },

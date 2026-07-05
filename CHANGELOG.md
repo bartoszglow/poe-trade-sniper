@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Market price for every active search (plan 41, D-dw-14)**: the app now
+  checks each active search's approximate market price about once an hour (the
+  same manipulation-resistant instant-buyout baseline deal watch uses, with the
+  search's own price filter set aside) so you always know what a purchase price
+  compares against. Deal-watch rows reuse their own baseline — no extra
+  traffic — and enabling deal watch on a freshly-checked search skips the
+  initial market call entirely. The row display and per-hit price context land
+  in the web UI alongside this release; `MARKET_CHECK_ENABLED=false` turns the
+  loop off.
+
 - **Unified search detail panel (plan 42)**: clicking anywhere on a search row
   (except its switches and buttons) expands one animated panel that replaces the
   old criteria dropdown and both popups — item criteria, the full deal-price

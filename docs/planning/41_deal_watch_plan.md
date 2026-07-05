@@ -425,7 +425,6 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 | `DEAL_REFRESH_JITTER_RATIO`       | 0.15              | Relative-scheduling jitter                                          |
 | `DEAL_DRIFT_THRESHOLD`            | 0.05              | Drift vs capBaseline that triggers re-derive                        |
 | `DEAL_MAX_ID_AGE_MS`              | 259 200 000 (3 d) | Forced re-derive age (pending P0.2/P0.8)                            |
-| `DEAL_BASELINE_K`                 | 3                 | Baseline = median of cheapest K survivors                           |
 | `DEAL_OUTLIER_RATIO`              | 0.5               | Listing < ratio × sample median = dropped (price-fixer)             |
 | `DEAL_MIN_SAMPLE`                 | 5                 | Fewer usable listings → insufficient-data                           |
 | `DEAL_MIN_HEADROOM`               | 0.3               | Governor headroom reserve (shared helper with D-pc-2)               |
@@ -435,6 +434,10 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 | `DEAL_CAP_MARGIN_RATIO`           | 0                 | Extra GGG-cap headroom above cutoff (Q3)                            |
 | `DEAL_BASELINE_HISTORY_MAX`       | 500               | Rolling per-watch cap on baseline-history rows (D-dw-12)            |
 | `DEAL_QUEUE_TICK_MS`              | 30 000            | Deal queue beat (due-refresh scan + queued-job pickup)              |
+| `MARKET_CHECK_ENABLED`            | true              | Killswitch for the universal market-price loop (D-dw-14)            |
+| `MARKET_CHECK_INTERVAL_MS`        | 3 600 000         | Market-price check cadence per active non-deal search (D-dw-14)     |
+| `MARKET_CHECK_JITTER_RATIO`       | 0.15              | Jitter on the market-check schedule                                 |
+| `MARKET_SNAPSHOT_REUSE_MS`        | 900 000           | Snapshot fresher than this seeds a deal enable for free (D-dw-14)   |
 
 ### Failure modes (honest degradation, `DealWatchStatusCode`)
 
@@ -594,6 +597,30 @@ for deal searches" is parked.
   The stored definition keeps the ORIGINAL status untouched — disable restores
   faithfully. (Supersedes both "force online" — starved samples, 2 vs 56 — and
   the brief "inherit definition status" fix from earlier the same day.)
+- **D-dw-14 (operator, 2026-07-05 — "rób A")** — universal market price: EVERY
+  enabled, non-archived search gets an hourly-ish market check (the same robust
+  baseline as deal mode; `stripPriceFilter` + the D-dw-13 instant-buyout
+  status), persisted as a lightweight `searches.market_price` snapshot
+  (migration 0013) and served on `SearchRuntimeInfo.marketPrice` — deal rows
+  compose it from their own baseline instead (no double traffic). Traffic:
+  ~2 req/h per search, at most ONE check per queue beat (a resume burst
+  self-paces), same headroom reserve / pause / guard gating as deal refreshes —
+  detection always outranks it; the shared stackable gate skips stack-priced
+  items. A snapshot fresher than `MARKET_SNAPSHOT_REUSE_MS` seeds a deal enable
+  for free, and disabling a deal hands its last baseline back as the market
+  snapshot. Runtime-only state: never exported, cleared on id re-points;
+  `MARKET_CHECK_ENABLED` is the killswitch.
+- **D-dw-15 (operator, 2026-07-05)** — the baseline sample size is a per-watch
+  knob (`DealWatchConfig.baselineSampleSize`, valid 3..20, default 10):
+  base price = median of the N cheapest usable survivors after the outlier
+  drop, and N is also the fetch depth. Thin markets set ~5, liquid ones 10–20.
+  Supersedes the fixed `DEAL_BASELINE_K` (removed). The insufficiency floor
+  drops to `min(DEAL_MIN_SAMPLE, N)` so a deliberately small N works on a thin
+  market. Fetch depth > 10 chunks into ≤10-id `/fetch` calls (api-notes cap).
+  The universal market-price loop (D-dw-14, non-deal rows) uses the default 10.
+  A sample-size edit is picked up by the next scheduled refresh — never an
+  immediate GGG spend. Config travels in export/import (older files default to
+  10).
 - **D-dw-12 (operator request, 2026-07-05)** — baseline price history: every
   successful baseline refresh appends one row to a `deal_baseline_history`
   table (migration 0012: `watch_id`, `amount_exalted`, `raw_lowest_exalted`,

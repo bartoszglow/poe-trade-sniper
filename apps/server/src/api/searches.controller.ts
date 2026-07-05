@@ -13,6 +13,9 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEFAULT_BASELINE_SAMPLE_SIZE,
   PURCHASE_MODES,
   type DealBaselineHistoryEntry,
   type Hit,
@@ -41,6 +44,13 @@ const dealWatchConfigSchema = z.object({
   mode: z.enum(['percent', 'absolute']),
   thresholdValue: z.number().positive(),
   unit: z.enum(['exalted', 'divine']).default('exalted'),
+  /** D-dw-15: how many cheapest listings the base price is the median of. */
+  baselineSampleSize: z
+    .number()
+    .int()
+    .min(BASELINE_SAMPLE_SIZE_MIN)
+    .max(BASELINE_SAMPLE_SIZE_MAX)
+    .default(DEFAULT_BASELINE_SAMPLE_SIZE),
 });
 
 const updateSearchSchema = z

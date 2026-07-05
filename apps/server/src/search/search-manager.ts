@@ -12,6 +12,7 @@ import {
 import { and, asc, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
 import type {
   DealWatchState,
+  MarketPriceSnapshot,
   EngineKind,
   EngineStatus,
   ExportedRoom,
@@ -49,6 +50,7 @@ import {
 } from '../trade-api/trade-api.client.js';
 import { offerKey } from '@poe-sniper/shared';
 import { parseDealWatchState } from './deal-watch-state.schema.js';
+import { parseMarketPriceSnapshot } from './market-price-snapshot.schema.js';
 import { ENGINE_REGISTRY, type EngineFactory } from './engine-registry.js';
 import { HitDecoratorRegistry } from './hit-decorator.js';
 import { LiveOfferRegistry } from './live-offer-registry.js';
@@ -123,6 +125,9 @@ interface Watcher {
   correlationId: string;
   hitCount: number;
   lastHitAt: string | null;
+  /** Hourly market-price snapshot (D-dw-14) — NON-deal rows only; runtime-only
+   *  state (never on ManagedSearch, so exports and events never carry it). */
+  marketPrice: MarketPriceSnapshot | null;
 }
 
 /** In-memory room state (#33). Map insertion order = top-level room order. */
@@ -198,7 +203,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       });
     }
     for (const row of this.rowsInFlattenedOrder()) {
-      this.watchers.set(row.id, this.createWatcher(this.rowToManagedSearch(row)));
+      this.watchers.set(
+        row.id,
+        this.createWatcher(this.rowToManagedSearch(row), parseMarketPriceSnapshot(row.marketPrice)),
+      );
     }
     // Restore hit count + last-hit from the hits table in ONE grouped query (not
     // N per-search scans, PERF-6) — without it the UI shows "0 hits" after restart.
@@ -535,6 +543,43 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
+   * Persist a market-price snapshot for an ORDINARY row (D-dw-14) — or clear it
+   * (deal enable takes over, id re-point invalidates). Row already gone (check
+   * finished after a delete) → silent no-op; this is best-effort display data.
+   */
+  updateMarketSnapshot(searchId: string, snapshot: MarketPriceSnapshot | null): void {
+    const watcher = this.watchers.get(searchId);
+    if (!watcher) return;
+    watcher.marketPrice = snapshot;
+    this.database
+      .update(searches)
+      .set({ marketPrice: snapshot })
+      .where(eq(searches.id, searchId))
+      .run();
+    this.publishSearchesChanged();
+  }
+
+  /** The row's current market snapshot (deal-enable reuse; D-dw-14). */
+  getMarketSnapshot(searchId: string): MarketPriceSnapshot | null {
+    return this.watchers.get(searchId)?.marketPrice ?? null;
+  }
+
+  /**
+   * Rows the market-price loop may check (D-dw-14): enabled, non-archived and
+   * NOT deal-mode (deal rows are covered by their own refresh loop).
+   */
+  marketCheckCandidates(): Array<{ row: ManagedSearch; snapshot: MarketPriceSnapshot | null }> {
+    return [...this.watchers.values()]
+      .filter(
+        (watcher) =>
+          watcher.row.enabled &&
+          watcher.row.archivedAt === null &&
+          (watcher.row.dealWatch ?? null) === null,
+      )
+      .map((watcher) => ({ row: watcher.row, snapshot: watcher.marketPrice }));
+  }
+
+  /**
    * Swap a deal-mode search onto a new GGG id + watched query (derive /
    * re-derive / disable-restore):
    * - `next.id` === current id → filters/state update only (ids are
@@ -798,6 +843,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
                 mode: dealWatch.mode,
                 thresholdValue: dealWatch.thresholdValue,
                 unit: dealWatch.unit,
+                baselineSampleSize: dealWatch.baselineSampleSize,
                 definition: dealWatch.definition,
                 originalSearchId: dealWatch.originalSearchId,
                 originalPriceFilter: dealWatch.originalPriceFilter,
@@ -1556,7 +1602,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
   }
 
-  private createWatcher(row: ManagedSearch): Watcher {
+  private createWatcher(
+    row: ManagedSearch,
+    marketPrice: MarketPriceSnapshot | null = null,
+  ): Watcher {
     const archived = row.archivedAt !== null;
     return {
       row,
@@ -1569,6 +1618,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       correlationId: randomUUID(),
       hitCount: 0,
       lastHitAt: null,
+      marketPrice,
     };
   }
 
@@ -1613,7 +1663,22 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       statusDetail: watcher.statusDetail,
       hitCount: watcher.hitCount,
       lastHitAt: watcher.lastHitAt,
+      marketPrice: this.composeMarketPrice(watcher),
     };
+  }
+
+  /** Deal rows serve their live baseline; ordinary rows the hourly snapshot (D-dw-14). */
+  private composeMarketPrice(watcher: Watcher): MarketPriceSnapshot | null {
+    const dealWatch = watcher.row.dealWatch;
+    if (dealWatch !== null) {
+      if (dealWatch.baseline === null) return null;
+      return {
+        baseline: dealWatch.baseline,
+        divinePriceExalted: dealWatch.divinePriceExalted,
+        nextCheckAt: dealWatch.nextRefreshAt,
+      };
+    }
+    return watcher.marketPrice;
   }
 
   private publishSearchesChanged(): void {
