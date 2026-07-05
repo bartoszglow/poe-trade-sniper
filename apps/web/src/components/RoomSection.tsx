@@ -5,6 +5,8 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import type { RoomDeleteMode, RoomInfo, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { roomDragId, roomDropId } from '../lib/search-layout-dnd';
+import { shouldRowClickExpand } from '../lib/row-expand';
+import { useExpandTransition } from '../hooks/usePanelExpansion';
 import { useT, useTn } from '../i18n/i18n';
 import { ApiError } from '../lib/api';
 import { Badge } from './Badge';
@@ -99,6 +101,11 @@ export function RoomSection({
   }
 
   const CollapseIcon = collapsed ? ChevronRight : ChevronDown;
+  // Animate expand/collapse like the search detail panel (grid 0fr→1fr, ~200ms,
+  // reduced-motion aware). `forceCollapsed` (transient, drag-over) rides the same
+  // transition — the member list mounts through the collapse so it can animate.
+  const roomOpen = !collapsed && !forceCollapsed;
+  const { rendered: membersRendered, shown: membersShown } = useExpandTransition(roomOpen);
 
   return (
     <li
@@ -112,9 +119,22 @@ export function RoomSection({
             : 'border-edge bg-surface-0'
       }`}
     >
-      <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+      {/* D-42-1's guard, reused: the whole header toggles collapse — except
+          interactive controls (rename, switch, delete, drag handle) and
+          portal/text-selection clicks, same exclusion rule as the search row. */}
+      <div
+        className="flex cursor-pointer flex-wrap items-center gap-3 px-4 py-2.5"
+        onClick={(clickEvent) => {
+          if (
+            shouldRowClickExpand(clickEvent.currentTarget, clickEvent.target, window.getSelection())
+          ) {
+            void run(onToggleCollapsed);
+          }
+        }}
+      >
         <button
           type="button"
+          data-no-expand
           aria-label={t('rooms.reorder')}
           title={t('rooms.reorder')}
           className="shrink-0 cursor-grab touch-none text-ink-faint transition-colors hover:text-ink active:cursor-grabbing"
@@ -186,26 +206,36 @@ export function RoomSection({
           <Trash2 className="h-4 w-4" />
         </IconButton>
       </div>
-      {!collapsed && !forceCollapsed && (
-        <SortableContext
-          items={members.map((member) => member.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <ul className="flex flex-col gap-2 border-t border-edge p-3">
-            {members.map((member) => renderSearch(member))}
-            {members.length === 0 && (
-              <li
-                ref={setEmptyDropZoneRef}
-                className={`rounded-lg border border-dashed px-4 py-3 text-center text-sm transition-colors ${
-                  isOverEmptyDropZone ? 'border-gold/70 text-ink' : 'border-edge text-ink-faint'
-                }`}
-              >
-                {t('rooms.empty')}
-              </li>
-            )}
-          </ul>
-        </SortableContext>
-      )}
+      {/* Animated expand/collapse: grid 0fr→1fr height transition, matching the
+          search detail panel (D-42-1). */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+          membersShown ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          {membersRendered && (
+            <SortableContext
+              items={members.map((member) => member.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className="flex flex-col gap-2 border-t border-edge p-3">
+                {members.map((member) => renderSearch(member))}
+                {members.length === 0 && (
+                  <li
+                    ref={setEmptyDropZoneRef}
+                    className={`rounded-lg border border-dashed px-4 py-3 text-center text-sm transition-colors ${
+                      isOverEmptyDropZone ? 'border-gold/70 text-ink' : 'border-edge text-ink-faint'
+                    }`}
+                  >
+                    {t('rooms.empty')}
+                  </li>
+                )}
+              </ul>
+            </SortableContext>
+          )}
+        </div>
+      </div>
       <ConfirmDialog
         open={confirmingDelete}
         title={t('rooms.deleteTitle')}

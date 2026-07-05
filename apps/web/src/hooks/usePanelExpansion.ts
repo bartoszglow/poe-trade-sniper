@@ -49,3 +49,46 @@ export function usePanelExpansion(): PanelExpansion {
   }
   return { panelRendered, panelShown, openPanel, closePanel, togglePanel };
 }
+
+export interface ExpandTransition {
+  /** Content is mounted (kept through the collapse transition, then dropped). */
+  rendered: boolean;
+  /** Height state driving the grid 0fr→1fr transition. */
+  shown: boolean;
+}
+
+/**
+ * The same ~200ms grid 0fr→1fr expand/collapse as {@link usePanelExpansion},
+ * but CONTROLLED by an external `open` boolean — for a section whose expanded
+ * state lives elsewhere (e.g. a room's server-persisted `collapsed` flag). Mounts
+ * on open, commits the 0fr frame before flipping to 1fr, and unmounts after the
+ * transition window on close (timer, not transitionend — that event never fires
+ * under prefers-reduced-motion).
+ */
+export function useExpandTransition(open: boolean): ExpandTransition {
+  const [rendered, setRendered] = useState(open);
+  const [shown, setShown] = useState(open);
+
+  // Adjust-during-render (no effect, so no cascading-render lint): opening mounts
+  // immediately so the 0fr frame commits before paint; closing flips to 0fr at
+  // once (the transition then plays) and the content unmounts on the timer below.
+  // Each guard self-clears on the re-render, so neither loops.
+  if (open && !rendered) setRendered(true);
+  if (!open && shown) setShown(false);
+
+  useEffect(() => {
+    // Once mounted and opening, commit 0fr then flip to 1fr so height animates.
+    if (!open || shown) return undefined;
+    const frame = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(frame);
+  }, [open, shown]);
+  useEffect(() => {
+    // Drop the content after the collapse transition (timer, not transitionend —
+    // that never fires under prefers-reduced-motion).
+    if (open || !rendered) return undefined;
+    const timer = setTimeout(() => setRendered(false), 300);
+    return () => clearTimeout(timer);
+  }, [open, rendered]);
+
+  return { rendered, shown };
+}
