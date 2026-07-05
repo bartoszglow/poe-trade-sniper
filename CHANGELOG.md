@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unified search detail panel (plan 42)**: clicking anywhere on a search row
+  (except its switches and buttons) expands one animated panel that replaces the
+  old criteria dropdown and both popups — item criteria, the full deal-price
+  controls, a proper price-history chart (crosshair, cap-move markers, keyboard
+  navigation with screen-reader announcements, table fallback), and inline
+  label/id editing. The DEAL chip and the pencil open the panel scrolled to the
+  right card; locating a deal hit from the live panel auto-expands it. Multiple
+  panels can stay open; expand/collapse animates (~200 ms, disabled under
+  reduced motion).
+
 - **Deal-watch UI (plan 41, Phase 2)**: the operator surface for deal mode — a
   gold threshold chip with a live status dot on each search row, and a deal
   modal with the threshold/mode/unit editor, a market-baseline card (robust

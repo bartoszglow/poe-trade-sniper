@@ -48,15 +48,19 @@ panel and scrolls to the deal card (no popup).
   (single gold series, ringed re-derive markers, crosshair+tooltip, table-view
   fallback for a11y).
 
-## Open questions (pick before build)
+## Decisions (operator, 2026-07-05)
 
-- **Q1 — Settings card**: absorb label/id editing into the panel (mockup shows it,
-  dashed) or keep the edit modal? Operator flagged "do potwierdzenia".
-- **Q2 — Multiple panels open at once**: allow (mockup behavior, recommended —
-  compare two searches side-by-side) or auto-collapse the previous one (less
-  scrolling)?
-- **Q3 — Live-hits locate**: should click-to-locate also auto-expand the panel at
-  the deal card? (Cheap, nice; default: yes.)
+- **Q1 = YES** — the settings card absorbs label/id editing; the edit modal is
+  removed (id input locked while deal mode is on, as today's 409 guard).
+- **Q2 = YES** — multiple panels may be open at once.
+- **Q3 = YES** — live-hits locate auto-expands the panel at the deal card.
+- **D-42-1 (operator)** — the WHOLE row header is the expand/collapse trigger:
+  clicking anywhere on it toggles the panel, except interactive controls
+  (switches, buttons, links, inputs, the drag handle). The chevron stays as the
+  accessible, aria-expanded toggle; the row-wide click is a pointer convenience
+  and must not fight dnd-kit drag activation. Expand/collapse animates
+  (~200 ms ease-out via the grid 0fr→1fr technique, well under 0.5 s);
+  prefers-reduced-motion disables the animation.
 
 ## Phasing
 

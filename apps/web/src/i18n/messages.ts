@@ -339,8 +339,6 @@ export const EN = {
   'searches.watch': 'Watch search',
   'searches.addCta': 'Watch a search',
   'searches.detectionToggle': 'Detection',
-  'searches.editLabel': 'Rename',
-  'searches.saveLabel': 'Save name',
   'searches.editSearch': 'Edit search',
   'searches.openOnTradeSite': 'Open this search on the trade site',
   'searches.editLabelField': 'Label',
@@ -530,7 +528,6 @@ export const EN = {
   'dealWatch.configure': 'Set up deal watch',
   'dealWatch.rowToggle': 'DEAL',
   'dealWatch.manage': 'Deal watch settings',
-  'dealWatch.modalTitle': 'Deal watch',
   'dealWatch.modeLabel': 'Threshold type',
   'dealWatch.mode.percent': 'Percent below market',
   'dealWatch.mode.absolute': 'Amount below market',
@@ -543,7 +540,6 @@ export const EN = {
     'Alert at −{value} div below market — the exact cutoff follows the live divine rate',
   'dealWatch.summaryPending': 'The cutoff is computed after the first market check',
   'dealWatch.enableCta': 'Enable deal watch',
-  'dealWatch.baselineTitle': 'Market baseline',
   'dealWatch.baselineValue': 'Baseline',
   'dealWatch.baselineMissing': 'No baseline yet',
   'dealWatch.rawLowest': 'Lowest listing',
@@ -553,11 +549,9 @@ export const EN = {
   'dealWatch.warnStale': 'The market price is stale — discounts may be off until the next refresh.',
   'dealWatch.warnInsufficient':
     'Too few usable listings — alerts stay off until the market gives more data.',
-  'dealWatch.trendTitle': 'Baseline trend',
   'dealWatch.trendEmpty': 'No history yet — a sample lands with each market check.',
   'dealWatch.trendSince': '{change} over the last {time}',
   'dealWatch.trendRederived': 'markers = cap updates',
-  'dealWatch.detectionTitle': 'Detection',
   'dealWatch.detectionWs': 'Live websocket — instant alerts',
   'dealWatch.detectionPoll': 'Polling — degraded for sniping (seconds of delay)',
   'dealWatch.detectionOff': 'Detection is not running for this search',
@@ -576,6 +570,22 @@ export const EN = {
   'dealWatch.broadQuery':
     'Broad search — no item name or type is pinned, so the baseline may mix different items.',
   'dealWatch.editIdLocked': 'Managed by deal watch — disable it to re-point the search.',
+  'dealWatch.enableIntro':
+    'Deal watch builds its own price-capped trade search (your price filter is set aside), computes the instant-buyout market price, and re-checks it hourly.',
+  'dealWatch.itemPriceParked':
+    "The search's own price filter is parked while deal watch is on — the cap shown above is the automatic one; disabling deal watch restores the original.",
+  'searchPanel.item': 'Item',
+  'searchPanel.deal': 'Deal watch',
+  'searchPanel.history': 'Market price history',
+  'searchPanel.settings': 'Search settings',
+  'searchPanel.historyDisabled':
+    'History appears once deal watch is enabled — one sample lands with each market check.',
+  'searchPanel.historyLoading': 'Loading price history…',
+  'searchPanel.capMoved': 'cap updated',
+  'searchPanel.tableTime': 'Checked at',
+  'searchPanel.tableValue': 'Market price',
+  'searches.detailsShow': 'Show details',
+  'searches.detailsHide': 'Hide details',
   // Deal-watch — feeds & alerts (W2 section; add W2 keys below this line)
   'deal.badgePending': 'deal — baseline pending',
   'deal.stale': 'stale',
@@ -916,8 +926,6 @@ export const PL: Record<MessageKey, string> = {
   'searches.watch': 'Obserwuj wyszukiwanie',
   'searches.addCta': 'Obserwuj wyszukiwanie',
   'searches.detectionToggle': 'Detekcja',
-  'searches.editLabel': 'Zmień nazwę',
-  'searches.saveLabel': 'Zapisz nazwę',
   'searches.editSearch': 'Edytuj search',
   'searches.openOnTradeSite': 'Otwórz ten search na stronie handlu',
   'searches.editLabelField': 'Etykieta',
@@ -1109,7 +1117,6 @@ export const PL: Record<MessageKey, string> = {
   'dealWatch.configure': 'Skonfiguruj obserwację okazji',
   'dealWatch.rowToggle': 'DEAL',
   'dealWatch.manage': 'Ustawienia obserwacji okazji',
-  'dealWatch.modalTitle': 'Obserwacja okazji',
   'dealWatch.modeLabel': 'Rodzaj progu',
   'dealWatch.mode.percent': 'Procent poniżej rynku',
   'dealWatch.mode.absolute': 'Kwota poniżej rynku',
@@ -1122,7 +1129,6 @@ export const PL: Record<MessageKey, string> = {
     'Alert przy −{value} div poniżej rynku — dokładny próg wynika z bieżącego kursu divine',
   'dealWatch.summaryPending': 'Próg zostanie wyliczony po pierwszym sprawdzeniu rynku',
   'dealWatch.enableCta': 'Włącz obserwację okazji',
-  'dealWatch.baselineTitle': 'Cena rynkowa',
   'dealWatch.baselineValue': 'Cena bazowa',
   'dealWatch.baselineMissing': 'Brak ceny bazowej',
   'dealWatch.rawLowest': 'Najniższa oferta',
@@ -1133,11 +1139,9 @@ export const PL: Record<MessageKey, string> = {
     'Cena rynkowa jest nieaktualna — rabaty mogą być niedokładne do następnego odświeżenia.',
   'dealWatch.warnInsufficient':
     'Za mało użytecznych ofert — alerty wstrzymane, dopóki rynek nie da więcej danych.',
-  'dealWatch.trendTitle': 'Trend ceny bazowej',
   'dealWatch.trendEmpty': 'Brak historii — próbka pojawia się po każdym sprawdzeniu rynku.',
   'dealWatch.trendSince': '{change} w ciągu ostatnich {time}',
   'dealWatch.trendRederived': 'znaczniki = aktualizacje limitu',
-  'dealWatch.detectionTitle': 'Detekcja',
   'dealWatch.detectionWs': 'Websocket na żywo — natychmiastowe alerty',
   'dealWatch.detectionPoll': 'Odpytywanie — za wolne do snajpienia (opóźnienia rzędu sekund)',
   'dealWatch.detectionOff': 'Detekcja nie działa dla tego wyszukiwania',
@@ -1156,6 +1160,22 @@ export const PL: Record<MessageKey, string> = {
     'Szerokie wyszukiwanie — brak nazwy i typu przedmiotu, cena bazowa może mieszać różne przedmioty.',
   'dealWatch.editIdLocked':
     'Zarządzane przez obserwację okazji — wyłącz ją, aby przepiąć wyszukiwanie.',
+  'dealWatch.enableIntro':
+    'Obserwacja okazji buduje własne wyszukiwanie z limitem ceny (Twój filtr ceny zostaje odłożony), wyznacza cenę rynkową instant buyout i sprawdza ją co godzinę.',
+  'dealWatch.itemPriceParked':
+    'Filtr ceny tego wyszukiwania jest odłożony na czas obserwacji okazji — widoczny limit to limit automatyczny; wyłączenie obserwacji przywraca oryginał.',
+  'searchPanel.item': 'Przedmiot',
+  'searchPanel.deal': 'Obserwacja okazji',
+  'searchPanel.history': 'Historia ceny rynkowej',
+  'searchPanel.settings': 'Ustawienia wyszukiwania',
+  'searchPanel.historyDisabled':
+    'Historia pojawi się po włączeniu obserwacji okazji — jedna próbka na każde sprawdzenie ceny.',
+  'searchPanel.historyLoading': 'Wczytywanie historii ceny…',
+  'searchPanel.capMoved': 'zmiana limitu',
+  'searchPanel.tableTime': 'Sprawdzono',
+  'searchPanel.tableValue': 'Cena rynkowa',
+  'searches.detailsShow': 'Pokaż szczegóły',
+  'searches.detailsHide': 'Ukryj szczegóły',
   // Deal-watch — feed i alerty (sekcja W2; klucze W2 dodawaj poniżej)
   'deal.badgePending': 'okazja — oczekiwanie na cenę bazową',
   'deal.stale': 'nieaktualna',
@@ -1178,6 +1198,7 @@ export type PluralForms = {
 };
 
 export const EN_PLURALS = {
+  'searchPanel.samples': { one: '{count} sample', other: '{count} samples' },
   'searches.hitCount': { one: '{count} hit', other: '{count} hits' },
   'rooms.memberCount': { one: '{count} search', other: '{count} searches' },
   'rooms.deleteBody': {
@@ -1189,6 +1210,12 @@ export const EN_PLURALS = {
 export type PluralKey = keyof typeof EN_PLURALS;
 
 export const PL_PLURALS: Record<PluralKey, PluralForms> = {
+  'searchPanel.samples': {
+    one: '{count} próbka',
+    few: '{count} próbki',
+    many: '{count} próbek',
+    other: '{count} próbki',
+  },
   'searches.hitCount': {
     one: '{count} trafienie',
     few: '{count} trafienia',

@@ -51,8 +51,12 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DealWatchControl } from '../components/DealWatchControl';
 import { Field } from '../components/Field';
 import { IconButton, IconLink } from '../components/IconButton';
-import { Modal } from '../components/Modal';
 import { QueryCriteriaView } from '../components/QueryCriteriaView';
+import {
+  SearchDetailPanel,
+  type PanelScrollTarget,
+  type PanelSection,
+} from '../components/search-panel/SearchDetailPanel';
 import { RoomSection } from '../components/RoomSection';
 import { Select } from '../components/Select';
 import { Tooltip } from '../components/Tooltip';
@@ -60,12 +64,15 @@ import { Switch } from '../components/Switch';
 import { TextInput } from '../components/TextInput';
 import { useLeagues } from '../hooks/useLeagues';
 import { useDetection } from '../hooks/useDetection';
+import { usePanelExpansion } from '../hooks/usePanelExpansion';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useSearches, type AddSearchPayload, type UpdateSearchPayload } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { resolveBuyControl, type BuyControl } from '../lib/resolve-buy-control';
+import { shouldRowClickExpand } from '../lib/row-expand';
+import { duplicatedAddedAts, stableRowKey } from '../lib/search-row-key';
 import { ApiError, apiSend } from '../lib/api';
 import { GettingStartedCard } from '../components/GettingStartedCard';
 import { deriveGettingStarted } from '../lib/getting-started';
@@ -367,9 +374,10 @@ function SearchRow({
   buyControl,
   highlighted,
   detectionPaused,
+  spotlitAt,
   onUpdate,
   onRemove,
-  onCriteriaOpenChange,
+  onPanelOpenChange,
 }: {
   search: SearchRuntimeInfo;
   buyControl: BuyControl;
@@ -377,57 +385,46 @@ function SearchRow({
   /** Global detection pause — TRAVEL/BUY are inert then, so they grey out
    *  (still togglable: configuring while paused is fine, nothing fires). */
   detectionPaused: boolean;
+  /** Fresh locate-click timestamp for THIS row (Q3) — auto-opens the panel. */
+  spotlitAt: number | null;
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
   onRemove: () => Promise<void>;
-  /** Report criteria-panel open/close up to the page so an open panel keeps its
+  /** Report detail-panel open/close up to the page so an open panel keeps its
    *  auto-expanded room from folding out from under it (D-room-3). */
-  onCriteriaOpenChange?: (searchId: string, open: boolean) => void;
+  onPanelOpenChange?: (searchId: string, open: boolean) => void;
 }) {
   const t = useT();
   const tn = useTn();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [criteriaOpen, setCriteriaOpen] = useState(false);
+  // The unified detail panel (plan 42): the expand/collapse state machine is
+  // the shared usePanelExpansion hook; only the scroll target stays local.
+  const { panelRendered, panelShown, openPanel: expandPanel, togglePanel } = usePanelExpansion();
+  const [scrollTarget, setScrollTarget] = useState<PanelScrollTarget | null>(null);
+  function openPanel(section: PanelSection | null): void {
+    expandPanel();
+    setScrollTarget(section === null ? null : { section, token: Date.now() });
+  }
   // Keep the page's open-panel registry in sync — including on unmount (a manual
   // room collapse destroys this row), so a closed/gone panel never wedges the guard.
   useEffect(() => {
-    onCriteriaOpenChange?.(search.id, criteriaOpen);
-    return () => onCriteriaOpenChange?.(search.id, false);
-  }, [criteriaOpen, search.id, onCriteriaOpenChange]);
+    onPanelOpenChange?.(search.id, panelShown);
+    return () => onPanelOpenChange?.(search.id, false);
+  }, [panelShown, search.id, onPanelOpenChange]);
+  // Q3: a fresh locate-click on a deal-mode row opens its panel at the deal
+  // card. Adjust-during-render (not an effect — the repo forbids set-state in
+  // effects): a state flag dedupes so each distinct spotlight timestamp fires
+  // once (the draftsSyncedForOpen pattern used elsewhere in this file).
+  const hasDealWatch = search.dealWatch !== null;
+  const [handledSpotlightAt, setHandledSpotlightAt] = useState<number | null>(null);
+  if (spotlitAt !== null && hasDealWatch && handledSpotlightAt !== spotlitAt) {
+    setHandledSpotlightAt(spotlitAt);
+    expandPanel();
+    setScrollTarget({ section: 'deal', token: spotlitAt });
+  }
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [draftLabel, setDraftLabel] = useState(search.label);
-  const [draftInput, setDraftInput] = useState(search.id);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: search.id,
   });
-
-  // While deal mode is on the system owns the row's id (plan 41, D-dw-7): the
-  // edit modal locks the id/URL input and saves label-only — never `input`,
-  // because a re-derive can swap `search.id` mid-edit and the server 409s
-  // manual id changes for deal-mode rows anyway.
-  const dealManaged = search.dealWatch !== null;
-
-  function startEditing(): void {
-    setDraftLabel(search.label);
-    setDraftInput(search.id);
-    setEditing(true);
-  }
-
-  async function saveEdit(): Promise<void> {
-    const label = draftLabel.trim();
-    const input = draftInput.trim();
-    if (!label || !input) return;
-    setEditing(false);
-    if (dealManaged) {
-      if (label === search.label) return;
-      await run(() => onUpdate({ label }));
-      return;
-    }
-    // Nothing changed → skip the round-trip. A changed `input` re-points the row
-    // (the server keeps the hit history); an unchanged id is treated as label-only.
-    if (label === search.label && input === search.id) return;
-    await run(() => onUpdate({ label, input }));
-  }
 
   async function run(action: () => Promise<void>) {
     setErrorMessage(null);
@@ -455,44 +452,22 @@ function SearchRow({
             : 'border-edge bg-surface-1'
       }`}
     >
-      <Modal open={editing} label={t('searches.editSearch')} onClose={() => setEditing(false)}>
-        <div className="border-b border-edge px-4 py-2.5">
-          <h2 className="text-sm font-semibold text-ink">{t('searches.editSearch')}</h2>
-        </div>
-        <div className="space-y-3 p-4">
-          <Field label={t('searches.editLabelField')}>
-            <TextInput
-              value={draftLabel}
-              onChange={(changeEvent) => setDraftLabel(changeEvent.target.value)}
-            />
-          </Field>
-          <Field
-            label={t('searches.editSearchField')}
-            hint={t(dealManaged ? 'dealWatch.editIdLocked' : 'searches.editSearchHint')}
-          >
-            <TextInput
-              value={draftInput}
-              disabled={dealManaged}
-              onChange={(changeEvent) => setDraftInput(changeEvent.target.value)}
-            />
-          </Field>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-edge px-4 py-2.5">
-          <Button variant="ghost" onClick={() => setEditing(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            disabled={!draftLabel.trim() || !draftInput.trim()}
-            onClick={() => void saveEdit()}
-          >
-            {t('common.save')}
-          </Button>
-        </div>
-      </Modal>
-      <div className="flex flex-wrap items-center gap-3">
+      {/* D-42-1: the whole header toggles the panel; interactive controls,
+          portal (ConfirmDialog) clicks, and text-selection drags are excluded
+          via the shared guard, so switches/buttons/copying behave as before. */}
+      <div
+        className="flex cursor-pointer flex-wrap items-center gap-3"
+        onClick={(clickEvent) => {
+          if (
+            shouldRowClickExpand(clickEvent.currentTarget, clickEvent.target, window.getSelection())
+          ) {
+            togglePanel();
+          }
+        }}
+      >
         <button
           type="button"
+          data-no-expand
           aria-label={t('searches.reorder')}
           title={t('searches.reorder')}
           className="shrink-0 cursor-grab touch-none text-ink-faint transition-colors hover:text-ink active:cursor-grabbing"
@@ -508,7 +483,7 @@ function SearchRow({
               variant="ghost"
               aria-label={t('searches.editSearch')}
               title={t('searches.editSearch')}
-              onClick={startEditing}
+              onClick={() => openPanel('settings')}
             >
               <Pencil className="h-3 w-3" />
             </IconButton>
@@ -544,15 +519,15 @@ function SearchRow({
         <div className="flex-1" />
         <IconButton
           variant="ghost"
-          aria-label={criteriaOpen ? t('criteria.hide') : t('criteria.show')}
-          title={criteriaOpen ? t('criteria.hide') : t('criteria.show')}
-          aria-expanded={criteriaOpen}
-          className={criteriaOpen ? 'text-gold' : undefined}
-          onClick={() => setCriteriaOpen((previous) => !previous)}
+          aria-label={panelShown ? t('searches.detailsHide') : t('searches.detailsShow')}
+          title={panelShown ? t('searches.detailsHide') : t('searches.detailsShow')}
+          aria-expanded={panelShown}
+          className={panelShown ? 'text-gold' : undefined}
+          onClick={togglePanel}
         >
           <ListFilter className="h-4 w-4" />
         </IconButton>
-        <DealWatchControl search={search} detectionPaused={detectionPaused} onUpdate={onUpdate} />
+        <DealWatchControl search={search} onExpandDeal={() => openPanel('deal')} />
         <span className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Switch
             checked={search.enabled}
@@ -631,11 +606,26 @@ function SearchRow({
           already fully said by the badge, and a raw/unmapped detail is never shown. */}
       {detailKey && <div className="mt-1.5 text-xs text-ink-faint">{t(detailKey)}</div>}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
-      {criteriaOpen && (
-        <div className="mt-2 border-t border-edge pt-3">
-          <QueryCriteriaView query={search.filters} />
+      {/* Animated expand/collapse (D-42-1): grid 0fr→1fr height transition,
+          ~200ms ease-out, disabled under prefers-reduced-motion. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+          panelShown ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          {panelRendered && (
+            <div className="mt-2 border-t border-edge pt-3">
+              <SearchDetailPanel
+                search={search}
+                detectionPaused={detectionPaused}
+                onUpdate={onUpdate}
+                scrollTarget={scrollTarget}
+              />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </li>
   );
 }
@@ -660,6 +650,9 @@ function ArchivedSearchRow({
   const tn = useTn();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // D-42-1 applies to archived rows too — the panel shows the item criteria
+  // only (an archived search has no detection, no deal actions to offer).
+  const { panelRendered, panelShown, togglePanel } = usePanelExpansion();
 
   async function run(action: () => Promise<void>) {
     setErrorMessage(null);
@@ -681,7 +674,16 @@ function ArchivedSearchRow({
           : 'border-edge bg-surface-1 opacity-55 hover:opacity-85'
       }`}
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div
+        className="flex cursor-pointer flex-wrap items-center gap-3"
+        onClick={(clickEvent) => {
+          if (
+            shouldRowClickExpand(clickEvent.currentTarget, clickEvent.target, window.getSelection())
+          ) {
+            togglePanel();
+          }
+        }}
+      >
         <Archive className="h-4 w-4 shrink-0 text-ink-faint" />
         <div className="min-w-0">
           <span className="truncate font-medium text-ink">{search.label}</span>
@@ -695,6 +697,19 @@ function ArchivedSearchRow({
         </div>
         <div className="flex-1" />
         {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
+        {/* The accessible expand toggle (D-42-1) — the row-wide click is a
+            pointer convenience; keyboard/AT users get the same button as
+            active rows. */}
+        <IconButton
+          variant="ghost"
+          aria-label={panelShown ? t('searches.detailsHide') : t('searches.detailsShow')}
+          title={panelShown ? t('searches.detailsHide') : t('searches.detailsShow')}
+          aria-expanded={panelShown}
+          className={panelShown ? 'text-gold' : undefined}
+          onClick={togglePanel}
+        >
+          <ListFilter className="h-4 w-4" />
+        </IconButton>
         <IconButton
           variant="ghost"
           aria-label={t('searches.restore', { label: search.label })}
@@ -719,6 +734,19 @@ function ArchivedSearchRow({
             { id: 'delete', label: t('common.delete'), onSelect: () => void run(onRemove) },
           ]}
         />
+      </div>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+          panelShown ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          {panelRendered && (
+            <div className="mt-2 border-t border-edge pt-3">
+              <QueryCriteriaView query={search.filters} />
+            </div>
+          )}
+        </div>
       </div>
     </li>
   );
@@ -837,15 +865,15 @@ export function SearchesPage() {
   // room must keep that room from folding when its hit-highlight window ages out
   // (D-room-3) — otherwise the member row unmounts and the panel snaps shut under
   // the operator. Reported up from each SearchRow (open + on unmount).
-  const openCriteriaIdsRef = useRef<Set<string>>(new Set());
-  const reportCriteriaOpen = useCallback((searchId: string, open: boolean): void => {
-    if (open) openCriteriaIdsRef.current.add(searchId);
-    else openCriteriaIdsRef.current.delete(searchId);
+  const openPanelIdsRef = useRef<Set<string>>(new Set());
+  const reportPanelOpen = useCallback((searchId: string, open: boolean): void => {
+    if (open) openPanelIdsRef.current.add(searchId);
+    else openPanelIdsRef.current.delete(searchId);
   }, []);
   useEffect(() => {
     const isOperatorMidInteraction = (): boolean => {
       if (dragInFlightRef.current) return true;
-      if (openCriteriaIdsRef.current.size > 0) return true;
+      if (openPanelIdsRef.current.size > 0) return true;
       const focused = document.activeElement;
       return (
         focused instanceof HTMLElement &&
@@ -1046,6 +1074,10 @@ export function SearchesPage() {
     !needsLogin && loaded && !onboarding.checklistDismissed && !gettingStarted.allDone;
 
   const searchesById = new Map(searches.map((search) => [search.id, search]));
+  // Row React keys use addedAt (stable across deal enable/disable + re-derive
+  // id swaps + settings re-points), so an open panel never remounts shut;
+  // duplicate timestamps (import artifacts) fall back to the volatile scheme.
+  const duplicatedRowKeys = duplicatedAddedAts(searches);
   const roomsById = new Map(rooms.map((room) => [room.id, room]));
   // Archived searches (#35): greyed flat section at the bottom, newest first.
   const archivedSearches = searches
@@ -1072,9 +1104,7 @@ export function SearchesPage() {
   // room's items read as paused, matching the global detection toggle (#15).
   const renderSearchRow = (search: SearchRuntimeInfo, extraPaused = false) => (
     <SearchRow
-      // Keyed by the swap-stable watchId for deal rows: a re-derive replaces
-      // search.id, and an id-based key would unmount an open modal mid-edit.
-      key={search.dealWatch?.watchId ?? search.id}
+      key={stableRowKey(search, duplicatedRowKeys)}
       search={search}
       highlighted={isSearchLit(search.id)}
       detectionPaused={paused || extraPaused}
@@ -1086,7 +1116,12 @@ export function SearchesPage() {
       })}
       onUpdate={(payload) => update(search.id, payload)}
       onRemove={() => remove(search.id)}
-      onCriteriaOpenChange={reportCriteriaOpen}
+      onPanelOpenChange={reportPanelOpen}
+      spotlitAt={
+        spotlight !== null && spotlight.searchId === search.id && isSpotlightFresh(spotlight, nowMs)
+          ? spotlight.at
+          : null
+      }
     />
   );
 
@@ -1223,7 +1258,7 @@ export function SearchesPage() {
               <ul className="flex flex-col gap-2">
                 {archivedSearches.map((search) => (
                   <ArchivedSearchRow
-                    key={search.dealWatch?.watchId ?? search.id}
+                    key={stableRowKey(search, duplicatedRowKeys)}
                     search={search}
                     highlighted={isSearchLit(search.id)}
                     onRestore={() => update(search.id, { archived: false })}

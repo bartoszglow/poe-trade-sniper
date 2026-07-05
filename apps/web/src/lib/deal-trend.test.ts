@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DealBaselineHistoryEntry } from '@poe-sniper/shared';
-import { buildDealTrendGeometry, nearestTrendPointIndex } from './deal-trend';
+import { buildDealTrendGeometry, nearestTrendPointIndex, niceTrendTicks } from './deal-trend';
 
 const VIEW = { width: 100, height: 50, padding: 10 };
 
@@ -92,5 +92,37 @@ describe('nearestTrendPointIndex', () => {
 
   it('returns null with no points', () => {
     expect(nearestTrendPointIndex([], 10)).toBeNull();
+  });
+});
+
+describe('niceTrendTicks + geometry ticks (plan 42 chart upgrade)', () => {
+  it('produces nice 1/2/5-step values inside the span', () => {
+    expect(niceTrendTicks(71.1, 75.0)).toEqual([72, 74]);
+    expect(niceTrendTicks(0, 100)).toEqual([0, 50, 100]);
+  });
+
+  it('yields no ticks for a flat or degenerate span', () => {
+    expect(niceTrendTicks(100, 100)).toEqual([]);
+    expect(niceTrendTicks(100, 90)).toEqual([]);
+  });
+
+  it('places tick rows on the same scale as the points', () => {
+    const geometry = buildDealTrendGeometry(
+      [entry({ amountExalted: 100 }), entry({ amountExalted: 0 })],
+      VIEW,
+    )!;
+    const tick = geometry.ticks.find((candidate) => candidate.valueExalted === 50);
+    expect(tick).toBeDefined();
+    expect(tick!.y).toBeCloseTo(VIEW.height / 2, 0);
+  });
+
+  it('starts the plot at paddingLeft when the label inset is used', () => {
+    const geometry = buildDealTrendGeometry(
+      [entry({ amountExalted: 300 }), entry({ amountExalted: 100 })],
+      { ...VIEW, paddingLeft: 40 },
+    )!;
+    expect(geometry.plotLeft).toBe(40);
+    expect(geometry.points[0]!.x).toBe(40);
+    expect(geometry.points[1]!.x).toBe(VIEW.width - VIEW.padding);
   });
 });
