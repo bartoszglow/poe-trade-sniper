@@ -10,7 +10,6 @@ import {
 import type { UpdateSearchPayload } from '../hooks/useSearches';
 import { Badge } from './Badge';
 import { DealWatchModal } from './DealWatchModal';
-import { IconButton } from './IconButton';
 import { Tooltip } from './Tooltip';
 
 interface DealWatchControlProps {
@@ -34,14 +33,19 @@ export function DealWatchControl({ search, detectionPaused, onUpdate }: DealWatc
   return (
     <>
       {state === null || statusDisplay === null ? (
-        <IconButton
-          variant="ghost"
+        // Labelled like the ACTIVE/TRAVEL/BUY controls — an icon-only ghost
+        // button proved undiscoverable for a flagship feature (operator
+        // feedback, 2026-07-05).
+        <button
+          type="button"
           aria-label={t('dealWatch.configure')}
           title={t('dealWatch.configure')}
           onClick={() => setModalOpen(true)}
+          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-xs text-ink-muted transition-colors hover:text-gold focus:outline-none focus-visible:ring-1 focus-visible:ring-gold"
         >
           <BadgePercent className="h-4 w-4" />
-        </IconButton>
+          {t('dealWatch.rowToggle')}
+        </button>
       ) : (
         <Tooltip content={t(statusDisplay.labelKey)} focusable={false}>
           <button

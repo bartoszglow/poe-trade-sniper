@@ -528,6 +528,7 @@ export const EN = {
   'dealWatch.status.restore-pending': 'Restore queued — runs when detection resumes',
   // Deal-watch — modal & row (W1 section; add W1 keys below this line)
   'dealWatch.configure': 'Set up deal watch',
+  'dealWatch.rowToggle': 'DEAL',
   'dealWatch.manage': 'Deal watch settings',
   'dealWatch.modalTitle': 'Deal watch',
   'dealWatch.modeLabel': 'Threshold type',
@@ -1106,6 +1107,7 @@ export const PL: Record<MessageKey, string> = {
   'dealWatch.status.restore-pending': 'Przywracanie w kolejce — wykona się po wznowieniu detekcji',
   // Deal-watch — modal i wiersz (sekcja W1; klucze W1 dodawaj poniżej)
   'dealWatch.configure': 'Skonfiguruj obserwację okazji',
+  'dealWatch.rowToggle': 'DEAL',
   'dealWatch.manage': 'Ustawienia obserwacji okazji',
   'dealWatch.modalTitle': 'Obserwacja okazji',
   'dealWatch.modeLabel': 'Rodzaj progu',
