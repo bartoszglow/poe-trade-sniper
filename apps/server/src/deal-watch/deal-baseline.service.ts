@@ -61,6 +61,10 @@ export class DealBaselineService {
     league: string,
     correlationId: string = randomUUID(),
     sampleSize: number = DEFAULT_BASELINE_SAMPLE_SIZE,
+    // The budget reserve is a tier (D-dw-18): deal callers pass the low
+    // DEAL_MIN_HEADROOM (operator-facing work wins budget), the background
+    // market loop passes the higher MARKET_CHECK_MIN_HEADROOM (yields to deals).
+    minHeadroomReserve: number = this.config.DEAL_MIN_HEADROOM,
   ): Promise<BaselineComputation> {
     // Persisted states are zod-validated, but the clamp keeps a hand-edited
     // import or a future caller from turning the knob into a fetch amplifier.
@@ -68,7 +72,7 @@ export class DealBaselineService {
       BASELINE_SAMPLE_SIZE_MAX,
       Math.max(BASELINE_SAMPLE_SIZE_MIN, Math.round(sampleSize)),
     );
-    if (this.governor.minHeadroom([...BASELINE_POLICIES]) < this.config.DEAL_MIN_HEADROOM) {
+    if (this.governor.minHeadroom([...BASELINE_POLICIES]) < minHeadroomReserve) {
       return { kind: 'budget-low' };
     }
     const search = await this.tradeApi.priceSearch(

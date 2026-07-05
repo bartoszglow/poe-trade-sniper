@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Deal watches no longer stall when many searches compete for the rate-limit budget.**
+  With enough active searches, the background market-price checks could eat the whole
+  search budget and leave a newly enabled deal watch stuck on "Setting up the capped
+  search…" indefinitely. Budget priority is now tiered: deal work (the price you're
+  buying against) wins over the background market-price sweep, and both yield to live
+  detection — so enabling a deal watch derives promptly even under load.
 - **Faster reaction on contested bursts.** When several matching listings dropped at once, they
   were fetched one-by-one (each waiting on the rate-limit spacing), so the 5th could lag seconds.
   They're now coalesced into a single fetch — the first still fires instantly, the rest ride

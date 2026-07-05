@@ -63,8 +63,11 @@ export const envSchema = z.object({
   DEAL_OUTLIER_RATIO: z.coerce.number().min(0).max(1).default(0.5),
   /** Fewer usable listings than this → insufficient-data (no baseline, no alerts). */
   DEAL_MIN_SAMPLE: z.coerce.number().int().min(1).default(5),
-  /** Governor headroom reserve — same posture as D-pc-2; detection outranks deals. */
-  DEAL_MIN_HEADROOM: z.coerce.number().min(0).max(1).default(0.3),
+  /** Governor headroom reserve for DEAL work — derive/refresh is operator-facing
+   *  and time-sensitive, so it wins budget over the background market loop (it
+   *  keeps a lower reserve). Detection still outranks it (detection never gates).
+   *  Lowered 0.3→0.15 after the D-dw-18 starvation incident. */
+  DEAL_MIN_HEADROOM: z.coerce.number().min(0).max(1).default(0.15),
   /** Baseline older than this is surfaced as stale (alerts keep firing, flagged). */
   DEAL_BASELINE_STALE_MS: z.coerce.number().int().min(600_000).default(10_800_000),
   /** Debounce for threshold-edit re-derives (rapid edits coalesce). */
@@ -84,8 +87,15 @@ export const envSchema = z.object({
     .string()
     .default('true')
     .transform((value) => value !== 'false' && value !== '0'),
-  /** Market-price check cadence per active search (relative + jittered, R7). */
-  MARKET_CHECK_INTERVAL_MS: z.coerce.number().int().min(900_000).default(3_600_000),
+  /** Market-price check cadence per active search (relative + jittered, R7).
+   *  3h: the 19-search sweep is heavy and the price is a rough reference, not
+   *  live-critical (D-dw-18). */
+  MARKET_CHECK_INTERVAL_MS: z.coerce.number().int().min(900_000).default(10_800_000),
+  /** Governor headroom reserve for the BACKGROUND market loop — higher than the
+   *  deal reserve so market checks only run with ample spare, yielding to both
+   *  detection and deal work (D-dw-18: the tier that stops market checks from
+   *  starving deal derives). */
+  MARKET_CHECK_MIN_HEADROOM: z.coerce.number().min(0).max(1).default(0.5),
   /** Jitter ratio on the market-check schedule — no fleet-wide pattern. */
   MARKET_CHECK_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.15),
   /** A market snapshot fresher than this seeds a deal enable for free (no GGG spend). */

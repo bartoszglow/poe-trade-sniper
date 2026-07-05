@@ -262,7 +262,8 @@ a slow 3%/hour drift correctly accumulates and re-derives; the cap can never div
 unboundedly.
 
 **Budget gate:** skip the refresh when
-`minHeadroom(['search','fetch']) < DEAL_MIN_HEADROOM` (default 0.3). The
+`minHeadroom(['search','fetch']) < DEAL_MIN_HEADROOM` (0.15 after D-dw-18; the
+background market loop uses the higher `MARKET_CHECK_MIN_HEADROOM`). The
 `min(headroom…)` helper is **extracted to the governor** and shared with
 PriceCheckService's `currentHeadroom()` (second consumer of D-pc-2 logic). Refresh
 ticks also **no-op while detection is globally paused or the guard is tripped** —
@@ -427,7 +428,7 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 | `DEAL_MAX_ID_AGE_MS`              | 259 200 000 (3 d) | Forced re-derive age (pending P0.2/P0.8)                                                         |
 | `DEAL_OUTLIER_RATIO`              | 0.5               | Listing < ratio × sample median = dropped (price-fixer)                                          |
 | `DEAL_MIN_SAMPLE`                 | 5                 | Fewer usable listings → insufficient-data                                                        |
-| `DEAL_MIN_HEADROOM`               | 0.3               | Governor headroom reserve (shared helper with D-pc-2)                                            |
+| `DEAL_MIN_HEADROOM`               | 0.15              | Deal-work budget reserve — low tier, wins over background market (D-dw-18)                       |
 | `DEAL_BASELINE_STALE_MS`          | 10 800 000        | Baseline older than 3 h → stale status                                                           |
 | `DEAL_REDERIVE_DEBOUNCE_MS`       | 5 000             | Threshold-edit re-derive debounce                                                                |
 | `DEAL_MANUAL_REFRESH_COOLDOWN_MS` | 60 000            | Manual refresh per-search cooldown                                                               |
@@ -435,7 +436,8 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 | `DEAL_BASELINE_HISTORY_MAX`       | 500               | Rolling per-watch cap on baseline-history rows (D-dw-12)                                         |
 | `DEAL_QUEUE_TICK_MS`              | 30 000            | Deal queue beat (due-refresh scan + queued-job pickup)                                           |
 | `MARKET_CHECK_ENABLED`            | true              | Killswitch for the universal market-price loop (D-dw-14)                                         |
-| `MARKET_CHECK_INTERVAL_MS`        | 3 600 000         | Market-price check cadence per active non-deal search (D-dw-14)                                  |
+| `MARKET_CHECK_INTERVAL_MS`        | 10 800 000        | Market-price check cadence per active non-deal search — 3h (D-dw-14/18)                          |
+| `MARKET_CHECK_MIN_HEADROOM`       | 0.5               | Market-loop budget reserve — high tier, yields to deals + detection (D-dw-18)                    |
 | `MARKET_CHECK_JITTER_RATIO`       | 0.15              | Jitter on the market-check schedule                                                              |
 | `MARKET_SNAPSHOT_REUSE_MS`        | 900 000           | Snapshot fresher than this seeds a deal enable for free (D-dw-14)                                |
 
@@ -547,6 +549,39 @@ for deal searches" is parked.
 
 ## Decisions
 
+- **D-dw-19 (operator, 2026-07-05)** — rate-limit aggressiveness slider. A new
+  `AppSettings.rateLimitAggressiveness` (**50–120, default 85**, Settings-view
+  slider) = target utilization as a % of GGG's ADVERTISED limits (the governor
+  learns those from `X-Rate-Limit-*` headers; never hardcoded). It scales the
+  governor's effective ceiling: `effectiveLimit(bucket) = cap × A/100`; the
+  near-limit hold triggers at `effectiveLimit` instead of `cap−1`, and
+  `headroom` is computed against `effectiveLimit`, so the D-dw-18 reserves stay
+  consistent. The `OutboundGuard` HTTP ceiling scales with A too (so 85–100%
+  doesn't trip it spuriously). **>100% is an explicit RISK ZONE** (UI-warned):
+  it deliberately runs past GGG's advertised cap → 429s → the governor's
+  `pauseAll` (Retry-After) → ALL detection pauses; lockouts stack and it breaks
+  the browser-mimicry rule (R7). Operator chose the 50–120 range knowingly;
+  ≤100% is the safe, recommended band. Builds ON TOP of D-dw-18 (the reserves
+  are the default operating point; the slider moves the whole ceiling).
+- **D-dw-18 (operator, 2026-07-05, live incident)** — budget-priority tiers.
+  Root cause found live: the universal market-price loop (D-dw-14, ~19 hourly
+  checks) + the deal loop + detection over-subscribed the search policy;
+  steady-state headroom (~0.27, pinned by the tight Account 3:5:60 / Ip 15:60
+  rules) sat below the single `DEAL_MIN_HEADROOM=0.3` reserve, so EVERY deal
+  derive and market check was declined — enables hung forever in
+  `pending-derive` and all watches drifted `baseline-stale`. Fix: split the one
+  reserve into tiers so background market work yields to operator-facing deal
+  work and both yield to detection:
+  - `DEAL_MIN_HEADROOM` lowered to **0.15** — deal derive/refresh is
+    operator-facing and time-sensitive; it wins budget over background.
+  - new `MARKET_CHECK_MIN_HEADROOM` = **0.5** — the universal market-price loop
+    only runs with ample spare, yielding to detection AND deals.
+  - `MARKET_CHECK_INTERVAL_MS` default raised 1h → **3h** (the 19-search sweep
+    is heavy; the price is a rough reference, not live-critical).
+    Detection keeps absolute priority (it never gates on a reserve; the governor's
+    near-limit hold + 429 pause are the hard protections). Confirmed live:
+    disabling the market loop lifted headroom 0.27→0.67 and both stuck enables
+    derived immediately.
 - **D-dw-17 (operator, 2026-07-05)** — the concurrent-deal-watch cap becomes an
   operator-editable setting (`AppSettings.dealMaxWatches`), surfaced in the
   Settings view, replacing the env-only `DEAL_MAX_WATCHES`. Default raised to 25

@@ -140,6 +140,12 @@ export class MarketPriceService implements OnApplicationBootstrap, OnApplication
       definition,
       row.realm,
       row.league,
+      // Default correlationId + sample size; the market loop is the LOW-priority
+      // tier, so it gates on the higher MARKET reserve — it yields to deal work
+      // and detection (D-dw-18).
+      undefined,
+      undefined,
+      this.config.MARKET_CHECK_MIN_HEADROOM,
     );
     if (computation.kind === 'budget-low' || computation.kind === 'rate-limited') {
       this.scheduleBackoff(row.id);

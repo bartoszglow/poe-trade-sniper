@@ -59,6 +59,57 @@ describe('DealBaselineService.computeBaseline', () => {
     expect(result.kind).toBe('rate-limited');
   });
 
+  // Budget tiers (D-dw-18): deal work uses the low DEAL_MIN_HEADROOM (0.15) and
+  // wins budget; the background market loop passes the higher
+  // MARKET_CHECK_MIN_HEADROOM (0.5) and yields.
+  const usableListings = [
+    listing(100, 'exalted'),
+    listing(110, 'exalted'),
+    listing(120, 'exalted'),
+  ];
+
+  it('deal tier derives in the 0.15–0.3 band that was starving (regression)', async () => {
+    // headroom 0.2: below the OLD 0.3 reserve (would have declined), at/above
+    // the new deal reserve 0.15 → the derive proceeds.
+    const { service, priceSearch } = createService({ headroom: 0.2, listings: usableListings });
+    const result = await service.computeBaseline(DEFINITION, 'poe2', 'League');
+    expect(result.kind).toBe('ok');
+    expect(priceSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('at headroom 0.4 the market tier declines while the deal tier proceeds', async () => {
+    const market = createService({ headroom: 0.4, listings: usableListings });
+    const marketResult = await market.service.computeBaseline(
+      DEFINITION,
+      'poe2',
+      'League',
+      undefined,
+      undefined,
+      0.5, // MARKET_CHECK_MIN_HEADROOM
+    );
+    expect(marketResult.kind).toBe('budget-low');
+    expect(market.priceSearch).not.toHaveBeenCalled();
+
+    const deal = createService({ headroom: 0.4, listings: usableListings });
+    const dealResult = await deal.service.computeBaseline(DEFINITION, 'poe2', 'League');
+    expect(dealResult.kind).toBe('ok');
+    expect(deal.priceSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('the market tier runs once there is ample spare (headroom ≥ 0.5)', async () => {
+    const { service, priceSearch } = createService({ headroom: 0.6, listings: usableListings });
+    const result = await service.computeBaseline(
+      DEFINITION,
+      'poe2',
+      'League',
+      undefined,
+      undefined,
+      0.5,
+    );
+    expect(result.kind).toBe('ok');
+    expect(priceSearch).toHaveBeenCalledTimes(1);
+  });
+
   it('POSTs the baseline-shaped query: definition status kept, price asc, no price filter', async () => {
     const { service, priceSearch } = createService({
       listings: [listing(100, 'exalted'), listing(110, 'exalted'), listing(120, 'exalted')],
