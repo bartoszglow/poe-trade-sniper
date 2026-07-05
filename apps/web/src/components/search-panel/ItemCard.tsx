@@ -8,10 +8,11 @@ interface ItemCardProps {
 
 /**
  * The unified panel's item section (plan 42): the criteria group boxes render
- * DIRECTLY in the panel cell — they are bordered cards themselves, so an extra
- * wrapper card (and an "Item" heading, operator feedback 2026-07-05) was pure
- * chrome. While deal mode holds the row's price filter parked, a note explains
- * why the visible price cap is the AUTO one.
+ * DIRECTLY in the panel cell — no wrapper card heading (operator feedback
+ * 2026-07-05), but the "Item" GROUP chip stays so the group chips read as one
+ * consistent family (ITEM / PURCHASE / … — operator iteration, same day).
+ * While deal mode holds the row's price filter parked, a note explains why the
+ * visible price cap is the AUTO one.
  */
 export function ItemCard({ search }: ItemCardProps) {
   const t = useT();
@@ -20,7 +21,6 @@ export function ItemCard({ search }: ItemCardProps) {
       <QueryCriteriaView
         query={search.filters}
         divineRate={search.dealWatch?.divinePriceExalted ?? null}
-        hideItemLabel
       />
       {search.dealWatch !== null && (
         <p className="mt-2.5 text-[11px] leading-snug text-ink-faint">

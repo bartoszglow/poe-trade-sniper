@@ -347,6 +347,9 @@ export const EN = {
   'searches.editSearchHint': 'Re-points this row to a new search — your hits stay.',
   'searches.empty': 'No watched searches yet — paste a trade search id or URL above.',
   'searches.travelToggle': 'TRAVEL',
+  'searches.travelDesc': 'Auto-teleport to the seller the moment a hit lands',
+  'searches.buyDesc':
+    'After a successful travel the cursor moves onto the item — you confirm the purchase',
   'searches.buyToggle': 'BUY',
   'searches.buyFor': 'Auto buy for {label}',
   'searches.buyWebOnly': 'desktop app only',
@@ -581,6 +584,7 @@ export const EN = {
   'searchPanel.deal': 'Deal watch',
   'searchPanel.history': 'Market price history',
   'searchPanel.settings': 'Search settings',
+  'searchPanel.automation': 'Automation',
   'searchPanel.historyDisabled':
     'History appears once deal watch is enabled — one sample lands with each market check.',
   'searchPanel.historyLoading': 'Loading price history…',
@@ -937,6 +941,9 @@ export const PL: Record<MessageKey, string> = {
   'searches.editSearchHint': 'Przekierowuje wiersz na nowy search — trafienia pozostają.',
   'searches.empty': 'Brak obserwowanych wyszukiwań — wklej powyżej id lub URL wyszukiwania.',
   'searches.travelToggle': 'PODRÓŻ',
+  'searches.travelDesc': 'Automatyczny teleport do sprzedawcy, gdy tylko pojawi się trafienie',
+  'searches.buyDesc':
+    'Po udanym teleporcie kursor najeżdża na przedmiot — zakup potwierdzasz samodzielnie',
   'searches.buyToggle': 'ZAKUP',
   'searches.buyFor': 'Automatyczny zakup dla {label}',
   'searches.buyWebOnly': 'tylko aplikacja desktop',
@@ -1174,6 +1181,7 @@ export const PL: Record<MessageKey, string> = {
   'searchPanel.deal': 'Obserwacja okazji',
   'searchPanel.history': 'Historia ceny rynkowej',
   'searchPanel.settings': 'Ustawienia wyszukiwania',
+  'searchPanel.automation': 'Automatyzacja',
   'searchPanel.historyDisabled':
     'Historia pojawi się po włączeniu obserwacji okazji — jedna próbka na każde sprawdzenie ceny.',
   'searchPanel.historyLoading': 'Wczytywanie historii ceny…',

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SearchRuntimeInfo } from '@poe-sniper/shared';
 import type { UpdateSearchPayload } from '../../hooks/useSearches';
+import type { BuyControl } from '../../lib/resolve-buy-control';
 import { DealHistoryCard } from './DealHistoryCard';
 import { DealPriceCard } from './DealPriceCard';
 import { ItemCard } from './ItemCard';
@@ -18,6 +19,8 @@ export interface PanelScrollTarget {
 interface SearchDetailPanelProps {
   search: SearchRuntimeInfo;
   detectionPaused: boolean;
+  /** Buy-switch gating resolved at page level (permission/platform notes). */
+  buyControl: BuyControl;
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
   /** Set when the panel was opened via the DEAL chip / pencil / locate (Q3). */
   scrollTarget: PanelScrollTarget | null;
@@ -34,6 +37,7 @@ interface SearchDetailPanelProps {
 export function SearchDetailPanel({
   search,
   detectionPaused,
+  buyControl,
   onUpdate,
   scrollTarget,
 }: SearchDetailPanelProps) {
@@ -83,7 +87,12 @@ export function SearchDetailPanel({
         <ItemCard search={search} />
       </div>
       <div ref={settingsRef} className="min-w-0 lg:order-4 lg:col-span-2">
-        <SettingsCard search={search} onUpdate={onUpdate} />
+        <SettingsCard
+          search={search}
+          detectionPaused={detectionPaused}
+          buyControl={buyControl}
+          onUpdate={onUpdate}
+        />
       </div>
     </div>
   );

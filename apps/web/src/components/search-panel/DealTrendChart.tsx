@@ -10,11 +10,15 @@ import { formatExaltedAmount, formatSignedExaltedAmount } from '../../lib/deal-w
 import { formatRelativeMagnitude } from '../../lib/relative-time';
 
 /** Full-width history chart box (px) — roomier than the old modal sparkline. */
-const CHART_HEIGHT = 150;
+const CHART_HEIGHT = 172;
 /** Inner padding so markers + their 2px surface ring stay inside the box. */
 const CHART_PADDING = 10;
 /** Left inset reserving room for the y-axis tick labels. */
 const CHART_PADDING_LEFT = 56;
+/** Bottom inset reserving room for the time-axis tick labels. */
+const CHART_PADDING_BOTTOM = 26;
+/** Keep edge time labels (anchor: middle) inside the plot box. */
+const TIME_LABEL_CLEARANCE = 16;
 
 interface DealTrendChartProps {
   /** Newest-first, exactly as `GET …/deal-history` returns them. */
@@ -66,12 +70,17 @@ export function DealTrendChart({ entries, nowMs, divinePriceExalted }: DealTrend
 
   const geometry =
     containerWidth > 0
-      ? buildDealTrendGeometry(entries, {
-          width: containerWidth,
-          height: CHART_HEIGHT,
-          padding: CHART_PADDING,
-          paddingLeft: CHART_PADDING_LEFT,
-        })
+      ? buildDealTrendGeometry(
+          entries,
+          {
+            width: containerWidth,
+            height: CHART_HEIGHT,
+            padding: CHART_PADDING,
+            paddingLeft: CHART_PADDING_LEFT,
+            paddingBottom: CHART_PADDING_BOTTOM,
+          },
+          divinePriceExalted,
+        )
       : null;
 
   const hoveredPoint: DealTrendPoint | null =
@@ -138,7 +147,7 @@ export function DealTrendChart({ entries, nowMs, divinePriceExalted }: DealTrend
               }}
               onPointerLeave={() => setHoverIndex(null)}
             >
-              {/* Recessive grid: nice-value rows + ink-faint labels, never louder than data. */}
+              {/* Recessive grid: whole-unit rows + ink-faint labels, never louder than data. */}
               {geometry.ticks.map((tick) => (
                 <g key={tick.valueExalted}>
                   <line
@@ -156,7 +165,32 @@ export function DealTrendChart({ entries, nowMs, divinePriceExalted }: DealTrend
                     fontSize={10}
                     fill="var(--color-ink-faint)"
                   >
-                    {formatExaltedAmount(tick.valueExalted, divinePriceExalted)}
+                    {tick.label}
+                  </text>
+                </g>
+              ))}
+              {/* Time scale: adaptive local wall-clock ticks along the bottom. */}
+              {geometry.timeTicks.map((tick) => (
+                <g key={tick.ms}>
+                  <line
+                    x1={tick.x}
+                    x2={tick.x}
+                    y1={geometry.plotBottom}
+                    y2={geometry.plotBottom + 4}
+                    stroke="var(--color-edge-strong)"
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={Math.min(
+                      geometry.plotRight - TIME_LABEL_CLEARANCE,
+                      Math.max(geometry.plotLeft + TIME_LABEL_CLEARANCE, tick.x),
+                    )}
+                    y={CHART_HEIGHT - 8}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fill="var(--color-ink-faint)"
+                  >
+                    {tick.label}
                   </text>
                 </g>
               ))}
@@ -203,7 +237,7 @@ export function DealTrendChart({ entries, nowMs, divinePriceExalted }: DealTrend
                     x1={hoveredPoint.x}
                     x2={hoveredPoint.x}
                     y1={CHART_PADDING}
-                    y2={CHART_HEIGHT - CHART_PADDING}
+                    y2={geometry.plotBottom}
                     stroke="var(--color-edge-strong)"
                     strokeWidth={1}
                   />

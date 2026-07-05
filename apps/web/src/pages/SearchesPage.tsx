@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
@@ -537,45 +537,8 @@ function SearchRow({
           />
           {t('searches.activeToggle')}
         </span>
-        <span
-          className={`flex items-center gap-1.5 text-xs text-ink-muted transition-opacity ${
-            detectionPaused ? 'opacity-40' : ''
-          }`}
-          title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
-        >
-          <Switch
-            checked={search.autoTravel}
-            onChange={(checked) => void run(() => onUpdate({ autoTravel: checked }))}
-            label={t('searches.autoFor', { label: search.label })}
-          />
-          {t('searches.travelToggle')}
-        </span>
-        <span
-          className={`flex items-center gap-1.5 text-xs text-ink-muted transition-opacity ${
-            detectionPaused ? 'opacity-40' : ''
-          }`}
-          title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
-        >
-          <Switch
-            checked={buyControl.checked}
-            disabled={!buyControl.enabled}
-            onChange={(checked) => void run(() => onUpdate({ autoBuy: checked }))}
-            label={t('searches.buyFor', { label: search.label })}
-            tone="gold"
-          />
-          {t('searches.buyToggle')}
-          {buyControl.note &&
-            (buyControl.note === 'searches.buyNeedsPermission' ? (
-              <Link
-                to="/settings"
-                className="text-ink-faint underline underline-offset-2 hover:text-ink"
-              >
-                {t(buyControl.note)}
-              </Link>
-            ) : (
-              <span className="text-ink-faint">{t(buyControl.note)}</span>
-            ))}
-        </span>
+        {/* TRAVEL/BUY moved into the panel's Automation zone (operator
+            iteration 2026-07-05) — the header keeps ACTIVE + DEAL only. */}
         <IconButton
           variant="ghost"
           aria-label={t('searches.archive', { label: search.label })}
@@ -619,6 +582,7 @@ function SearchRow({
               <SearchDetailPanel
                 search={search}
                 detectionPaused={detectionPaused}
+                buyControl={buyControl}
                 onUpdate={onUpdate}
                 scrollTarget={scrollTarget}
               />

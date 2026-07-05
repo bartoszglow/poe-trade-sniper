@@ -62,12 +62,9 @@ function hasAnyContent(criteria: ParsedCriteria): boolean {
 export function QueryCriteriaView({
   query,
   divineRate = null,
-  /** Hide the "Item" group chip — its host already frames the section (plan 42). */
-  hideItemLabel = false,
 }: {
   query: unknown;
   divineRate?: number | null;
-  hideItemLabel?: boolean;
 }) {
   const t = useT();
   const statsById = useStatsDictionary();
@@ -99,7 +96,7 @@ export function QueryCriteriaView({
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-x-2.5 gap-y-5">
       {criteria.itemRows.length > 0 && (
-        <DetailCard title={hideItemLabel ? undefined : t('criteria.item')}>
+        <DetailCard title={t('criteria.item')}>
           <DetailRows rows={toRows(criteria.itemRows, disabledTag)} />
         </DetailCard>
       )}
