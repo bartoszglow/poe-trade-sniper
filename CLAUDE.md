@@ -53,6 +53,18 @@ Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
 NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no
 decorator metadata).
 
+Deal-watch (2026-07-05, plan 41): **#41 deal mode** shipped end-to-end — flip a
+search into deal mode; the server maintains a price-fixer-resistant baseline
+(median of cheapest usable listings, exalted-normalized via poe2scout rates),
+derives a price-capped GGG search (self-created content-addressed id, no-option
+value-converted cap — evidence in `api-notes.md` §"Self-created searches"),
+auto-swaps the row's id on >5% drift, and emits `deal` events with discount
+context; full operator UI (row chip, modal with baseline+trend sparkline, deal
+feed kind, distinct alerts). Phase 0 live-probed; both phases shipped after
+adversarial reviews with all confirmed findings fixed pre-commit. Remaining:
+multi-day id-aging evidence (P0.2b tail), Phase 3 live validation with the
+operator, Activity re-derive feed entry (parked).
+
 Operator-UX + tooling session (2026-07-02→03): shipped **#33 rooms** (named
 groups, DnD, master switch, auto-expand), **#34 live-hits panel** (resize/hide +
 click-to-locate spotlight), **#35 search archive/restore**, **#36 first-run

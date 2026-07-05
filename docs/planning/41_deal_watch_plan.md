@@ -7,10 +7,20 @@ extraction + governor minHeadroom), `9e0a2d8` (deal-watch core), `21049dd`
 (server 46 test files / 320+ tests incl. ~60 new, web 10, desktop 3). Shipped
 after an 8-specialist adversarial review (34 verified findings — all confirmed
 S2/S3 + S4 batch fixed pre-commit, F24 deferred; record:
-`docs/process/reviews/2026-07-05-deal-watch-phase1.md`). **Remaining: P0.2b id
-aging** (probe search kept watching), **Phase 2 web UI** (DealWatchModal, deal
-chip, feed kind, i18n for 12 status codes, stackable gate + broad-query
-warning), **Phase 3 live validation**.
+`docs/process/reviews/2026-07-05-deal-watch-phase1.md`).
+
+**Phase 2 (operator UI + stackable gate) IMPLEMENTED (2026-07-05, same session)**
+— DealWatchModal (config editor, baseline card, trend sparkline with re-derive
+markers, detection honesty, cooldown-aware refresh, restore-explaining disable),
+row deal chip + status dot, deal rendering in live panel/hits/activity (new
+`deal` feed kind + chip), distinct three-tone deal sound + flip-context
+notification, EN+PL for all 12 status codes + coded 409s, `unsupported-item`
+stackable gate (closes the Phase 1 deviation), id-lock in the edit dialog.
+Built in three parallel slices, then a 3-lens adversarial review (10 findings:
+3 S2 + 7 S3 — ALL fixed pre-commit, incl. watchId-stable React row keys so
+re-derives never unmount an open modal). Verify green.
+**Remaining: P0.2b multi-day id aging** (interim ~2 h evidence positive, see
+api-notes), **Phase 3 live validation with the operator**, parked items below.
 
 Phase 0 record: gate PASSED, direction confirmed by operator; Q1/Q2 resolved. Phase 0 results
 (evidence in `api-notes.md`, "Self-created searches + price filters"): P0.1/P0.3
@@ -488,9 +498,22 @@ for deal searches" is parked.
 - **Parked**: per-unit normalization for stackables; resale tracker (bought-at vs
   sold-at P&L); trend guard ("don't buy a falling knife"); priority poll slot;
   suspicious-discount flag; tray/background notifications (90_future_ideas.md
-  candidates).
+  candidates); Activity-feed re-derive entry ("baseline X → Y ex, cap updated" —
+  deferred from D-dw-12, see the as-built deviations).
 
-## Phase 1 as-built deviations (2026-07-05, recorded per the plan-24 pattern)
+## As-built deviations (recorded per the plan-24 pattern)
+
+### Phase 2 (2026-07-05)
+
+- **D-dw-12 Activity-feed re-derive entry DEFERRED** — `rederived` samples are
+  surfaced as ringed markers on the modal's trend sparkline only; the Activity
+  feed entry is parked (see Parked). The history table + endpoint carry the
+  `rederived` flag, so the feed entry is a pure web addition later.
+- **Trend label is change-since-oldest-shown**, not D-dw-12's
+  "change-since-yesterday" — the sparkline window (≤200 samples) is the honest
+  reference span and avoids a second time anchor; accepted.
+
+### Phase 1 (2026-07-05)
 
 - **Pre-derive rows decorate as ordinary hits, not `deal`** — before the first
   successful swap the row still watches the operator's ORIGINAL query, so
@@ -500,7 +523,8 @@ for deal searches" is parked.
   dictionary category lookup (`TradeDataService` is not exported from
   PriceCheckModule); the status code ships now, the gate lands with the UI
   warning. Until then the operator can enable deal mode on a stackable search
-  and gets honest-but-wrong baselines — Phase 2 closes this.
+  and gets honest-but-wrong baselines — closed 2026-07-05 (W3: gate in
+  `DealWatchService.enable`, 409 `deal-unsupported-item`, offline-tolerant).
 - **Insufficient-data at refresh keeps the old baseline+cap running** (alerts
   continue, status flags the condition); only enable-time insufficiency skips
   the derive entirely.

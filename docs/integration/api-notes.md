@@ -219,8 +219,13 @@ scratchpad; summarized here as the durable evidence.
   connected and authed on a self-created id (watched via the app: engine `ws`,
   detail "live websocket connected"). The full deal-watch premise — build query →
   POST → id → resolve → fetch → live ws — is proven end-to-end. (2026-07-05)
-- **Id lifetime**: unknown beyond same-day; re-check scheduled (probe id kept as
-  the `[P0 probe]` search). `TODO(verify)` — aging of idle vs live-watched ids.
+- **Id lifetime**: P0.2b interim (2026-07-05 ~03:10): both a live-watched id
+  (`5nv8453oTa`, ws-connected for ~2 h) and an idle never-watched id
+  (`eR5lGDJrIL`) still GET-resolve ~2 h after creation with filters intact.
+  Content-addressing (P0.7) also means a "lost" id is always re-mintable by
+  re-POSTing the identical query — id expiry is a recoverable, not fatal,
+  condition. Multi-day aging still `TODO(verify)`: re-resolve both ids on a
+  later day and extend this bullet.
 - **`trade_filters.price` is accepted when POSTed** (previously only ever parsed
   from resolved queries): `{filters:{trade_filters:{filters:{price:{max,option?}}}}}`.
   (2026-07-05)
