@@ -503,6 +503,15 @@ for deal searches" is parked.
 
 ## As-built deviations (recorded per the plan-24 pattern)
 
+- **Live-validation finding (2026-07-05, first operator session): the baseline
+  keeps the definition's OWN status instead of forcing `online`.** The plan's
+  "force status online" step was wrong on live data: on identical uncapped
+  constraints `online` returned 2 listings where the search's own `securable`
+  returned 56 (Twister; operator's manual counter-search `4mmRQVvZt9`) —
+  instant-buyout listings from offline sellers ARE the purchasable market.
+  Evidence in api-notes; P0.9 closed with this semantics note. The #37
+  price-check `online` usage is a parked follow-up.
+
 ### Phase 2 (2026-07-05)
 
 - **D-dw-12 Activity-feed re-derive entry DEFERRED** — `rederived` samples are

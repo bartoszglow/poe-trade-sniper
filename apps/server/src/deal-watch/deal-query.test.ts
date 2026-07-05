@@ -83,10 +83,13 @@ describe('withPriceCap', () => {
 });
 
 describe('baselineQuery', () => {
-  it('forces online status and never carries a price filter', () => {
+  it('keeps the definition status and never carries a price filter', () => {
+    // Forcing `online` here missed the offline-seller instant-buyout market —
+    // 2 vs 56 listings on identical constraints (api-notes 2026-07-05). The
+    // baseline must sample the same status the watch buys under.
     const { definition } = stripPriceFilter(cappedQuery);
     const baseline = baselineQuery(definition) as typeof cappedQuery;
-    expect(baseline.status).toEqual({ option: 'online' });
+    expect(baseline.status).toEqual({ option: 'securable' });
     expect(baseline.filters).not.toHaveProperty('trade_filters');
   });
 });

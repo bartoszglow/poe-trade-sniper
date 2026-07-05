@@ -76,14 +76,16 @@ export function withPriceCap(definition: unknown, capExalted: number): unknown {
 }
 
 /**
- * The baseline query: the definition with online-only status and no price
- * filter, so the sample is the whole live market for the item. `online` is
- * accepted live but its strict seller filtering is still TODO(verify) (P0.9).
+ * The baseline query: the definition, price-free, with its OWN status kept.
+ * Forcing `status {option:'online'}` here was wrong: trade2's status domain is
+ * the purchase-type set, and on identical constraints `online` returned 2
+ * listings where the definition's `securable` returned 56 (Twister evidence,
+ * api-notes 2026-07-05) — instant-buyout listings from offline sellers ARE the
+ * operator's purchasable market, so the baseline must sample the same status
+ * the watch buys under.
  */
 export function baselineQuery(definition: unknown): unknown {
-  const base = isRecord(definition) ? cloneQuery(definition) : {};
-  base['status'] = { option: 'online' };
-  return base;
+  return isRecord(definition) ? cloneQuery(definition) : {};
 }
 
 /** The pre-deal query for disable: definition + the snapshotted price filter. */

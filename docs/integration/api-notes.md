@@ -241,10 +241,17 @@ scratchpad; summarized here as the durable evidence.
 - **`sort {price:'asc'}` is accepted and orders cross-currency by value**
   (`1 divine` × 3 → `1 mirror` → barter listings last). Backfills the missing
   evidence for the #37 price-check sort. (2026-07-05)
-- **`status {option:'online'}` is accepted** on a POSTed query (200 + id +
-  plausible results). Whether it strictly filters to online sellers was not
-  independently verified — `TODO(verify)` (would need an offline-seller
-  counter-example). Backfills the #37 builders' assumption. (2026-07-05)
+- **`status {option:'online'}` is accepted but DRASTICALLY narrows results** —
+  evidence 2026-07-05: the identical uncapped Twister query (gem_level ≥21,
+  quality ≥23, 5 sockets) returned **2** listings with `online` vs **56** with
+  the search's own `securable` (operator's hand-made search `4mmRQVvZt9`).
+  Interpretation: trade2's status domain is the purchase-type set (see the
+  table above), and instant-buyout listings from OFFLINE sellers — most of the
+  high-end gem market — do not match `online`. Consequence: deal-watch
+  baselines keep the definition's own status (never force `online`); the #37
+  price-check builders still POST `online` for rare comparables — their sample
+  may be similarly over-narrowed, follow-up decision parked (a conservative
+  narrow sample is not wrong for pricing, but it is for market coverage). (2026-07-05)
 - **Rate-limit policy `trade-search-request-limit` has an Account rule** besides
   Ip: observed `x-rate-limit-account: 3:5:60` with `x-rate-limit-rules:
 Account,Ip`, and Ip tiers `8:10:60, 15:60:120, 60:300:1800`. The governor

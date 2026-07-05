@@ -5,7 +5,7 @@ import type { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import type { RawTradeListing, TradeApiClient } from '../trade-api/trade-api.client.js';
 import { DealBaselineService } from './deal-baseline.service.js';
 
-const DEFINITION = { type: 'Barrage' };
+const DEFINITION = { type: 'Barrage', status: { option: 'securable' } };
 
 function listing(amount: number, currency: string): RawTradeListing {
   return { price: { amount, currency }, seller: 'seller#1234', indexedAt: null, whisper: null };
@@ -60,7 +60,7 @@ describe('DealBaselineService.computeBaseline', () => {
     expect(result.kind).toBe('rate-limited');
   });
 
-  it('POSTs the baseline-shaped query: online status, price asc, no price filter', async () => {
+  it('POSTs the baseline-shaped query: definition status kept, price asc, no price filter', async () => {
     const { service, priceSearch } = createService({
       listings: [listing(100, 'exalted'), listing(110, 'exalted'), listing(120, 'exalted')],
     });
@@ -69,7 +69,10 @@ describe('DealBaselineService.computeBaseline', () => {
       query: { status: unknown; filters?: unknown };
       sort: unknown;
     };
-    expect(body.query.status).toEqual({ option: 'online' });
+    // The definition's own status is the operator's purchasable market —
+    // forcing `online` missed offline-seller instant-buyout listings
+    // (2 vs 56 on identical constraints, api-notes 2026-07-05).
+    expect(body.query.status).toEqual({ option: 'securable' });
     expect(body.sort).toEqual({ price: 'asc' });
     expect(JSON.stringify(body.query)).not.toContain('price');
   });
