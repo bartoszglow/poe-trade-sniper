@@ -38,7 +38,10 @@ export function DealConfigFields({
   const t = useT();
   return (
     <>
-      <div className="grid grid-cols-[7fr_3fr] gap-2">
+      {/* minmax(0,…) so an fr track can shrink below its content min instead of
+          overflowing the card — the number input then absorbs the shrink and the
+          unit suffix stays visible (operator feedback 2026-07-06). */}
+      <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-2">
         <Field label={t('dealWatch.modeLabel')}>
           <Select
             value={mode}
@@ -50,7 +53,7 @@ export function DealConfigFields({
           />
         </Field>
         <Field label={t('dealWatch.thresholdLabel')}>
-          <div className="flex items-stretch rounded-md border border-edge bg-surface-2 focus-within:border-gold">
+          <div className="flex min-w-0 items-stretch rounded-md border border-edge bg-surface-2 focus-within:border-gold">
             {/* Bare + no steppers: the wrapper owns the box and the suffix sits
                 where the stepper would; native spinners are still hidden. */}
             <NumberInput
@@ -63,13 +66,13 @@ export function DealConfigFields({
               ariaLabel={t('dealWatch.thresholdLabel')}
             />
             {mode === 'percent' ? (
-              <span className="flex items-center border-l border-edge px-2 text-sm text-ink-muted">
+              <span className="flex shrink-0 items-center border-l border-edge px-2 text-sm text-ink-muted">
                 %
               </span>
             ) : (
               <Select
                 variant="bare"
-                className="border-l border-edge"
+                className="shrink-0 border-l border-edge"
                 value={unit}
                 onChange={(value) => onUnitChange(value === 'divine' ? 'divine' : 'exalted')}
                 ariaLabel={t('dealWatch.unitLabel')}

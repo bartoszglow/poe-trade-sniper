@@ -284,26 +284,37 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
               }
             : undefined,
       });
-      setInput('');
-      setLabel('');
-      setAutoTravel(false);
-      setDealEnabled(false);
-      setDealMode('percent');
-      setDealThreshold('');
-      setDealUnit('exalted');
-      setDealSampleSize(String(DEFAULT_BASELINE_SAMPLE_SIZE));
-      // After a successful add, collapse the form (and any open preview) so the
-      // search list isn't pushed down by the editor — it reopens on click.
-      setPreviewOpen(false);
-      setPreviewQuery(null);
-      setCollapsed(true);
+      resetAndClose();
     } catch (error) {
-      setErrorMessage(
-        error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
-      );
+      // A deal-coded 409 (stackable / cap reached) means the SEARCH WAS created
+      // and only the deal part was refused — the row now shows that deal status,
+      // so close the form as for a normal add rather than trapping the operator.
+      if (error instanceof ApiError && error.code?.startsWith('deal-')) {
+        resetAndClose();
+      } else {
+        setErrorMessage(
+          error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
+        );
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function resetAndClose(): void {
+    setInput('');
+    setLabel('');
+    setAutoTravel(false);
+    setDealEnabled(false);
+    setDealMode('percent');
+    setDealThreshold('');
+    setDealUnit('exalted');
+    setDealSampleSize(String(DEFAULT_BASELINE_SAMPLE_SIZE));
+    // Collapse the form (and any open preview) so the search list isn't pushed
+    // down by the editor — it reopens on click.
+    setPreviewOpen(false);
+    setPreviewQuery(null);
+    setCollapsed(true);
   }
 
   if (collapsed) {
