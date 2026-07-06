@@ -54,6 +54,20 @@ body {
 }
 
 /*
+ * The app fills EXACTLY the viewport and only its inner panes scroll. Without
+ * pinning #root's height + overflow, a momentary overflow escapes to the body
+ * and paints a scrollbar across the WHOLE window — and because the themed
+ * ::-webkit-scrollbar below has an explicit width, that bar is a classic,
+ * space-taking one (not a macOS overlay), so it also shoves the layout.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/*
  * Frameless-window readiness (Phase 5): when the Electron shell sets
  * data-shell="desktop", the app bar becomes the drag region and interactive
  * elements inside it opt out. No effect in the browser.

@@ -108,7 +108,7 @@ export function AppShell() {
     <div
       ref={gridRef}
       style={{ '--hits-panel-width': `${hitsPanel.widthPx}px` } as CSSProperties}
-      className={`grid h-screen grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden ${
+      className={`grid h-full grid-rows-[2.5rem_auto_minmax(0,1fr)_2rem] grid-cols-[3rem_1fr] overflow-hidden ${
         hitsPanelHidden ? '' : 'lg:grid-cols-[3rem_1fr_var(--hits-panel-width)]'
       }`}
     >
@@ -131,7 +131,10 @@ export function AppShell() {
 
       <IconRail />
 
-      <main className="min-h-0 overflow-y-auto bg-surface-0 px-5 py-4">
+      {/* scrollbar-gutter: stable reserves the (themed, space-taking) scrollbar's
+          width always, so expanding a group that adds the bar never shifts the
+          column width. */}
+      <main className="min-h-0 overflow-y-auto bg-surface-0 px-5 py-4 [scrollbar-gutter:stable]">
         <Routes>
           {NAV_ENTRIES.filter((entry) => !entry.devOnly || networkViewEnabled).map((entry) => (
             <Route key={entry.id} path={entry.path} element={<entry.page />} />

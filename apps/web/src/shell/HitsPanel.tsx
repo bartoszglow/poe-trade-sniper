@@ -137,7 +137,7 @@ export function HitsPanel({ onHide }: { onHide: () => void }) {
       {/* Stable scroll container — never unmounted on clear (swapping the whole
           overflow container out was what left the ghost). Only the inner content swaps. */}
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]"
         aria-live="polite"
         aria-atomic="false"
       >
