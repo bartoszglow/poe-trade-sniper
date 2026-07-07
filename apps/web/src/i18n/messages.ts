@@ -303,6 +303,15 @@ export const EN = {
   'hitCard.traveled': 'traveled ✓',
   'hitCard.failed': 'failed',
   'hitCard.travelGone': 'no longer available',
+  'hitCard.travelNotInGame': 'not in game',
+  'hitCard.travelNotInGameHint':
+    'Your character must be in-game to travel — open PoE, then click Retry.',
+  'hitCard.travelServerError': 'GGG server error',
+  'hitCard.travelServerErrorHint':
+    "GGG's server hit an internal error — usually brief; retried automatically.",
+  'hitCard.travelBadResponse': 'unexpected response',
+  'hitCard.travelBadResponseHint':
+    'GGG returned an unexpected response — usually transient; retried automatically.',
   'hitCard.travelRateLimited': 'rate-limited — try again shortly',
   'hitCard.buying': 'buying…',
   'hitCard.buyReady': 'cursor on item',
@@ -923,6 +932,15 @@ export const PL: Record<MessageKey, string> = {
   'hitCard.traveled': 'przeniesiono ✓',
   'hitCard.failed': 'niepowodzenie',
   'hitCard.travelGone': 'już niedostępny',
+  'hitCard.travelNotInGame': 'nie jesteś w grze',
+  'hitCard.travelNotInGameHint':
+    'Twoja postać musi być w grze, aby się przenieść — włącz PoE i kliknij Ponów.',
+  'hitCard.travelServerError': 'błąd serwera GGG',
+  'hitCard.travelServerErrorHint':
+    'Wewnętrzny błąd serwera GGG — zwykle chwilowy; ponawiane automatycznie.',
+  'hitCard.travelBadResponse': 'nieoczekiwana odpowiedź',
+  'hitCard.travelBadResponseHint':
+    'GGG zwróciło nieoczekiwaną odpowiedź — zwykle chwilowe; ponawiane automatycznie.',
   'hitCard.travelRateLimited': 'limit zapytań — spróbuj za chwilę',
   'hitCard.buying': 'kupowanie…',
   'hitCard.buyReady': 'kursor na przedmiocie',

@@ -94,7 +94,11 @@ const STEP_PHASE_KEY: Record<string, MessageKey> = {
  * travel-failure display (same friendly label as live hits, e.g. "no longer available"),
  * so the raw server `detail` is never shown; every other phase maps through STEP_PHASE_KEY.
  */
-function stepPhaseDisplay(step: ActivityStep): { key: MessageKey; tone: string } {
+function stepPhaseDisplay(step: ActivityStep): {
+  key: MessageKey;
+  tone: string;
+  hintKey?: MessageKey;
+} {
   if (step.kind === 'travel' && step.phase === 'failed') {
     return travelFailureDisplay(step.reason);
   }
@@ -347,7 +351,12 @@ export function ActivityFeedCard({
                   <span className="w-12 shrink-0 text-ink-faint">
                     {t(STEP_KIND_KEY[step.kind])}
                   </span>
-                  <span className={phaseDisplay.tone}>{t(phaseDisplay.key)}</span>
+                  <span
+                    className={phaseDisplay.tone}
+                    title={phaseDisplay.hintKey ? t(phaseDisplay.hintKey) : undefined}
+                  >
+                    {t(phaseDisplay.key)}
+                  </span>
                   <div className="flex-1" />
                   <span className="font-mono text-[0.65rem] text-ink-faint/70">
                     {new Date(step.at).toLocaleTimeString()}

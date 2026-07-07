@@ -335,6 +335,60 @@ describe('TravelService', () => {
       service.onApplicationShutdown();
     });
 
+    it('retries a transient server error (code 4) — it is not definitive', async () => {
+      const { service, tradeApi, realtimeBus, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TradeApiError(500, 'travel: internal error', 4),
+      );
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      expect(refreshListing).toHaveBeenCalledTimes(1);
+      expect(tradeApi.travel).toHaveBeenCalledTimes(2);
+      service.onApplicationShutdown();
+    });
+
+    it('does not retry a rate-limit failure (code 3)', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TradeApiError(400, 'travel: rate limit exceeded', 3),
+      );
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      expect(refreshListing).not.toHaveBeenCalled();
+      expect(lastFailed(travelEvents)?.reason).toBe('rate_limited');
+      service.onApplicationShutdown();
+    });
+
+    it('does not retry a not-in-game failure (400 code 2) — labels + leaves manual Retry', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TradeApiError(400, 'travel: account must be in-game', 2),
+      );
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      // Retrying can't help until the operator is in-game — so no re-resolve, no
+      // second travel; just the labelled failure (the UI keeps its Retry button).
+      expect(refreshListing).not.toHaveBeenCalled();
+      expect(tradeApi.travel).toHaveBeenCalledTimes(1);
+      expect(lastFailed(travelEvents)?.reason).toBe('not_in_game');
+      service.onApplicationShutdown();
+    });
+
     it('does not re-resolve a already-definitive failure (404 code 1)', async () => {
       const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
         autoTravel: true,

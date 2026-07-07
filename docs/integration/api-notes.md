@@ -119,11 +119,38 @@ Served to the UI via cached `GET /api/leagues`.
   `{error: {code, message}}` on failure. Observed live:
   - `404 code 1` → `"Item no longer available"` — the listing sold/vanished (the common case;
     even a just-re-fetched id whispers 404 once the item is gone). Observed 2026-07-01.
+  - `400 code 2` → `"Invalid query; Your account must be in-game to use this feature"` — the
+    character isn't in-game (client at login / character-select, or PoE not running). Verbatim
+    server log 2026-07-07 (search `mk5Go6Eef6`): `POST /api/trade2/whisper → 400`. NOT retryable —
+    only entering the game clears it, so auto-retry skips it (reason `not_in_game`) and the UI shows
+    an actionable label while leaving the manual Retry button for when the operator is back in-game.
   - `403 code 6` → `"Forbidden"` — a missing `X-Requested-With` / wrong Referer (see the whisper
     row above). A _format_ problem, not a business one.
     These are mapped to a stable UI reason by `classifyTravelFailure` (`packages/shared/src/travel-failure.ts`,
     registry-style); `429` → rate-limited; anything else stays `unknown`. Add a new code there only
     with evidence here (hard rule #2).
+  - **Official GGG error-code enum** (authoritative — from the public dev docs,
+    `pathofexile.com/developer/docs/index#errors`, fetched 2026-07-07; the whisper endpoint
+    reuses this envelope, so `error.code` means the same). GGG explicitly says _"use the code
+    rather than the message as the message is subject to change"_ — which is exactly why we key
+    `classifyTravelFailure` on the code:
+
+    | code | meaning                 | code | meaning                 |
+    | ---- | ----------------------- | ---- | ----------------------- |
+    | 0    | Accepted                | 6    | Forbidden               |
+    | 1    | Resource not found      | 7    | Temporarily Unavailable |
+    | 2    | Invalid query           | 8    | Unauthorized            |
+    | 3    | Rate limit exceeded     | 9    | Method not allowed      |
+    | 4    | Internal error          | 10   | Unprocessable Entity    |
+    | 5    | Unexpected content type |      |                         |
+
+    So the asked-about **3 = Rate limit exceeded, 4 = Internal error, 5 = Unexpected content type**.
+    `classifyTravelFailure` now maps these too (by code, per GGG's guidance): 3 → `rate_limited`,
+    4 → `server_error`, 5 → `bad_response`. Retry policy is driven by `isRetryableTravelFailure`:
+    the transient/indeterminate ones (`server_error`, `bad_response`, `unknown`, and a null reason)
+    get one automatic retry; the definitive ones (`item_gone`, `not_in_game`, `rate_limited`,
+    `forbidden`) do not. Codes 7/8/9/10 remain unmapped → `unknown` (still auto-retried once); the
+    server warn logs the raw `HTTP <status>: <message> (code N)` so a real occurrence surfaces there.
 
 ## Auth & session
 

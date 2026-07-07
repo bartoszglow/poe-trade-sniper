@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   classifyTravelFailure,
+  isRetryableTravelFailure,
   offerKey,
   type DomainEvent,
   type TravelEvent,
@@ -225,8 +226,9 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
    * travel again, or surface `item_gone` if the offer is gone (retryTravel owns
    * both branches). Deliberately narrow:
    *   - auto source only (manual already has an explicit Retry);
-   *   - only for an unknown/undetermined reason — a 404,1 already IS item_gone, a
-   *     429 is a budget backoff, a 403,6 is a config fault, none should retry;
+   *   - only for a RETRYABLE reason (isRetryableTravelFailure) — transient or
+   *     indeterminate; item_gone/not_in_game/rate_limited/forbidden are definitive
+   *     and would only waste budget;
    *   - single-flight + budget-gated: the re-resolve spends a SEARCH-bucket hit
    *     (the 30-min-lockout path), so a burst of failures collapses to at most one
    *     retry, and only when detection/deals have budget to spare.
@@ -238,7 +240,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
     reason: TravelFailureReason | null,
   ): Promise<void> {
     if (request.source !== 'auto' || request.listingId === null) return;
-    if (reason !== null && reason !== 'unknown') return;
+    if (!isRetryableTravelFailure(reason)) return;
     if (!request.offerKey) return;
     if (this.retrying) return;
     if (this.governor.minHeadroom(RETRY_POLICIES) < this.config.TRAVEL_RETRY_MIN_HEADROOM) return;

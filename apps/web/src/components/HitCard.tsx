@@ -149,7 +149,12 @@ export function HitCard({
             )}
             {phase === 'failed' && (
               <>
-                <span className={`text-xs ${travelFail.tone}`}>{t(travelFail.key)}</span>
+                <span
+                  className={`text-xs ${travelFail.tone}`}
+                  title={travelFail.hintKey ? t(travelFail.hintKey) : undefined}
+                >
+                  {t(travelFail.key)}
+                </span>
                 <Button
                   variant="ghost"
                   className="!px-2 !py-0.5 text-xs"

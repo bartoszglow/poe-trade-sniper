@@ -6,6 +6,8 @@ export interface FailureDisplay {
   key: MessageKey;
   /** Tailwind text-color class for the label's tone. */
   tone: string;
+  /** Optional i18n key for a short on-hover explanation (rendered as a title). */
+  hintKey?: MessageKey;
 }
 
 /**
@@ -21,7 +23,24 @@ export interface FailureDisplay {
  */
 const TRAVEL_FAILURE_DISPLAY: Partial<Record<TravelFailureReason, FailureDisplay>> = {
   item_gone: { key: 'hitCard.travelGone', tone: 'text-ink-muted' },
+  // Actionable (enter the game, then retry) — amber, not the dead-end muted grey.
+  not_in_game: {
+    key: 'hitCard.travelNotInGame',
+    tone: 'text-warn',
+    hintKey: 'hitCard.travelNotInGameHint',
+  },
   rate_limited: { key: 'hitCard.travelRateLimited', tone: 'text-gold' },
+  // Transient GGG faults (codes 4/5) — auto-retried once; amber, hint on hover.
+  server_error: {
+    key: 'hitCard.travelServerError',
+    tone: 'text-warn',
+    hintKey: 'hitCard.travelServerErrorHint',
+  },
+  bad_response: {
+    key: 'hitCard.travelBadResponse',
+    tone: 'text-warn',
+    hintKey: 'hitCard.travelBadResponseHint',
+  },
 };
 
 /** Friendly label + tone for a (possibly null/unmapped) travel failure reason. */
