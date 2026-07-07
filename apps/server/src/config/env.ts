@@ -54,8 +54,15 @@ export const envSchema = z.object({
   DEAL_REFRESH_INTERVAL_MS: z.coerce.number().int().min(300_000).default(3_600_000),
   /** Jitter ratio on the relative refresh schedule — the phase random-walks (R7). */
   DEAL_REFRESH_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.15),
-  /** Baseline drift vs the cap's reference baseline that triggers a re-derive. */
-  DEAL_DRIFT_THRESHOLD: z.coerce.number().min(0.005).max(1).default(0.05),
+  /**
+   * Baseline drift vs the cap's reference baseline that triggers a re-derive.
+   * The GGG cap is a COARSE server-side pre-filter; the hit decorator applies the
+   * EXACT cutoff against the live baseline, so a slightly-stale cap only lets a
+   * few sub-threshold listings through (suppressed), never a wrong alert. A wide
+   * band (0.20) cuts ws re-connect churn ~4× and keeps the ws-connect rate under
+   * the OutboundGuard ceiling — a re-derive burst tripped it live (D-dw-20).
+   */
+  DEAL_DRIFT_THRESHOLD: z.coerce.number().min(0.005).max(1).default(0.2),
   /** Forced re-derive age for the derived id — bounds id lifetime even in a flat
    *  market (id aging is TODO(verify), P0.2b — keep conservative until it lands). */
   DEAL_MAX_ID_AGE_MS: z.coerce.number().int().min(3_600_000).default(259_200_000),
@@ -74,9 +81,17 @@ export const envSchema = z.object({
   DEAL_REDERIVE_DEBOUNCE_MS: z.coerce.number().int().min(0).default(5_000),
   /** Per-search cooldown on POST /searches/:id/deal-refresh (operator impatience). */
   DEAL_MANUAL_REFRESH_COOLDOWN_MS: z.coerce.number().int().min(0).default(60_000),
-  /** Extra GGG-cap headroom above the exact cutoff (Q3 — default none; the cap is
-   *  value-converted by GGG at its own internal rate, which may drift vs poe2scout). */
-  DEAL_CAP_MARGIN_RATIO: z.coerce.number().min(0).max(0.5).default(0),
+  /** Extra GGG-cap headroom above the exact cutoff. MUST be ≥ DEAL_DRIFT_THRESHOLD
+   *  (review S2): the cap is a coarse server-side pre-filter set at the LAST
+   *  re-derive's baseline, and GGG returns only listings ≤ cap. In a RISING
+   *  market the live cutoff (baseline×(1−t)) grows with the baseline, so without
+   *  this headroom a genuine deal priced between the stale cap and the higher
+   *  live cutoff would be filtered out server-side and never reach the decorator
+   *  = a silently missed deal, up to the full drift band. 0.25 covers the 0.20
+   *  drift band with a small buffer; the decorator suppresses the extra
+   *  sub-cutoff listings this lets through. (Also absorbs GGG's own
+   *  currency-conversion drift vs poe2scout, Q3.) */
+  DEAL_CAP_MARGIN_RATIO: z.coerce.number().min(0).max(0.5).default(0.25),
   /** Rolling per-watch cap on baseline-history rows (D-dw-12) — ~3 weeks hourly. */
   DEAL_BASELINE_HISTORY_MAX: z.coerce.number().int().min(50).default(500),
   /** Deal queue beat — due-refresh scans + queued jobs are picked up on this cadence. */

@@ -47,6 +47,8 @@ export interface DealWatchConfigInput {
   unit: DealWatchUnit;
   /** D-dw-15 sample-size knob — validated 3..20 at the controller edge. */
   baselineSampleSize: number;
+  /** D-dw-20 per-watch refresh interval (ms) or null = global default. */
+  refreshIntervalMs: number | null;
 }
 
 export type ManualRefreshResult =
@@ -303,6 +305,7 @@ export class DealWatchService
       thresholdValue: configInput.thresholdValue,
       unit: configInput.unit,
       baselineSampleSize: configInput.baselineSampleSize,
+      refreshIntervalMs: configInput.refreshIntervalMs,
       definition,
       originalSearchId: row.id,
       originalPriceFilter,
@@ -359,6 +362,15 @@ export class DealWatchService
     if (pendingJob?.disable && pendingJob.settlers.length === 0) {
       this.pendingJobs.delete(state.watchId);
     }
+    // A cap-affecting change (threshold / mode / unit / sample size) needs a
+    // re-derive; a refresh-interval-only change (D-dw-20) must NOT spend GGG —
+    // it just reschedules the next check.
+    const capAffectingChanged =
+      configInput.mode !== state.mode ||
+      configInput.thresholdValue !== state.thresholdValue ||
+      configInput.unit !== state.unit ||
+      configInput.baselineSampleSize !== state.baselineSampleSize;
+    const intervalChanged = configInput.refreshIntervalMs !== state.refreshIntervalMs;
     const nextState: DealWatchState = {
       ...state,
       mode: configInput.mode,
@@ -367,6 +379,13 @@ export class DealWatchService
       // A sample-size change is picked up by the NEXT scheduled refresh — it
       // must not force an immediate GGG spend (D-dw-15).
       baselineSampleSize: configInput.baselineSampleSize,
+      refreshIntervalMs: configInput.refreshIntervalMs,
+      // Reschedule when only the cadence changed so a shorter interval takes
+      // effect promptly (and a longer one pushes out) without a GGG spend.
+      nextRefreshAt:
+        intervalChanged && !capAffectingChanged
+          ? this.nextRefreshAt(configInput)
+          : state.nextRefreshAt,
       status:
         state.status === 'restore-pending'
           ? state.baseline === null
@@ -376,6 +395,7 @@ export class DealWatchService
     };
     const info = this.searchManager.updateDealState(row.id, nextState);
     this.refreshSnapshotCutoff(nextState);
+    if (!capAffectingChanged) return info;
     // Debounced re-derive: rapid threshold edits coalesce into one swap.
     const existingTimer = this.rederiveDebounceTimers.get(state.watchId);
     if (existingTimer) clearTimeout(existingTimer);
@@ -716,7 +736,7 @@ export class DealWatchService
       this.updateStateIfCurrent(searchIdAtStart, {
         ...currentState,
         status: 'insufficient-data',
-        nextRefreshAt: this.nextRefreshAt(),
+        nextRefreshAt: this.nextRefreshAt(currentState),
         divinePriceExalted: computation.divinePriceExalted,
       });
       this.applySnapshot(currentState, computation);
@@ -726,7 +746,7 @@ export class DealWatchService
     const withNewBaseline: DealWatchState = {
       ...currentState,
       baseline: computation.baseline,
-      nextRefreshAt: this.nextRefreshAt(),
+      nextRefreshAt: this.nextRefreshAt(currentState),
       divinePriceExalted: computation.divinePriceExalted,
     };
     const needsRederive =
@@ -988,11 +1008,14 @@ export class DealWatchService
     return state.derivedCreatedAt === null ? 0 : Date.now() - Date.parse(state.derivedCreatedAt);
   }
 
-  /** Relative + jittered schedule (R7): the phase random-walks across days. */
-  private nextRefreshAt(): string {
-    const jitterSpan = this.config.DEAL_REFRESH_INTERVAL_MS * this.config.DEAL_REFRESH_JITTER_RATIO;
-    const jitter = (Math.random() * 2 - 1) * jitterSpan;
-    return new Date(Date.now() + this.config.DEAL_REFRESH_INTERVAL_MS + jitter).toISOString();
+  /**
+   * Relative + jittered schedule (R7): the phase random-walks across days. Uses
+   * the watch's own `refreshIntervalMs` when set (D-dw-20), else the global.
+   */
+  private nextRefreshAt(state?: Pick<DealWatchState, 'refreshIntervalMs'>): string {
+    const intervalMs = state?.refreshIntervalMs ?? this.config.DEAL_REFRESH_INTERVAL_MS;
+    const jitter = (Math.random() * 2 - 1) * intervalMs * this.config.DEAL_REFRESH_JITTER_RATIO;
+    return new Date(Date.now() + intervalMs + jitter).toISOString();
   }
 
   /** Short retry horizon after a declined/failed cycle (reviews F4/F26). */

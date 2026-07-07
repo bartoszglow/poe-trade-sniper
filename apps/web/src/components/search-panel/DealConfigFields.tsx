@@ -1,9 +1,23 @@
-import { BASELINE_SAMPLE_SIZE_MAX, BASELINE_SAMPLE_SIZE_MIN } from '@poe-sniper/shared';
+import {
+  BASELINE_SAMPLE_SIZE_MAX,
+  BASELINE_SAMPLE_SIZE_MIN,
+  DEAL_REFRESH_INTERVAL_OPTIONS_MS,
+} from '@poe-sniper/shared';
 import type { DealWatchMode, DealWatchUnit } from '@poe-sniper/shared';
 import { useT } from '../../i18n/i18n';
+import type { MessageKey } from '../../i18n/messages';
 import { Field } from '../Field';
 import { NumberInput } from '../NumberInput';
 import { Select } from '../Select';
+
+/** ms → i18n key for the refresh-interval options (D-dw-20). */
+const REFRESH_INTERVAL_LABEL_KEYS: Record<number, MessageKey> = {
+  1_800_000: 'dealWatch.refreshEvery.30m',
+  3_600_000: 'dealWatch.refreshEvery.1h',
+  10_800_000: 'dealWatch.refreshEvery.3h',
+  21_600_000: 'dealWatch.refreshEvery.6h',
+  43_200_000: 'dealWatch.refreshEvery.12h',
+};
 
 export interface DealConfigFieldsProps {
   mode: DealWatchMode;
@@ -15,6 +29,9 @@ export interface DealConfigFieldsProps {
   sampleSize: string;
   onSampleSizeChange: (raw: string) => void;
   sampleSizeValid: boolean;
+  /** null = the global default cadence (D-dw-20). */
+  refreshIntervalMs: number | null;
+  onRefreshIntervalChange: (value: number | null) => void;
 }
 
 /**
@@ -34,6 +51,8 @@ export function DealConfigFields({
   sampleSize,
   onSampleSizeChange,
   sampleSizeValid,
+  refreshIntervalMs,
+  onRefreshIntervalChange,
 }: DealConfigFieldsProps) {
   const t = useT();
   return (
@@ -101,6 +120,22 @@ export function DealConfigFields({
         />
         <span>{t('dealWatch.sampleSizeSuffix')}</span>
       </div>
+      {/* Per-watch refresh cadence (D-dw-20): how often the market price is
+          re-checked (feeds the threshold cutoff). Default = the global. */}
+      <Field label={t('dealWatch.refreshEveryLabel')}>
+        <Select
+          value={refreshIntervalMs === null ? '' : String(refreshIntervalMs)}
+          onChange={(value) => onRefreshIntervalChange(value === '' ? null : Number(value))}
+          ariaLabel={t('dealWatch.refreshEveryLabel')}
+          options={[
+            { value: '', label: t('dealWatch.refreshEvery.default') },
+            ...DEAL_REFRESH_INTERVAL_OPTIONS_MS.map((ms) => ({
+              value: String(ms),
+              label: t(REFRESH_INTERVAL_LABEL_KEYS[ms] ?? 'dealWatch.refreshEvery.default'),
+            })),
+          ]}
+        />
+      </Field>
     </>
   );
 }

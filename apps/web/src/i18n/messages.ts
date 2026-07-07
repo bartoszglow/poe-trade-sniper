@@ -593,6 +593,13 @@ export const EN = {
   'dealWatch.enableMarket': 'Market price ~{price} · checked {time}',
   'dealWatch.sampleSizePrefix': 'Base price from',
   'dealWatch.sampleSizeSuffix': 'cheapest listings',
+  'dealWatch.refreshEveryLabel': 'Re-check market price every',
+  'dealWatch.refreshEvery.default': 'Default',
+  'dealWatch.refreshEvery.30m': '30 minutes',
+  'dealWatch.refreshEvery.1h': '1 hour',
+  'dealWatch.refreshEvery.3h': '3 hours',
+  'dealWatch.refreshEvery.6h': '6 hours',
+  'dealWatch.refreshEvery.12h': '12 hours',
   'dealWatch.sampleSizeAria': 'Number of cheapest listings the base price is the median of',
   'dealWatch.itemPriceParked':
     "The search's own price filter is parked while deal watch is on — the cap shown above is the automatic one; disabling deal watch restores the original.",
@@ -1206,6 +1213,13 @@ export const PL: Record<MessageKey, string> = {
   'dealWatch.enableMarket': 'Cena rynkowa ~{price} · sprawdzono {time}',
   'dealWatch.sampleSizePrefix': 'Cena bazowa z',
   'dealWatch.sampleSizeSuffix': 'najtańszych ofert',
+  'dealWatch.refreshEveryLabel': 'Odświeżaj cenę rynkową co',
+  'dealWatch.refreshEvery.default': 'Domyślnie',
+  'dealWatch.refreshEvery.30m': '30 minut',
+  'dealWatch.refreshEvery.1h': '1 godzinę',
+  'dealWatch.refreshEvery.3h': '3 godziny',
+  'dealWatch.refreshEvery.6h': '6 godzin',
+  'dealWatch.refreshEvery.12h': '12 godzin',
   'dealWatch.sampleSizeAria':
     'Liczba najtańszych ofert, z których liczona jest mediana ceny bazowej',
   'dealWatch.itemPriceParked':

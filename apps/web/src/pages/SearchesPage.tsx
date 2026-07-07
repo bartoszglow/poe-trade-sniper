@@ -190,6 +190,7 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
   const [dealThreshold, setDealThreshold] = useState('');
   const [dealUnit, setDealUnit] = useState<DealWatchUnit>('exalted');
   const [dealSampleSize, setDealSampleSize] = useState(String(DEFAULT_BASELINE_SAMPLE_SIZE));
+  const [dealRefreshIntervalMs, setDealRefreshIntervalMs] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewQuery, setPreviewQuery] = useState<unknown>(null);
@@ -281,6 +282,7 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
                 thresholdValue: parsedDealThreshold,
                 unit: dealUnit,
                 baselineSampleSize: parsedDealSampleSize,
+                refreshIntervalMs: dealRefreshIntervalMs,
               }
             : undefined,
       });
@@ -310,6 +312,7 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
     setDealThreshold('');
     setDealUnit('exalted');
     setDealSampleSize(String(DEFAULT_BASELINE_SAMPLE_SIZE));
+    setDealRefreshIntervalMs(null);
     // Collapse the form (and any open preview) so the search list isn't pushed
     // down by the editor — it reopens on click.
     setPreviewOpen(false);
@@ -413,6 +416,8 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
               sampleSize={dealSampleSize}
               onSampleSizeChange={setDealSampleSize}
               sampleSizeValid={dealSampleSizeValid}
+              refreshIntervalMs={dealRefreshIntervalMs}
+              onRefreshIntervalChange={setDealRefreshIntervalMs}
             />
             <p className="text-xs text-ink-faint">{t('dealWatch.summaryPending')}</p>
           </div>

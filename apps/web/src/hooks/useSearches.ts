@@ -26,6 +26,8 @@ export interface DealWatchConfigPayload {
   unit?: DealWatchUnit;
   /** D-dw-15: how many cheapest listings the base price is the median of. */
   baselineSampleSize?: number;
+  /** D-dw-20: how often to re-check the market price (ms); null = global default. */
+  refreshIntervalMs?: number | null;
 }
 
 export interface AddSearchPayload {

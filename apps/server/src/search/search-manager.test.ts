@@ -1448,6 +1448,7 @@ describe('deal-watch seam (plan 41)', () => {
     thresholdValue: 30,
     unit: 'exalted' as const,
     baselineSampleSize: 10,
+    refreshIntervalMs: null,
     definition: { status: { option: 'securable' }, stats: [] },
     originalSearchId: 'AbCdEf111',
     originalPriceFilter: null,
@@ -1510,6 +1511,31 @@ describe('deal-watch seam (plan 41)', () => {
     }
   });
 
+  it('a deal re-derive swap preserves the prior engine status — no pending flash (D-dw-20)', async () => {
+    const { manager, realtimeBus } = createManager();
+    const engineStatuses: string[] = [];
+    realtimeBus.subscribe((event) => {
+      if (event.type === 'engine-status') engineStatuses.push(event.status);
+    });
+    try {
+      await manager.add('AbCdEf222', { label: 'deal row' });
+      manager.updateDealState('AbCdEf222', DEAL_STATE);
+      engineStatuses.length = 0;
+
+      // A real re-derive swap (new id) must NOT publish a `pending` downgrade —
+      // the carried status holds through the reconnect (onWsStatus takes over;
+      // the new engines' own status is what the row ends on).
+      manager.swapDealSearch('AbCdEf222', {
+        id: 'NewDeal99',
+        filters: { status: { option: 'securable' }, stats: [] },
+        dealWatch: DEAL_STATE,
+      });
+      expect(engineStatuses).not.toContain('pending');
+    } finally {
+      manager.onApplicationShutdown();
+    }
+  });
+
   it('exports a deal row as the portable config subset — no watchId, no runtime state (F8/F17d)', async () => {
     const { manager } = createManager();
     try {
@@ -1531,6 +1557,7 @@ describe('deal-watch seam (plan 41)', () => {
         thresholdValue: 30,
         unit: 'exalted',
         baselineSampleSize: 10,
+        refreshIntervalMs: null,
         definition: DEAL_STATE.definition,
         originalSearchId: 'AbCdEf111',
         originalPriceFilter: null,
@@ -1675,6 +1702,7 @@ describe('market-price seam (D-dw-14)', () => {
         thresholdValue: 30,
         unit: 'exalted',
         baselineSampleSize: 10,
+        refreshIntervalMs: null,
         definition: {},
         originalSearchId: 'AbCdEf111',
         originalPriceFilter: null,

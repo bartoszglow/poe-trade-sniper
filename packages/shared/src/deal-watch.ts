@@ -66,6 +66,20 @@ export const BASELINE_SAMPLE_SIZE_MIN = 3;
 export const BASELINE_SAMPLE_SIZE_MAX = 20;
 export const DEFAULT_BASELINE_SAMPLE_SIZE = 10;
 
+/**
+ * Allowed per-watch market-refresh intervals in ms (D-dw-20): 30m / 1h / 3h /
+ * 6h / 12h. `null` on the config means "use the global DEAL_REFRESH_INTERVAL_MS".
+ */
+export const DEAL_REFRESH_INTERVAL_OPTIONS_MS = [
+  1_800_000, 3_600_000, 10_800_000, 21_600_000, 43_200_000,
+] as const;
+
+/** Coerce a persisted/imported refresh interval to an allowed value or null (fail-safe). */
+export function normalizeRefreshInterval(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return (DEAL_REFRESH_INTERVAL_OPTIONS_MS as readonly number[]).includes(value) ? value : null;
+}
+
 /** Operator-set deal configuration — the part that travels in export/import (D-dw-10). */
 export interface DealWatchConfig {
   /**
@@ -85,6 +99,13 @@ export interface DealWatchConfig {
    * Also the fetch depth of each market check. Valid 3..20, default 10.
    */
   baselineSampleSize: number;
+  /**
+   * How often this watch re-checks its market price (D-dw-20), one of
+   * {@link DEAL_REFRESH_INTERVAL_OPTIONS_MS}; null = the global
+   * DEAL_REFRESH_INTERVAL_MS. Governs the threshold-cutoff freshness, not the
+   * live decorator math.
+   */
+  refreshIntervalMs: number | null;
   /** The operator's trade query minus its price filter — baseline + derive source (opaque here). */
   definition: unknown;
   /** The pre-transform search id, restored on disable. */

@@ -107,6 +107,9 @@ export function DealPriceCard({
   const [draftSampleSize, setDraftSampleSize] = useState(
     String(state?.baselineSampleSize ?? DEFAULT_BASELINE_SAMPLE_SIZE),
   );
+  const [draftRefreshIntervalMs, setDraftRefreshIntervalMs] = useState<number | null>(
+    state?.refreshIntervalMs ?? null,
+  );
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
@@ -163,7 +166,8 @@ export function DealPriceCard({
     draftMode !== state.mode ||
     parsedThreshold !== state.thresholdValue ||
     (draftMode === 'absolute' && draftUnit !== state.unit) ||
-    (sampleSizeValid && parsedSampleSize !== state.baselineSampleSize);
+    (sampleSizeValid && parsedSampleSize !== state.baselineSampleSize) ||
+    draftRefreshIntervalMs !== state.refreshIntervalMs;
 
   function showError(error: unknown): void {
     // Coded refusals (stackable item, watch cap) map to their catalog message —
@@ -195,11 +199,13 @@ export function DealPriceCard({
                 thresholdValue: parsedThreshold,
                 unit: draftUnit,
                 baselineSampleSize: parsedSampleSize,
+                refreshIntervalMs: draftRefreshIntervalMs,
               }
             : {
                 mode: draftMode,
                 thresholdValue: parsedThreshold,
                 baselineSampleSize: parsedSampleSize,
+                refreshIntervalMs: draftRefreshIntervalMs,
               },
       });
       onHistoryStale();
@@ -287,6 +293,8 @@ export function DealPriceCard({
           sampleSize={draftSampleSize}
           onSampleSizeChange={setDraftSampleSize}
           sampleSizeValid={sampleSizeValid}
+          refreshIntervalMs={draftRefreshIntervalMs}
+          onRefreshIntervalChange={setDraftRefreshIntervalMs}
         />
 
         {/* The alert line previews the DRAFT config — once saved, the BUY BELOW

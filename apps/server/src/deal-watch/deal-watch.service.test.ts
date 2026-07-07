@@ -43,6 +43,7 @@ const PERCENT_CONFIG: DealWatchConfigInput = {
   thresholdValue: 30,
   unit: 'exalted',
   baselineSampleSize: 10,
+  refreshIntervalMs: null,
 };
 
 function makeRow(overrides: Partial<ManagedSearch> = {}): ManagedSearch {
@@ -287,15 +288,16 @@ describe('DealWatchService', () => {
       query: { filters: { trade_filters: { filters: { price: unknown } } } };
       sort: unknown;
     };
-    // Cap = cutoff exactly (margin 0): 1000 × 0.70 = 700, NO currency option (D-dw-6).
-    expect(createBody.query.filters.trade_filters.filters.price).toEqual({ max: 700 });
+    // Cap = cutoff × (1 + 0.25 margin, D-dw-20): 1000 × 0.70 × 1.25 = 875, NO
+    // currency option (D-dw-6).
+    expect(createBody.query.filters.trade_filters.filters.price).toEqual({ max: 875 });
     expect(createBody.sort).toEqual({ price: 'asc' });
 
     expect(searchManager.swapDealSearch).toHaveBeenCalledOnce();
     expect(store.row.id).toBe('derived99');
     const state = store.row.dealWatch;
     expect(state?.status).toBe('active');
-    expect(state?.capExalted).toBe(700);
+    expect(state?.capExalted).toBe(875);
     expect(state?.originalSearchId).toBe('orig1234');
     expect(state?.originalPriceFilter).toEqual({ max: 5, option: 'divine' });
     // The definition kept every non-price filter but lost the price cap.
@@ -331,6 +333,7 @@ describe('DealWatchService', () => {
         thresholdValue: 10,
         unit: 'exalted',
         baselineSampleSize: 10,
+        refreshIntervalMs: null,
         definition: {},
         originalSearchId: 'busy0001',
         originalPriceFilter: null,
@@ -364,6 +367,7 @@ describe('DealWatchService', () => {
       thresholdValue: 30,
       unit: 'exalted',
       baselineSampleSize: 10,
+      refreshIntervalMs: null,
       definition: {},
       originalSearchId: 'orig1234',
       originalPriceFilter: null,
@@ -400,6 +404,7 @@ describe('DealWatchService', () => {
       thresholdValue: 30,
       unit: 'exalted',
       baselineSampleSize: 10,
+      refreshIntervalMs: null,
       definition: {},
       originalSearchId: 'orig1234',
       originalPriceFilter: null,
@@ -439,6 +444,7 @@ describe('DealWatchService', () => {
         thresholdValue: 10,
         unit: 'exalted',
         baselineSampleSize: 10,
+        refreshIntervalMs: null,
         definition: {},
         originalSearchId: 'refused1',
         originalPriceFilter: null,
@@ -522,16 +528,16 @@ describe('DealWatchService', () => {
       total: 1,
       rateLimited: false,
     });
-    // capBaseline is 1000; a 900 baseline is a 10% drift > 5% default.
+    // capBaseline is 1000; a 700 baseline is a 30% drift > 20% default (D-dw-20).
     (searchManager.swapDealSearch as ReturnType<typeof vi.fn>).mockClear();
-    const drifted = { ...BASELINE, amountExalted: 900 };
+    const drifted = { ...BASELINE, amountExalted: 700 };
     computationHolder.value = { ...OK_COMPUTATION, baseline: drifted };
 
     const result = await service.manualRefresh(store.row.id);
     expect(result.kind).toBe('ok');
     expect(searchManager.swapDealSearch).toHaveBeenCalledOnce();
     expect(store.row.id).toBe('derived100');
-    expect(store.row.dealWatch?.capExalted).toBe(630); // 900 × 0.70
+    expect(store.row.dealWatch?.capExalted).toBe(612); // cutoff ~490 (700×0.70) × 1.25 margin, float-floored
     expect(historyService.record).toHaveBeenLastCalledWith(
       store.row.dealWatch?.watchId,
       drifted,
@@ -543,7 +549,7 @@ describe('DealWatchService', () => {
     const { service, store, searchManager, historyService, computationHolder } = createHarness();
     await service.applyConfig('orig1234', PERCENT_CONFIG);
     (searchManager.swapDealSearch as ReturnType<typeof vi.fn>).mockClear();
-    const nudged = { ...BASELINE, amountExalted: 1020 }; // 2% < 5% drift
+    const nudged = { ...BASELINE, amountExalted: 1020 }; // 2% < 20% drift
     computationHolder.value = { ...OK_COMPUTATION, baseline: nudged };
 
     await service.manualRefresh(store.row.id);
@@ -716,8 +722,13 @@ describe('DealWatchService', () => {
     (searchManager.swapDealSearch as ReturnType<typeof vi.fn>).mockClear();
     await sleepReal(5);
 
-    // Re-derive forced by a threshold edit landing on the SAME value → same cap.
-    await service.applyConfig(store.row.id, PERCENT_CONFIG);
+    // A cap-affecting edit (sample size) forces a re-derive, but the mocked
+    // baseline is unchanged → same cap → content-addressed no-op (an identical
+    // config edit is skipped entirely now, D-dw-20, so nudge a cap-affecting field).
+    await service.applyConfig(store.row.id, {
+      ...PERCENT_CONFIG,
+      baselineSampleSize: PERCENT_CONFIG.baselineSampleSize + 1,
+    });
     await vi.waitFor(() => {
       // No POST, no swap — content-addressed ids make it a no-op…
       expect(tradeApi.createSearch).not.toHaveBeenCalled();
@@ -736,7 +747,7 @@ describe('DealWatchService', () => {
 
     await service.manualRefresh(store.row.id);
     expect(tradeApi.createSearch).not.toHaveBeenCalled();
-    expect(store.row.dealWatch?.capExalted).toBe(700); // the old cap survived
+    expect(store.row.dealWatch?.capExalted).toBe(875); // the old cap survived
   });
 
   it('disable while paused parks as restore-pending with zero GGG (F14)', async () => {
@@ -781,6 +792,7 @@ describe('DealWatchService', () => {
       thresholdValue: 30,
       unit: 'exalted',
       baselineSampleSize: 10,
+      refreshIntervalMs: null,
       definition: {},
       originalSearchId: 'x',
       originalPriceFilter: null,
@@ -827,13 +839,40 @@ describe('DealWatchService', () => {
       thresholdValue: 40,
       unit: 'exalted',
       baselineSampleSize: 10,
+      refreshIntervalMs: null,
     });
     expect(store.row.dealWatch?.thresholdValue).toBe(40);
     expect(searchManager.swapDealSearch).not.toHaveBeenCalled();
 
     await vi.runAllTimersAsync();
-    // Debounce fired → re-derive queued + processed: cap now 1000 × 0.60.
-    expect(store.row.dealWatch?.capExalted).toBe(600);
+    // Debounce fired → re-derive queued + processed: cap 1000 × 0.60 × 1.25 = 750.
+    expect(store.row.dealWatch?.capExalted).toBe(750);
+  });
+
+  it('an interval-only edit reschedules the next check WITHOUT a re-derive (D-dw-20)', async () => {
+    vi.useFakeTimers();
+    const { service, store, searchManager, tradeApi } = createHarness({
+      configOverrides: { DEAL_REDERIVE_DEBOUNCE_MS: '5000' },
+    });
+    const enablePromise = service.applyConfig('orig1234', PERCENT_CONFIG);
+    await vi.runAllTimersAsync();
+    await enablePromise;
+    (searchManager.swapDealSearch as ReturnType<typeof vi.fn>).mockClear();
+    (tradeApi.createSearch as ReturnType<typeof vi.fn>).mockClear();
+    const beforeNextRefresh = store.row.dealWatch?.nextRefreshAt;
+
+    // Only the cadence changes — no cap-affecting field moves.
+    await service.applyConfig(store.row.id, {
+      ...PERCENT_CONFIG,
+      refreshIntervalMs: 1_800_000,
+    });
+    expect(store.row.dealWatch?.refreshIntervalMs).toBe(1_800_000);
+    // The schedule was rewritten (shorter interval), but nothing spent GGG budget.
+    expect(store.row.dealWatch?.nextRefreshAt).not.toBe(beforeNextRefresh);
+
+    await vi.runAllTimersAsync();
+    expect(searchManager.swapDealSearch).not.toHaveBeenCalled();
+    expect(tradeApi.createSearch).not.toHaveBeenCalled();
   });
 
   it('enable reuses a fresh market snapshot: no baseline GGG spend, snapshot cleared (D-dw-14)', async () => {

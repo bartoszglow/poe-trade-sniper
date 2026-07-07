@@ -15,6 +15,7 @@ import { z } from 'zod';
 import {
   BASELINE_SAMPLE_SIZE_MAX,
   BASELINE_SAMPLE_SIZE_MIN,
+  DEAL_REFRESH_INTERVAL_OPTIONS_MS,
   DEFAULT_BASELINE_SAMPLE_SIZE,
   PURCHASE_MODES,
   type DealBaselineHistoryEntry,
@@ -41,6 +42,14 @@ const dealWatchConfigSchema = z.object({
     .min(BASELINE_SAMPLE_SIZE_MIN)
     .max(BASELINE_SAMPLE_SIZE_MAX)
     .default(DEFAULT_BASELINE_SAMPLE_SIZE),
+  /** D-dw-20: per-watch market-refresh cadence (ms); null = global default. */
+  refreshIntervalMs: z
+    .number()
+    .refine((value) => (DEAL_REFRESH_INTERVAL_OPTIONS_MS as readonly number[]).includes(value), {
+      message: 'unsupported refresh interval',
+    })
+    .nullable()
+    .default(null),
 });
 
 const addSearchSchema = z.object({

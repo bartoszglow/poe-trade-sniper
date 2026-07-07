@@ -89,6 +89,8 @@ describe('ImportService', () => {
       unit: 'exalted',
       // Absent in the (pre-knob) file → the old fixed depth (D-dw-15).
       baselineSampleSize: 10,
+      // Absent in the (pre-D-dw-20) file → the global cadence.
+      refreshIntervalMs: null,
       definition: { type: 'Barrage' },
       originalSearchId: 'orig1',
       originalPriceFilter: { max: 5, option: 'divine' },

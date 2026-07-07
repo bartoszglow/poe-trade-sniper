@@ -484,6 +484,13 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const newWatcher = this.createWatcher(newRow);
     newWatcher.hitCount = watcher.hitCount;
     newWatcher.lastHitAt = watcher.lastHitAt;
+    // Carry the displayed status across the swap (D-dw-20): a deal re-derive is a
+    // routine cap update on a near-identical query — the caller can keep showing
+    // the prior status (typically active/ws) through the brief reconnect instead
+    // of flashing pending/degraded. onWsStatus takes over when the new socket
+    // resolves; a genuine failure still degrades it.
+    newWatcher.status = watcher.status;
+    newWatcher.statusDetail = watcher.statusDetail;
     const reordered = [...this.watchers.entries()].map((entry) =>
       entry[0] === oldId ? ([newRow.id, newWatcher] as [string, Watcher]) : entry,
     );
@@ -605,7 +612,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         .set({ filters: next.filters, dealWatch: next.dealWatch })
         .where(eq(searches.id, currentId))
         .run();
-      if (queryChanged) this.restartViaDrip(watcher);
+      // preserveStatus: a deal re-derive keeps the prior status through the
+      // reconnect (D-dw-20) — no pending/degraded flash for a routine cap update.
+      if (queryChanged) this.restartViaDrip(watcher, true);
       this.publishSearchesChanged();
       return this.toRuntimeInfo(watcher);
     }
@@ -619,20 +628,27 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       dealWatch: next.dealWatch,
     };
     const newWatcher = this.swapWatcherRow(currentId, newRow);
-    this.restartViaDrip(newWatcher);
+    this.restartViaDrip(newWatcher, true);
     this.publishSearchesChanged();
     return this.toRuntimeInfo(newWatcher);
   }
 
-  /** Stop engines and hand the watcher to the stagger drip (guard-safe restart). */
-  private restartViaDrip(watcher: Watcher): void {
+  /**
+   * Stop engines and hand the watcher to the stagger drip (guard-safe restart).
+   * `preserveStatus` (deal re-derive, D-dw-20) keeps the currently-displayed
+   * status instead of publishing `pending` — the near-identical capped query
+   * reconnects within seconds and onWsStatus/onPollStatus take over; a real
+   * failure still degrades. The engines DO still stop + drip (guard accounting
+   * unchanged) — only the displayed status is held.
+   */
+  private restartViaDrip(watcher: Watcher, preserveStatus = false): void {
     this.stopEngines(watcher);
     if (watcher.row.archivedAt !== null || !watcher.row.enabled) return;
     if (this.detectionPaused) {
       this.publishEngineStatus(watcher, 'paused', 'globally paused');
       return;
     }
-    this.publishEngineStatus(watcher, 'pending', null);
+    if (!preserveStatus) this.publishEngineStatus(watcher, 'pending', null);
     this.startPendingWatchers();
   }
 
@@ -844,6 +860,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
                 thresholdValue: dealWatch.thresholdValue,
                 unit: dealWatch.unit,
                 baselineSampleSize: dealWatch.baselineSampleSize,
+                refreshIntervalMs: dealWatch.refreshIntervalMs,
                 definition: dealWatch.definition,
                 originalSearchId: dealWatch.originalSearchId,
                 originalPriceFilter: dealWatch.originalPriceFilter,
@@ -1136,7 +1153,13 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   /** Stops every engine; watchers auto-restart on the next tick post-reset. */
   private windDownForGuard(): void {
     for (const watcher of this.watchers.values()) {
-      if (watcher.wsEngine || watcher.pollEngine) {
+      // Degrade every watcher whose INTENDED state is running — including one that
+      // is transiently engine-null (a deal re-derive swap carried its prior
+      // 'active' status but its drip restart hasn't fired yet, D-dw-20). Without
+      // this, a guard trip landing in that window would freeze a lying 'active'
+      // for the whole lockout while detection is actually dead (review S2).
+      const intendedRunning = watcher.row.enabled && watcher.row.archivedAt === null;
+      if (watcher.wsEngine || watcher.pollEngine || intendedRunning) {
         this.stopEngines(watcher);
         this.publishEngineStatus(watcher, 'degraded', 'guard-halted');
       }

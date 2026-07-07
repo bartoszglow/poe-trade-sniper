@@ -65,6 +65,7 @@ describe('SearchesController — add with deal config (D-dw-16)', () => {
       thresholdValue: 5,
       unit: 'divine',
       baselineSampleSize: 10, // schema default (D-dw-15)
+      refreshIntervalMs: null, // schema default (D-dw-20)
     });
   });
 
@@ -100,6 +101,7 @@ describe('SearchesController — deal-watch routes', () => {
       thresholdValue: 30,
       unit: 'exalted', // schema default (D-dw-11)
       baselineSampleSize: 10, // schema default (D-dw-15)
+      refreshIntervalMs: null, // schema default (D-dw-20)
     });
   });
 

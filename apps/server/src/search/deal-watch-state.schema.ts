@@ -3,6 +3,7 @@ import {
   BASELINE_SAMPLE_SIZE_MAX,
   BASELINE_SAMPLE_SIZE_MIN,
   DEFAULT_BASELINE_SAMPLE_SIZE,
+  normalizeRefreshInterval,
   type DealWatchState,
 } from '@poe-sniper/shared';
 
@@ -42,6 +43,13 @@ const dealWatchStateSchema = z.object({
     .min(BASELINE_SAMPLE_SIZE_MIN)
     .max(BASELINE_SAMPLE_SIZE_MAX)
     .default(DEFAULT_BASELINE_SAMPLE_SIZE),
+  /** Absent in pre-D-dw-20 persisted states — defaults to the global cadence.
+   *  Normalized to the allowed set (review S3): a hand-edited/legacy out-of-set
+   *  value must NOT drive nextRefreshAt to a rogue cadence and hammer GGG. */
+  refreshIntervalMs: z
+    .unknown()
+    .transform((value) => normalizeRefreshInterval(value))
+    .default(null),
   definition: z.record(z.string(), z.unknown()),
   originalSearchId: z.string().min(1),
   originalPriceFilter: z.unknown(),

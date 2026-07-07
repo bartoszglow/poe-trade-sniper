@@ -7,6 +7,7 @@ import {
   DEFAULT_BASELINE_SAMPLE_SIZE,
   PURCHASE_MODES,
   SEARCH_EXPORT_VERSION,
+  normalizeRefreshInterval,
 } from '@poe-sniper/shared';
 import type {
   DealWatchState,
@@ -43,6 +44,8 @@ const dealWatchEntrySchema = z
       .min(BASELINE_SAMPLE_SIZE_MIN)
       .max(BASELINE_SAMPLE_SIZE_MAX)
       .default(DEFAULT_BASELINE_SAMPLE_SIZE),
+    /** Per-watch refresh cadence (D-dw-20); absent in older exports → global default. */
+    refreshIntervalMs: z.number().nullable().optional(),
     definition: z.record(z.string(), z.unknown()),
     originalSearchId: z.string().min(1),
     originalPriceFilter: z.unknown().nullable(),
@@ -109,6 +112,7 @@ function rebuildDealWatch(
     thresholdValue: entry.thresholdValue,
     unit: entry.unit,
     baselineSampleSize: entry.baselineSampleSize,
+    refreshIntervalMs: normalizeRefreshInterval(entry.refreshIntervalMs ?? null),
     definition: entry.definition,
     originalPriceFilter: entry.originalPriceFilter ?? null,
     originalSearchId: entry.originalSearchId,

@@ -424,7 +424,7 @@ thresholdCurrency, definition, originalSearchId, originalPriceFilter}` — runti
 | ~~`DEAL_MAX_WATCHES`~~            | —                 | **Removed (D-dw-17)** → operator-editable `AppSettings.dealMaxWatches` (default 25, bounds 1–50) |
 | `DEAL_REFRESH_INTERVAL_MS`        | 3 600 000         | Baseline re-check cadence (R3)                                                                   |
 | `DEAL_REFRESH_JITTER_RATIO`       | 0.15              | Relative-scheduling jitter                                                                       |
-| `DEAL_DRIFT_THRESHOLD`            | 0.05              | Drift vs capBaseline that triggers re-derive                                                     |
+| `DEAL_DRIFT_THRESHOLD`            | 0.20              | Drift vs capBaseline that triggers a cap re-derive (coarse pre-filter; D-dw-20)                  |
 | `DEAL_MAX_ID_AGE_MS`              | 259 200 000 (3 d) | Forced re-derive age (pending P0.2/P0.8)                                                         |
 | `DEAL_OUTLIER_RATIO`              | 0.5               | Listing < ratio × sample median = dropped (price-fixer)                                          |
 | `DEAL_MIN_SAMPLE`                 | 5                 | Fewer usable listings → insufficient-data                                                        |
@@ -549,6 +549,35 @@ for deal searches" is parked.
 
 ## Decisions
 
+- **D-dw-20 (operator, 2026-07-07, live incident)** — smooth re-derives + a
+  per-watch refresh interval. Root cause found live: a manual "refresh market
+  price" (or the hourly drift refresh) that moves the cap re-derives → swaps the
+  GGG id → `stopEngines` + drip restart, which (a) flashed `pending`/degraded on
+  a routine cap update, and (b) under a burst of re-derives the ws-connect rate
+  hit 13/min and TRIPPED the guard (12/min ceiling) → ALL detection halted until
+  a manual reset. Fixes:
+  1. **Smooth swap**: a deal re-derive carries the previous engine status onto
+     the new watcher (no `pending`/degraded flash) — the near-identical capped
+     query reconnects within seconds; only a genuine ws failure degrades.
+  2. **Fewer re-derives**: `DEAL_DRIFT_THRESHOLD` raised 0.05 → **0.20**. The cap
+     is a COARSE server-side pre-filter; the decorator already applies the exact
+     cutoff against the live baseline, so a slightly-stale cap only lets a few
+     sub-threshold listings through (suppressed), never a wrong alert. A wider
+     drift band cuts ws-churn ~4× and keeps the ws-connect rate well under the
+     guard ceiling. **Paired with `DEAL_CAP_MARGIN_RATIO` 0 → 0.25** (review S2):
+     GGG returns only listings ≤ cap, so in a RISING market a stale cap set below
+     the growing live cutoff would filter genuine deals out server-side before
+     the decorator sees them — the margin (≥ the drift band) keeps the cap above
+     the live cutoff across the whole tolerated drift, and the decorator
+     suppresses the extra sub-cutoff listings it admits.
+  3. **Guard-halt honesty** (review S2): `windDownForGuard` degrades every
+     intended-running watcher on a guard trip, including one transiently
+     engine-null mid-swap — so a preserved `active` can never outlive detection
+     through a guard lockout.
+  4. **Per-watch interval (feature)**: `dealWatch.refreshIntervalMs` overrides
+     the global `DEAL_REFRESH_INTERVAL_MS` for how often that watch re-checks its
+     market price (feeds the threshold cutoff). Operator picks from a small enum
+     (e.g. 30 m / 1 h / 3 h / 6 h / 12 h) in the deal card; default = the global.
 - **D-dw-19 (operator, 2026-07-05)** — rate-limit aggressiveness slider. A new
   `AppSettings.rateLimitAggressiveness` (**50–120, default 85**, Settings-view
   slider) = target utilization as a % of GGG's ADVERTISED limits (the governor
