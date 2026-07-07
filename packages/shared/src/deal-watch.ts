@@ -67,11 +67,19 @@ export const BASELINE_SAMPLE_SIZE_MAX = 20;
 export const DEFAULT_BASELINE_SAMPLE_SIZE = 10;
 
 /**
- * Allowed per-watch market-refresh intervals in ms (D-dw-20): 30m / 1h / 3h /
- * 6h / 12h. `null` on the config means "use the global DEAL_REFRESH_INTERVAL_MS".
+ * The global default market-refresh cadence (server `DEAL_REFRESH_INTERVAL_MS`
+ * default) — the single source of truth shared by the env schema and the UI, so
+ * the "Default" option can name its actual value. 1 hour.
+ */
+export const DEFAULT_DEAL_REFRESH_INTERVAL_MS = 3_600_000;
+
+/**
+ * Allowed per-watch market-refresh intervals in ms (D-dw-20): 15m / 30m / 1h /
+ * 3h / 6h / 12h. `null` on the config means "use the global
+ * DEAL_REFRESH_INTERVAL_MS" (see {@link DEFAULT_DEAL_REFRESH_INTERVAL_MS}).
  */
 export const DEAL_REFRESH_INTERVAL_OPTIONS_MS = [
-  1_800_000, 3_600_000, 10_800_000, 21_600_000, 43_200_000,
+  900_000, 1_800_000, 3_600_000, 10_800_000, 21_600_000, 43_200_000,
 ] as const;
 
 /** Coerce a persisted/imported refresh interval to an allowed value or null (fail-safe). */

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_DEAL_REFRESH_INTERVAL_MS } from '@poe-sniper/shared';
 
 /**
  * The single source of truth for runtime configuration. Parsed once at boot;
@@ -50,8 +51,13 @@ export const envSchema = z.object({
   // --- Deal-watch (#41) ---
   // NOTE: the concurrent-deal-watch cap moved to the operator-editable
   // `AppSettings.dealMaxWatches` (D-dw-17) — it is no longer an env var.
-  /** Baseline re-check cadence (R3). Scheduled relatively (now + interval ± jitter). */
-  DEAL_REFRESH_INTERVAL_MS: z.coerce.number().int().min(300_000).default(3_600_000),
+  /** Baseline re-check cadence (R3). Scheduled relatively (now + interval ± jitter).
+   *  Default shared with the UI's "Default" interval option (DEFAULT_DEAL_REFRESH_INTERVAL_MS). */
+  DEAL_REFRESH_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(300_000)
+    .default(DEFAULT_DEAL_REFRESH_INTERVAL_MS),
   /** Jitter ratio on the relative refresh schedule — the phase random-walks (R7). */
   DEAL_REFRESH_JITTER_RATIO: z.coerce.number().min(0).max(1).default(0.15),
   /**

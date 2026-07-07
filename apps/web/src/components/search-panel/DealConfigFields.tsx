@@ -2,6 +2,7 @@ import {
   BASELINE_SAMPLE_SIZE_MAX,
   BASELINE_SAMPLE_SIZE_MIN,
   DEAL_REFRESH_INTERVAL_OPTIONS_MS,
+  DEFAULT_DEAL_REFRESH_INTERVAL_MS,
 } from '@poe-sniper/shared';
 import type { DealWatchMode, DealWatchUnit } from '@poe-sniper/shared';
 import { useT } from '../../i18n/i18n';
@@ -12,6 +13,7 @@ import { Select } from '../Select';
 
 /** ms → i18n key for the refresh-interval options (D-dw-20). */
 const REFRESH_INTERVAL_LABEL_KEYS: Record<number, MessageKey> = {
+  900_000: 'dealWatch.refreshEvery.15m',
   1_800_000: 'dealWatch.refreshEvery.30m',
   3_600_000: 'dealWatch.refreshEvery.1h',
   10_800_000: 'dealWatch.refreshEvery.3h',
@@ -128,7 +130,14 @@ export function DealConfigFields({
           onChange={(value) => onRefreshIntervalChange(value === '' ? null : Number(value))}
           ariaLabel={t('dealWatch.refreshEveryLabel')}
           options={[
-            { value: '', label: t('dealWatch.refreshEvery.default') },
+            {
+              value: '',
+              // Name the actual global value so "Default" isn't a mystery.
+              label: `${t('dealWatch.refreshEvery.default')} (${t(
+                REFRESH_INTERVAL_LABEL_KEYS[DEFAULT_DEAL_REFRESH_INTERVAL_MS] ??
+                  'dealWatch.refreshEvery.1h',
+              )})`,
+            },
             ...DEAL_REFRESH_INTERVAL_OPTIONS_MS.map((ms) => ({
               value: String(ms),
               label: t(REFRESH_INTERVAL_LABEL_KEYS[ms] ?? 'dealWatch.refreshEvery.default'),
