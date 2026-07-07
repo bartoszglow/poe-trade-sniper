@@ -26,8 +26,8 @@ import {
 } from '../trade-api/trade-api.client.js';
 import { GameFocusService } from './game-focus.service.js';
 
-/** Budget policies a re-resolve spends from (Tier-1 fetch + Tier-2 re-search). */
-const REFINE_POLICIES = ['search', 'fetch'] as const;
+/** Budget policies an auto-retry spends from (Tier-1 fetch + Tier-2 re-search). */
+const RETRY_POLICIES = ['search', 'fetch'] as const;
 
 export interface TravelRequest {
   hideoutToken: string;
@@ -73,9 +73,9 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
    */
   private readonly traveledListingIds = new Set<string>();
   private processing = false;
-  /** At most one auto-failure re-resolve in flight — a burst of failures must
-   *  never fan out into a stack of SEARCH-bucket re-searches (30-min lockout). */
-  private refining = false;
+  /** At most one auto-failure retry in flight — a burst of failures must never
+   *  fan out into a stack of SEARCH-bucket re-resolves (30-min lockout). */
+  private retrying = false;
   private unsubscribe: (() => void) | null = null;
   private lastTravel: TravelStatus['lastTravel'] = null;
 
@@ -190,8 +190,8 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
 
         if (Date.now() - request.enqueuedAtMs > this.config.TRAVEL_TOKEN_MAX_AGE_MS) {
           this.publish('failed', request, 'token expired while queued — dropped');
-          // Never whispered — the offer may just be gone. Learn without blocking.
-          void this.refineAutoFailure(request, null);
+          // Never whispered — auto-retry with a fresh token (or report it gone).
+          void this.retryAutoFailure(request, null);
           continue;
         }
 
@@ -211,7 +211,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
               ? classifyTravelFailure(error.status, error.gggCode)
               : 'unknown';
           this.publish('failed', request, errorMessage(error), reason);
-          void this.refineAutoFailure(request, reason);
+          void this.retryAutoFailure(request, reason);
         }
       }
     } finally {
@@ -220,45 +220,36 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
-   * Auto-travel only: after a NON-definitive failure, do ONE re-resolve to learn
-   * whether the offer is simply gone, and upgrade the event to `item_gone` — so
-   * the operator reads "no longer available" without having to click Retry (which
-   * runs this same re-resolve manually). Deliberately narrow:
-   *   - auto source only (manual already has an explicit Retry that re-resolves);
+   * Auto-travel only: after a NON-definitive failure, do ONE automatic retry —
+   * exactly what the operator's manual Retry does: re-resolve a fresh token and
+   * travel again, or surface `item_gone` if the offer is gone (retryTravel owns
+   * both branches). Deliberately narrow:
+   *   - auto source only (manual already has an explicit Retry);
    *   - only for an unknown/undetermined reason — a 404,1 already IS item_gone, a
-   *     429 is a budget backoff, a 403,6 is a config fault, none need a re-resolve;
-   *   - single-flight + budget-gated: the Tier-2 re-search spends a SEARCH-bucket
-   *     hit (the 30-min-lockout path), so a burst of failures collapses to at most
-   *     one re-resolve, and only when detection/deals have budget to spare.
-   * Labelling only — a recovered live token is NOT auto-travelled (that would
-   * expand auto-travel's teleport semantics); the operator's Retry still does.
+   *     429 is a budget backoff, a 403,6 is a config fault, none should retry;
+   *   - single-flight + budget-gated: the re-resolve spends a SEARCH-bucket hit
+   *     (the 30-min-lockout path), so a burst of failures collapses to at most one
+   *     retry, and only when detection/deals have budget to spare.
+   * Bounded to a single attempt: retryTravel re-enqueues as `source: 'manual'`, so
+   * a second failure never re-enters this path — it's one auto-retry, not a loop.
    */
-  private async refineAutoFailure(
+  private async retryAutoFailure(
     request: TravelRequest,
     reason: TravelFailureReason | null,
   ): Promise<void> {
     if (request.source !== 'auto' || request.listingId === null) return;
     if (reason !== null && reason !== 'unknown') return;
     if (!request.offerKey) return;
-    if (this.refining) return;
-    if (this.governor.minHeadroom(REFINE_POLICIES) < this.config.TRAVEL_REFINE_MIN_HEADROOM) return;
-    this.refining = true;
+    if (this.retrying) return;
+    if (this.governor.minHeadroom(RETRY_POLICIES) < this.config.TRAVEL_RETRY_MIN_HEADROOM) return;
+    this.retrying = true;
     try {
-      // null = both re-fetch and re-search failed to find the offer → gone. A
-      // recovered listing (still buyable) leaves the generic failure standing.
-      const listing = await this.searchManager.refreshListing(
-        request.search.searchId,
-        request.listingId,
-        request.offerKey,
-      );
-      if (listing === null) {
-        this.publish('failed', request, 'no longer listed', 'item_gone');
-      }
+      await this.retryTravel(request.search.searchId, request.listingId, request.offerKey);
     } catch (error) {
-      // A refine failure must never escalate — the original failure already stands.
-      this.logger.warn(`auto-travel refine failed: ${errorMessage(error)}`);
+      // A retry failure must never escalate — the original failure already stands.
+      this.logger.warn(`auto-travel retry failed: ${errorMessage(error)}`);
     } finally {
-      this.refining = false;
+      this.retrying = false;
     }
   }
 

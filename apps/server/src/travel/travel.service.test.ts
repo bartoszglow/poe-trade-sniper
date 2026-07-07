@@ -272,12 +272,12 @@ describe('TravelService', () => {
     service.onApplicationShutdown();
   });
 
-  describe('auto-failure refine (option B)', () => {
+  describe('auto-failure auto-retry (option B)', () => {
     function lastFailed(events: TravelEvent[]): TravelEvent | undefined {
       return events.filter((event) => event.phase === 'failed').at(-1);
     }
 
-    it('upgrades a generic auto failure to item_gone when the offer is gone', async () => {
+    it('reports item_gone (and does not re-travel) when the offer is gone', async () => {
       const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
         autoTravel: true,
         headroom: 1,
@@ -288,23 +288,26 @@ describe('TravelService', () => {
       await flushQueue();
 
       expect(refreshListing).toHaveBeenCalledTimes(1);
+      expect(tradeApi.travel).toHaveBeenCalledTimes(1); // gone → no second travel
       expect(lastFailed(travelEvents)?.reason).toBe('item_gone');
       service.onApplicationShutdown();
     });
 
-    it('leaves the generic failure standing when the offer is still listed', async () => {
-      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+    it('re-travels with a fresh token when the offer is still listed', async () => {
+      const { service, tradeApi, realtimeBus, refreshListing } = createService({
         autoTravel: true,
         headroom: 1,
-        refreshListingResult: listingWithToken('fresh-token'), // recovered → not gone
+        refreshListingResult: listingWithToken('fresh-token'), // recovered → re-travel
       });
       (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
       realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
       await flushQueue();
 
+      // One re-resolve, then a SECOND travel with the recovered token — exactly
+      // what the operator's manual Retry does.
       expect(refreshListing).toHaveBeenCalledTimes(1);
-      // A recovered token is NOT auto-travelled and NOT relabelled item_gone.
-      expect(lastFailed(travelEvents)?.reason).toBe('unknown');
+      expect(tradeApi.travel).toHaveBeenCalledTimes(2);
+      expect((tradeApi.travel as ReturnType<typeof vi.fn>).mock.calls[1]?.[0]).toBe('fresh-token');
       service.onApplicationShutdown();
     });
 

@@ -178,14 +178,14 @@ export const envSchema = z.object({
   TRAVEL_DEDUPE_MAX_ENTRIES: z.coerce.number().int().min(10).default(500),
   /**
    * After an auto-travel fails for a non-definitive reason, the service does ONE
-   * budget-gated re-resolve to learn whether the offer is simply gone (so the
-   * operator sees "no longer available" without a manual retry). That re-resolve
-   * spends a SEARCH-bucket hit (the 30-min-lockout path), so it only fires when
-   * at least this fraction of the search+fetch budget is free — detection and
-   * deal alerts always win. Single-flight + auto-only besides. Set 0 to disable
-   * the gate; >1 is clamped to never fire.
+   * automatic retry — exactly the operator's manual Retry: re-resolve a fresh
+   * token and travel again (or surface item_gone if the offer is gone). That
+   * re-resolve spends a SEARCH-bucket hit (the 30-min-lockout path), so it only
+   * fires when at least this fraction of the search+fetch budget is free —
+   * detection and deal alerts always win. Single-flight + auto-only + bounded to
+   * one attempt besides. Set 0 to disable the gate; >1 is clamped to never fire.
    */
-  TRAVEL_REFINE_MIN_HEADROOM: z.coerce.number().min(0).default(0.3),
+  TRAVEL_RETRY_MIN_HEADROOM: z.coerce.number().min(0).default(0.3),
 
   // --- live WebSocket ---
   /** Tarpit guard: unauthenticated handshakes hang forever — always time out. */
