@@ -52,6 +52,9 @@ export interface EventStreamState {
   lastHitAtBySearchId: Record<string, string>;
   travelStateByListingId: Record<string, TravelState>;
   buyStateByListingId: Record<string, BuyState>;
+  /** Bumped on every NEW hit/deal (not the re-served twins) — the Hits page
+   *  refetches page 0 off it so the persisted list live-updates like the panel. */
+  hitsVersion: number;
   /** Bumped on searches-changed/engine-status — pages refetch off it. */
   searchesVersion: number;
   /** Bumped on travel/buy events — the Activity page refetches off it. */
@@ -68,6 +71,7 @@ const INITIAL_STATE: EventStreamState = {
   lastHitAtBySearchId: {},
   travelStateByListingId: {},
   buyStateByListingId: {},
+  hitsVersion: 0,
   searchesVersion: 0,
   activityVersion: 0,
   guard: null,
@@ -109,6 +113,7 @@ function reduceEvent(state: EventStreamState, event: DomainEvent): EventStreamSt
           ...state.lastHitAtBySearchId,
           [event.listing.searchId]: event.listing.detectedAt,
         },
+        hitsVersion: state.hitsVersion + 1,
       };
     case 'hit-updated':
     case 'deal-updated':

@@ -8,6 +8,7 @@ import { PriceTag } from '../components/PriceTag';
 import { RarityName } from '../components/RarityName';
 import { Select } from '../components/Select';
 import { TextInput } from '../components/TextInput';
+import { useEventStream } from '../hooks/EventStreamProvider';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useSearches } from '../hooks/useSearches';
 import { useT } from '../i18n/i18n';
@@ -15,6 +16,8 @@ import { apiGet } from '../lib/api';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
+/** Coalesce bursts of live hits into a single page-0 refetch. */
+const LIVE_MERGE_DEBOUNCE_MS = 400;
 
 type SortOption = 'newest' | 'oldest' | 'name';
 
@@ -45,9 +48,15 @@ function buildQuery(filters: Filters, offset: number): string {
 export function HitsPage() {
   const t = useT();
   const { searches } = useSearches();
+  const { hitsVersion } = useEventStream();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   // Debounce the free-text box so we don't refetch on every keystroke.
   const debouncedText = useDebouncedValue(filters.text, SEARCH_DEBOUNCE_MS);
+  // A NEW live hit bumps hitsVersion; debounce so a burst is one refetch.
+  const debouncedHitsVersion = useDebouncedValue(hitsVersion, LIVE_MERGE_DEBOUNCE_MS);
+  // The last hitsVersion we've already merged — so this only fires on genuinely
+  // new hits, never on a filter-driven effect re-run or on mount.
+  const mergedVersionRef = useRef(hitsVersion);
   const [hits, setHits] = useState<Hit[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -103,6 +112,33 @@ export function HitsPage() {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [hasMore, loadPage]);
+
+  // Live-merge: on a new hit, prepend it to the persisted list so this view
+  // updates in real time like the Live Hits panel (both read one SSE stream).
+  // Refetch page 0 with the CURRENT filters (so the server owns filtering +
+  // the persisted Hit shape) and merge by id — never replacing already-loaded
+  // pages. Only the newest-first sort can place a fresh hit at the top; other
+  // sorts still refresh on filter/sort change via loadPage.
+  useEffect(() => {
+    if (debouncedHitsVersion === mergedVersionRef.current) return;
+    mergedVersionRef.current = debouncedHitsVersion;
+    if (sort !== 'newest') return;
+    const query = buildQuery({ searchId, text: debouncedText, from, to, sort }, 0);
+    apiGet<Hit[]>(`/api/hits?${query}`)
+      .then((page) => {
+        setHits((previous) => {
+          const existingIds = new Set(previous.map((existing) => existing.id));
+          const fresh = page.filter((candidate) => !existingIds.has(candidate.id));
+          if (fresh.length === 0) return previous;
+          // The list grew at the top — keep the paging cursor past what's shown.
+          offsetRef.current += fresh.length;
+          return [...fresh, ...previous];
+        });
+      })
+      .catch(() => {
+        // A failed live-merge is non-fatal — the next hit or filter change retries.
+      });
+  }, [debouncedHitsVersion, sort, searchId, debouncedText, from, to]);
 
   const filterOptions = [
     { value: '', label: t('hits.allSearches') },
