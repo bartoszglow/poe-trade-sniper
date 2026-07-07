@@ -11,13 +11,22 @@ interface DealBadgeProps {
  * Discount chip for deal-mode hits (plan 41): '−32%' in gold, with a warn
  * 'stale' marker when the baseline aged out (alerts keep firing, flagged —
  * plan 41 failure modes). A deal persisted before the first baseline landed
- * gets a neutral 'baseline pending' badge instead of a discount.
+ * shows a small muted marker (not a full badge) instead of a discount.
  */
 export function DealBadge({ deal }: DealBadgeProps) {
   const t = useT();
   const discount = formatDealDiscount(deal);
   if (discount === null) {
-    return <Badge tone="neutral">{t('deal.badgePending')}</Badge>;
+    // No baseline yet — a subtle inline marker, not a heavy filled tag; the full
+    // reason lives in the tooltip so the row stays uncluttered.
+    return (
+      <span
+        className="shrink-0 text-[0.6rem] font-medium tracking-wide text-ink-muted uppercase"
+        title={t('deal.badgePendingHint')}
+      >
+        {t('deal.badgePending')}
+      </span>
+    );
   }
   return (
     <span

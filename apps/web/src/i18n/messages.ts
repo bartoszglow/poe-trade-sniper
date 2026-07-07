@@ -618,7 +618,8 @@ export const EN = {
   'searches.detailsShow': 'Show details',
   'searches.detailsHide': 'Hide details',
   // Deal-watch — feeds & alerts (W2 section; add W2 keys below this line)
-  'deal.badgePending': 'deal — baseline pending',
+  'deal.badgePending': 'baseline pending',
+  'deal.badgePendingHint': 'No baseline yet — the discount shows once the deal watch has one',
   'deal.stale': 'stale',
   'deal.context': 'listed {price} · resale ≈ {baseline} ({profit})',
   'deal.contextPending': 'listed {price} · resale unknown — baseline pending',
@@ -1240,7 +1241,8 @@ export const PL: Record<MessageKey, string> = {
   'searches.detailsShow': 'Pokaż szczegóły',
   'searches.detailsHide': 'Ukryj szczegóły',
   // Deal-watch — feed i alerty (sekcja W2; klucze W2 dodawaj poniżej)
-  'deal.badgePending': 'okazja — oczekiwanie na cenę bazową',
+  'deal.badgePending': 'brak ceny bazowej',
+  'deal.badgePendingHint': 'Brak ceny bazowej — rabat pojawi się, gdy obserwacja okazji ją ustali',
   'deal.stale': 'nieaktualna',
   'deal.context': 'wystawiono za {price} · odsprzedaż ≈ {baseline} ({profit})',
   'deal.contextPending': 'wystawiono za {price} · odsprzedaż nieznana — oczekiwanie na cenę bazową',
