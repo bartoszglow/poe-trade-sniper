@@ -3,6 +3,7 @@ import type { Listing, TravelEvent } from '@poe-sniper/shared';
 import { loadConfig } from '../config/env.js';
 import { BuySessionLock } from '../events/buy-session-lock.service.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
+import type { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import type { SearchManager } from '../search/search-manager.js';
 import {
   TradeApiError,
@@ -38,7 +39,17 @@ function manualRequest(overrides: Partial<TravelRequest> = {}): TravelRequest {
   };
 }
 
-function createService(options: { autoTravel?: boolean; travelDelayMs?: number } = {}) {
+function createService(
+  options: {
+    autoTravel?: boolean;
+    travelDelayMs?: number;
+    /** Budget the governor reports for the auto-failure re-resolve gate (default 0
+     *  → refine always skips, so it never interferes with the base-behaviour tests). */
+    headroom?: number;
+    /** What refreshListing returns when a refine does run (null = offer gone). */
+    refreshListingResult?: Listing | null;
+  } = {},
+) {
   const config = loadConfig({});
   const realtimeBus = new RealtimeBus();
   const travelEvents: TravelEvent[] = [];
@@ -57,10 +68,16 @@ function createService(options: { autoTravel?: boolean; travelDelayMs?: number }
     }),
   } as unknown as TradeApiClient;
 
+  const refreshListing = vi.fn(() => Promise.resolve(options.refreshListingResult ?? null));
   const searchManager = {
     isAutoTravelEnabled: vi.fn(() => options.autoTravel ?? false),
     getSearchRef: vi.fn(() => SEARCH),
+    refreshListing,
   } as unknown as SearchManager;
+
+  const governor = {
+    minHeadroom: vi.fn(() => options.headroom ?? 0),
+  } as unknown as RateLimitGovernor;
 
   const gameFocus = { focus: vi.fn() };
   const buyLock = new BuySessionLock();
@@ -71,9 +88,20 @@ function createService(options: { autoTravel?: boolean; travelDelayMs?: number }
     realtimeBus,
     gameFocus as unknown as GameFocusService,
     buyLock,
+    governor,
   );
   service.onApplicationBootstrap();
-  return { service, tradeApi, realtimeBus, travelEvents, travelCalls, gameFocus, buyLock };
+  return {
+    service,
+    tradeApi,
+    realtimeBus,
+    travelEvents,
+    travelCalls,
+    gameFocus,
+    buyLock,
+    refreshListing,
+    governor,
+  };
 }
 
 async function flushQueue(): Promise<void> {
@@ -244,6 +272,85 @@ describe('TravelService', () => {
     service.onApplicationShutdown();
   });
 
+  describe('auto-failure refine (option B)', () => {
+    function lastFailed(events: TravelEvent[]): TravelEvent | undefined {
+      return events.filter((event) => event.phase === 'failed').at(-1);
+    }
+
+    it('upgrades a generic auto failure to item_gone when the offer is gone', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: null, // both re-resolve tiers miss → gone
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      expect(refreshListing).toHaveBeenCalledTimes(1);
+      expect(lastFailed(travelEvents)?.reason).toBe('item_gone');
+      service.onApplicationShutdown();
+    });
+
+    it('leaves the generic failure standing when the offer is still listed', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: listingWithToken('fresh-token'), // recovered → not gone
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      expect(refreshListing).toHaveBeenCalledTimes(1);
+      // A recovered token is NOT auto-travelled and NOT relabelled item_gone.
+      expect(lastFailed(travelEvents)?.reason).toBe('unknown');
+      service.onApplicationShutdown();
+    });
+
+    it('skips the re-resolve when budget headroom is below the reserve', async () => {
+      const { service, tradeApi, realtimeBus, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 0.2, // < TRAVEL_REFINE_MIN_HEADROOM (0.3)
+        refreshListingResult: null,
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      expect(refreshListing).not.toHaveBeenCalled();
+      service.onApplicationShutdown();
+    });
+
+    it('does not re-resolve a manual failure (Retry does that explicitly)', async () => {
+      const { service, tradeApi, refreshListing } = createService({ headroom: 1 });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+      service.enqueue(manualRequest());
+      await flushQueue();
+
+      expect(refreshListing).not.toHaveBeenCalled();
+      service.onApplicationShutdown();
+    });
+
+    it('does not re-resolve a already-definitive failure (404 code 1)', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: null,
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TradeApiError(404, 'travel: gone', 1),
+      );
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      // GGG already told us it's gone — no need to spend a SEARCH-bucket re-resolve.
+      expect(refreshListing).not.toHaveBeenCalled();
+      expect(lastFailed(travelEvents)?.reason).toBe('item_gone');
+      service.onApplicationShutdown();
+    });
+  });
+
   it('evicts the oldest remembered listings beyond TRAVEL_DEDUPE_MAX_ENTRIES', async () => {
     const config = loadConfig({ TRAVEL_DEDUPE_MAX_ENTRIES: '10' });
     const realtimeBus = new RealtimeBus();
@@ -256,6 +363,7 @@ describe('TravelService', () => {
       realtimeBus,
       { focus: vi.fn() } as unknown as GameFocusService,
       new BuySessionLock(),
+      { minHeadroom: () => 0 } as unknown as RateLimitGovernor,
     );
     service.onApplicationBootstrap();
 
@@ -304,6 +412,7 @@ describe('TravelService', () => {
       realtimeBus,
       { focus: vi.fn() } as unknown as GameFocusService,
       new BuySessionLock(),
+      { minHeadroom: () => 0 } as unknown as RateLimitGovernor,
     );
 
     vi.useFakeTimers({ toFake: ['Date'] });
