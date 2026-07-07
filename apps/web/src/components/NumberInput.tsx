@@ -72,7 +72,10 @@ export function NumberInput({
   const boxClasses =
     variant === 'boxed'
       ? `rounded-md border bg-surface-2 focus-within:border-gold ${invalid ? 'border-danger' : 'border-edge'}`
-      : '';
+      : // Bare fills its composite parent and, crucially, `min-w-0` lets it shrink
+        // below the number input's intrinsic width — without it, a narrow column
+        // overflows and the right-aligned value slides out of view past the suffix.
+        'min-w-0 flex-1';
 
   return (
     <div className={`relative flex items-stretch ${boxClasses}`}>

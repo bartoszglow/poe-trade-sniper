@@ -321,7 +321,7 @@ export function DealPriceCard({
                     <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
                       {t('dealWatch.baselineValue')}
                     </dt>
-                    <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-gold-bright">
+                    <dd className="mt-0.5 font-mono text-[15px] leading-tight font-semibold text-gold-bright tabular-nums">
                       {renderDetailedAmount(state.baseline.amountExalted, divineRate)}
                     </dd>
                   </div>
@@ -329,7 +329,7 @@ export function DealPriceCard({
                     <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
                       {t('dealWatch.rawLowest')}
                     </dt>
-                    <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-ink">
+                    <dd className="mt-0.5 font-mono text-[15px] leading-tight font-semibold text-ink tabular-nums">
                       {renderDetailedAmount(state.baseline.rawLowestExalted, divineRate)}
                     </dd>
                   </div>
@@ -338,7 +338,7 @@ export function DealPriceCard({
                       <dt className="text-[10px] tracking-wide text-ink-faint uppercase">
                         {t('dealWatch.buyBelow')}
                       </dt>
-                      <dd className="mt-0.5 text-[15px] leading-tight font-semibold text-gold-bright">
+                      <dd className="mt-0.5 font-mono text-[15px] leading-tight font-semibold text-gold-bright tabular-nums">
                         {renderDetailedAmount(persistedCutoffExalted, divineRate)}
                       </dd>
                     </div>
