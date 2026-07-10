@@ -8,6 +8,7 @@ import {
   FolderPlus,
   GripVertical,
   ListFilter,
+  Loader2,
   LogIn,
   Plus,
   Settings as SettingsIcon,
@@ -451,8 +452,8 @@ function AddSearchForm({ onAdd }: { onAdd: (payload: AddSearchPayload) => Promis
           type="submit"
           disabled={submitting || input.trim() === '' || dealConfigInvalid}
         >
-          <Plus className="h-4 w-4" />
-          {t('searches.watch')}
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {submitting ? t('searches.adding') : t('searches.watch')}
         </Button>
       </div>
     </form>
