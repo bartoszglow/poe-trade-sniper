@@ -181,15 +181,16 @@ export function RoomSection({
         <Badge tone="neutral">{tn('rooms.memberCount', members.length)}</Badge>
         <div className="flex-1" />
         {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
-        {/* Master switch: ON while ANY member detects; a click sets ALL members
-            to the opposite state (overwrites their individual toggles). The
+        {/* Master switch: bound to the room's OWN gate (room.enabled), a single
+            source of truth — it never overwrites members' individual toggles, so
+            an individually-paused member stays paused through a room toggle. The
             info tone mirrors the per-row ACTIVE switch under a global pause. */}
         <span
           className="flex items-center gap-1.5 text-xs text-ink-muted"
           title={detectionPaused ? t('engineStatusDesc.paused') : undefined}
         >
           <Switch
-            checked={members.some((member) => member.enabled)}
+            checked={room.enabled}
             disabled={members.length === 0}
             onChange={(enabled) => void run(() => onSetEnabled(enabled))}
             label={t('rooms.activeFor', { name: room.name })}

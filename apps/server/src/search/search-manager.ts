@@ -135,6 +135,9 @@ interface RoomState {
   id: string;
   name: string;
   collapsed: boolean;
+  /** Room master switch (D-room-1 v2) — a gate on top of member.enabled, never
+   *  overwrites it. See the `rooms.enabled` schema comment. */
+  enabled: boolean;
   addedAt: string;
   /** Last persisted top-level index — anchors the room when it has no members. */
   position: number;
@@ -198,6 +201,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         id: roomRow.id,
         name: roomRow.name,
         collapsed: roomRow.collapsed,
+        enabled: roomRow.enabled,
         addedAt: roomRow.addedAt,
         position: roomRow.position ?? Number.MAX_SAFE_INTEGER,
       });
@@ -292,11 +296,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const watcher = this.createWatcher(row);
     watcher.correlationId = correlationId;
     this.watchers.set(row.id, watcher);
-    if (this.detectionPaused) {
-      this.publishEngineStatus(watcher, 'paused', 'globally paused');
-    } else {
-      this.startWatcher(watcher);
-    }
+    this.startEnabledWatcher(watcher);
     this.publishSearchesChanged();
     return this.toRuntimeInfo(watcher);
   }
@@ -353,10 +353,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // since the resume drip skips disabled watchers).
       if (!watcher.row.enabled) {
         this.publishEngineStatus(watcher, 'stopped', 'paused');
-      } else if (this.detectionPaused) {
-        this.publishEngineStatus(watcher, 'paused', 'globally paused');
       } else {
-        this.startWatcher(watcher);
+        this.startEnabledWatcher(watcher);
       }
       // The row's persisted position went stale while archived (persistLayout
       // never writes archived rows) — re-persist the canonical layout so the
@@ -370,15 +368,19 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         this.stopEngines(watcher);
         this.publishEngineStatus(watcher, 'stopped', 'paused');
       } else if (enabled && !wasEnabled) {
-        // Re-enabled — start now, unless detection is globally paused (then it
-        // waits as PAUSED and comes up on the next global resume).
-        if (this.detectionPaused) {
-          this.publishEngineStatus(watcher, 'paused', 'globally paused');
-        } else {
-          this.startWatcher(watcher);
-        }
-      } else if (options.purchaseMode !== undefined && enabled && !this.detectionPaused) {
-        // A purchase-mode change alters the executed query — restart detection.
+        // Re-enabled — start now, unless a gate holds it (global pause or a
+        // disabled room), in which case it waits labelled and comes up when the
+        // gate lifts.
+        this.startEnabledWatcher(watcher);
+      } else if (
+        options.purchaseMode !== undefined &&
+        enabled &&
+        !this.detectionPaused &&
+        this.roomEnabled(watcher)
+      ) {
+        // A purchase-mode change alters the executed query — restart detection
+        // (only if it's actually running; a gated search picks up the new query
+        // when it next starts).
         this.stopEngines(watcher);
         this.startWatcher(watcher);
       }
@@ -473,6 +475,12 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
    */
   private swapWatcherRow(oldId: string, newRow: ManagedSearch): Watcher {
     const watcher = this.requireWatcher(oldId);
+    // Snapshot the displayed status BEFORE stopEngines mutates it to 'stopped' —
+    // otherwise the D-dw-20 "carry" below copies 'stopped', which strands an
+    // enabled watcher (the drip skips 'stopped'). restartViaDrip normalizes a
+    // non-running carried status back to 'pending'; here we preserve the REAL one.
+    const priorStatus = watcher.status;
+    const priorStatusDetail = watcher.statusDetail;
     this.database.transaction((tx) => {
       tx.insert(searches)
         .values({ ...newRow, filters: newRow.filters })
@@ -489,8 +497,8 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     // the prior status (typically active/ws) through the brief reconnect instead
     // of flashing pending/degraded. onWsStatus takes over when the new socket
     // resolves; a genuine failure still degrades it.
-    newWatcher.status = watcher.status;
-    newWatcher.statusDetail = watcher.statusDetail;
+    newWatcher.status = priorStatus;
+    newWatcher.statusDetail = priorStatusDetail;
     const reordered = [...this.watchers.entries()].map((entry) =>
       entry[0] === oldId ? ([newRow.id, newWatcher] as [string, Watcher]) : entry,
     );
@@ -648,7 +656,18 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       this.publishEngineStatus(watcher, 'paused', 'globally paused');
       return;
     }
-    if (!preserveStatus) this.publishEngineStatus(watcher, 'pending', null);
+    if (!this.roomEnabled(watcher)) {
+      this.publishEngineStatus(watcher, 'paused', 'room paused');
+      return;
+    }
+    // Preserve only a RUNNING-ish status (avoids a 'degraded'→'pending' flash on a
+    // deal re-derive of a live search). A carried 'stopped'/'paused' is stale here
+    // — and the drip's `status !== 'stopped'` filter would EXCLUDE a 'stopped'
+    // watcher forever (enabled=true, engines null: the deal-add strand) — so
+    // normalize it to 'pending' before dripping.
+    if (!preserveStatus || watcher.status === 'stopped' || watcher.status === 'paused') {
+      this.publishEngineStatus(watcher, 'pending', null);
+    }
     this.startPendingWatchers();
   }
 
@@ -682,6 +701,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       id: room.id,
       name: room.name,
       collapsed: room.collapsed,
+      enabled: room.enabled,
       addedAt: room.addedAt,
     }));
   }
@@ -691,6 +711,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       id: randomUUID(),
       name: name.trim(),
       collapsed: false,
+      enabled: true,
       addedAt: new Date().toISOString(),
       // Appended at the end of the top level.
       position: this.currentLayout().length,
@@ -715,34 +736,31 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   /**
-   * Master enable/disable for a whole room (D-room-1): sets `enabled` on every
-   * member in one transaction. Disabling stops each member's engines at once
-   * (stopping is burst-safe). Enabling deliberately does NOT start N watchers
-   * directly — N simultaneous ws-connects would trip GGG's per-minute connect
-   * latch — it resets the members to PENDING and lets the existing staggered
-   * drip (startPendingWatchers, DETECTION_STAGGER_MS apart) bring them up.
-   * Overwrites each member's individual enabled state by design (master switch).
+   * Master enable/disable for a whole room (D-room-1 v2): flips the room's OWN
+   * `enabled` gate — it does NOT rewrite any member's individual `enabled`. So an
+   * individually-paused member stays paused through a room OFF→ON round-trip (the
+   * old "overwrite by design" resurrected them, diverging the toggle from the
+   * status — the bug this fixes). Disabling stops each enabled member's engines
+   * at once (burst-safe). Enabling does NOT start N watchers directly — N
+   * simultaneous ws-connects would trip GGG's per-minute connect latch — it marks
+   * them PENDING and lets the staggered drip (startPendingWatchers) bring them up.
    */
   setRoomEnabled(roomId: string, enabled: boolean): SearchesView {
-    this.requireRoom(roomId);
+    const room = this.requireRoom(roomId);
+    if (room.enabled === enabled) return this.view();
+    room.enabled = enabled;
+    this.database.update(rooms).set({ enabled }).where(eq(rooms.id, roomId)).run();
     // Archived members are invisible in the room — the master switch skips them.
-    const changedMembers = [...this.watchers.values()].filter(
-      (watcher) =>
-        watcher.row.roomId === roomId &&
-        watcher.row.archivedAt === null &&
-        watcher.row.enabled !== enabled,
+    const members = [...this.watchers.values()].filter(
+      (watcher) => watcher.row.roomId === roomId && watcher.row.archivedAt === null,
     );
-    if (changedMembers.length === 0) return this.view();
-    this.database.transaction((tx) => {
-      for (const watcher of changedMembers) {
-        tx.update(searches).set({ enabled }).where(eq(searches.id, watcher.row.id)).run();
-      }
-    });
-    for (const watcher of changedMembers) {
-      watcher.row = { ...watcher.row, enabled };
+    for (const watcher of members) {
+      // Individually-disabled members own their 'stopped' state — the room gate
+      // never touches them, so their toggle stays OFF regardless of this switch.
+      if (!watcher.row.enabled) continue;
       if (!enabled) {
         this.stopEngines(watcher);
-        this.publishEngineStatus(watcher, 'stopped', 'paused');
+        this.publishEngineStatus(watcher, 'paused', 'room paused');
       } else if (this.detectionPaused) {
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
       } else {
@@ -975,6 +993,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         id: randomUUID(),
         name: exportedRoom.name,
         collapsed: exportedRoom.collapsed,
+        // Room master state is runtime-only (not in the export file) — a fresh
+        // import comes up active, like a newly created room.
+        enabled: true,
         addedAt: new Date().toISOString(),
         position: this.currentLayout().length,
       };
@@ -1088,6 +1109,37 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return this.detectionPaused;
   }
 
+  /** Whether this watcher's room permits running. Top-level searches (no room)
+   *  have no room gate; a member defers to its room's master switch. */
+  private roomEnabled(watcher: Watcher): boolean {
+    const roomId = watcher.row.roomId;
+    return roomId === null || (this.rooms.get(roomId)?.enabled ?? true);
+  }
+
+  /**
+   * The single decision for an ENABLED, non-archived watcher: start it, or label
+   * WHY it's held. Gate order = the reasons it can be blocked — global pause,
+   * then its room's master switch. The individually-disabled and archived cases
+   * are handled by callers (they own distinct 'stopped' labels); this method is
+   * the one place the "enabled but not running" status is derived, so the toggle
+   * (member.enabled) and the status can never disagree.
+   */
+  private startEnabledWatcher(watcher: Watcher): void {
+    if (this.detectionPaused) {
+      this.publishEngineStatus(watcher, 'paused', 'globally paused');
+    } else if (!this.roomEnabled(watcher)) {
+      this.publishEngineStatus(watcher, 'paused', 'room paused');
+    } else {
+      // startWatcher doesn't publish until the socket reports — so if the row was
+      // sitting at a stale 'stopped'/'paused' (e.g. a re-enable), show 'pending'
+      // at once, or the toggle (ON) and the status would disagree until connect.
+      if (watcher.status === 'stopped' || watcher.status === 'paused') {
+        this.publishEngineStatus(watcher, 'pending', null);
+      }
+      this.startWatcher(watcher);
+    }
+  }
+
   /**
    * Global pause/resume. Pausing halts every ENABLED search as PAUSED (distinct
    * from a per-search STOPPED) without clearing its enabled flag; resuming
@@ -1098,8 +1150,12 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.detectionPaused = paused;
     if (paused) {
       for (const watcher of this.watchers.values()) {
-        // Archived searches are already stopped — a pause must not relabel them.
-        if (!watcher.row.enabled || watcher.row.archivedAt !== null) continue;
+        // Skip searches already held by another gate: archived, individually
+        // disabled, or in a disabled room — a global pause must not relabel them
+        // (their own status is authoritative and resume's drip re-gates on it).
+        if (!watcher.row.enabled || watcher.row.archivedAt !== null || !this.roomEnabled(watcher)) {
+          continue;
+        }
         this.stopEngines(watcher);
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
       }
@@ -1182,6 +1238,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const pending = [...this.watchers.values()].filter(
       (watcher) =>
         watcher.row.enabled &&
+        this.roomEnabled(watcher) &&
         watcher.row.archivedAt === null &&
         watcher.wsEngine === null &&
         watcher.pollEngine === null &&

@@ -1,0 +1,1 @@
+ALTER TABLE `rooms` ADD `enabled` integer DEFAULT true NOT NULL;

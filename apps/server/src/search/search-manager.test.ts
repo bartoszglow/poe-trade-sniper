@@ -1137,7 +1137,7 @@ describe('SearchManager', () => {
     }
   });
 
-  it('room master switch disables every member at once and persists (D-room-1)', async () => {
+  it('room master switch GATES every member (own enabled untouched) and persists (D-room-1 v2)', async () => {
     const { manager, database, executeSearch } = createManager();
     try {
       await manager.add('AbCdEf001', {});
@@ -1151,21 +1151,27 @@ describe('SearchManager', () => {
 
       const view = manager.setRoomEnabled(roomId, false);
       const memberStates = view.searches.filter((entry) => entry.roomId === roomId);
-      expect(memberStates.every((entry) => !entry.enabled && entry.status === 'stopped')).toBe(
-        true,
-      );
+      // Members are GATED (room paused) but keep their OWN enabled — the toggle
+      // stays ON while the room holds them (single source of truth per gate).
+      expect(memberStates.every((entry) => entry.enabled && entry.status === 'paused')).toBe(true);
+      // The room's OWN gate is what flipped, not the members' enabled.
+      expect(view.rooms.find((room) => room.id === roomId)?.enabled).toBe(false);
       // The non-member is untouched.
       expect(view.searches.find((entry) => entry.id === 'AbCdEf003')?.enabled).toBe(true);
-      // Persisted.
+      // Persisted: every member keeps enabled=1; the ROOM row carries enabled=0.
       const rows = database.$client
         .prepare('SELECT id, enabled FROM searches ORDER BY id')
         .all() as Array<{ id: string; enabled: number }>;
       expect(rows).toEqual([
-        { id: 'AbCdEf001', enabled: 0 },
-        { id: 'AbCdEf002', enabled: 0 },
+        { id: 'AbCdEf001', enabled: 1 },
+        { id: 'AbCdEf002', enabled: 1 },
         { id: 'AbCdEf003', enabled: 1 },
       ]);
-      // Disabled members poll no more.
+      const roomRow = database.$client
+        .prepare('SELECT enabled FROM rooms WHERE id = ?')
+        .get(roomId) as { enabled: number };
+      expect(roomRow.enabled).toBe(0);
+      // Gated members poll no more.
       executeSearch.mockClear();
       await manager.runSchedulerTick();
       await manager.runSchedulerTick();
@@ -1173,6 +1179,55 @@ describe('SearchManager', () => {
         (call) => (call as unknown as [{ searchId: string }])[0].searchId,
       );
       expect(tickedSearches).toEqual(['AbCdEf003', 'AbCdEf003']);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('room master ON does NOT resurrect an individually-paused member (the reported bug)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001', 'AbCdEf002'] }]);
+
+      // Individually pause ONE member, then round-trip the room master OFF→ON.
+      manager.update('AbCdEf001', { enabled: false });
+      manager.setRoomEnabled(roomId, false);
+      const view = manager.setRoomEnabled(roomId, true);
+
+      // The individually-paused member stays paused (toggle OFF, status stopped);
+      // the room switch never overwrote its own enabled.
+      const pausedMember = view.searches.find((entry) => entry.id === 'AbCdEf001')!;
+      expect(pausedMember.enabled).toBe(false);
+      expect(pausedMember.status).toBe('stopped');
+      // The other member is re-enabled by the room gate.
+      expect(view.searches.find((entry) => entry.id === 'AbCdEf002')?.enabled).toBe(true);
+      // Persisted: the paused member's enabled stays 0 through the round-trip.
+      const row = database.$client
+        .prepare('SELECT enabled FROM searches WHERE id = ?')
+        .get('AbCdEf001') as { enabled: number };
+      expect(row.enabled).toBe(0);
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('re-enabling a disabled search never leaves it at a stale stopped (toggle/status consistency)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      manager.update('AbCdEf001', { enabled: false });
+      expect(manager.list()[0]!.status).toBe('stopped');
+
+      // Re-enable: an enabled search must NEVER read 'stopped' — startWatcher
+      // doesn't publish until the socket connects, so it shows 'pending' at once.
+      const reEnabled = manager.update('AbCdEf001', { enabled: true });
+      expect(reEnabled.enabled).toBe(true);
+      expect(reEnabled.status).not.toBe('stopped');
     } finally {
       manager.onApplicationShutdown();
       database.$client.close();

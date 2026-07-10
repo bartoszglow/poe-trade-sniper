@@ -74,6 +74,10 @@ export interface RoomInfo {
   name: string;
   /** Collapsed in the UI (persisted so it survives restarts). */
   collapsed: boolean;
+  /** Room master switch: a gate on top of each member's own `enabled`. A member
+   *  runs iff `member.enabled && room.enabled && !detectionPaused`. Toggling this
+   *  never rewrites a member's individual enabled (single source of truth). */
+  enabled: boolean;
   /** ISO-8601 timestamp of when the room was created. */
   addedAt: string;
 }

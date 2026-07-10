@@ -45,6 +45,14 @@ export const rooms = sqliteTable('rooms', {
   name: text('name').notNull(),
   /** Collapsed in the UI — persisted so the view survives restarts. */
   collapsed: integer('collapsed', { mode: 'boolean' }).notNull().default(false),
+  /**
+   * Room master switch (D-room-1 v2): an independent gate ON TOP OF each member's
+   * own `enabled`. A member runs iff its own enabled AND its room's enabled AND
+   * detection isn't globally paused. The room switch never overwrites a member's
+   * individual enabled — so an individually-paused member stays paused through any
+   * room/global toggle (single source of truth per gate).
+   */
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   /** Top-level order, same single sequence as ungrouped searches' position. */
   position: integer('position'),
   addedAt: text('added_at').notNull(),
