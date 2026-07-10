@@ -121,6 +121,14 @@ interface WatcherHealth {
   /** When the live socket last came (and stayed) up while sticky — the stability
    *  countdown anchor; any close resets it. */
   stableSince: number | null;
+  /**
+   * DURABLE `halted` marker (plan 44, review F1). `status === 'halted'` alone is
+   * not enough: a gate close clobbers the display to `paused`, so on reopen the
+   * search would be revived. This flag survives gate round-trips — publishEngine
+   * Status re-derives a running-ish status back to `halted` while it's set, and
+   * only `freshHealth()` (Restart / own-toggle re-enable) clears it.
+   */
+  halted: boolean;
 }
 
 function freshHealth(): WatcherHealth {
@@ -132,6 +140,7 @@ function freshHealth(): WatcherHealth {
     lastRecoveryAt: null,
     wsDrops: [],
     stableSince: null,
+    halted: false,
   };
 }
 
@@ -268,7 +277,12 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
     this.startPendingWatchers();
     this.schedulerTimer = setInterval(() => {
-      void this.runSchedulerTick();
+      // Never let a tick's rejection escape to the process (review F2): the sweep
+      // body is already per-watcher guarded, but a defensive .catch keeps the sole
+      // detection loop alive even if a future tick path throws.
+      this.runSchedulerTick().catch((error: unknown) => {
+        this.logger.error(`scheduler tick failed: ${errorMessage(error)}`);
+      });
     }, this.config.POLL_INTERVAL_MS);
     this.logger.log(
       `watching ${this.watchers.size} search(es); scheduler tick ${this.config.POLL_INTERVAL_MS}ms`,
@@ -819,11 +833,19 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       if (!watcher.row.enabled) continue;
       if (!enabled) {
         this.stopEngines(watcher);
+        // A halted member keeps its durable marker; the held 'paused' shows while
+        // the room is off, and reopen re-derives it back to halted (review F1).
         this.publishEngineStatus(watcher, 'paused', 'room paused');
       } else if (this.detectionPaused) {
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
       } else {
-        // PENDING (not an immediate start) → picked up by the stagger drip below.
+        // Re-seed the recovery clock (review F3) so a held-then-reopened degraded
+        // member isn't restarted for time it was held. PENDING → the stagger drip
+        // below picks it up (a halted member re-derives to halted and is skipped).
+        if (watcher.health.stickyDegraded && !watcher.health.halted) {
+          watcher.health.lastRecoveryAt = Date.now();
+          watcher.health.stableSince = null;
+        }
         this.publishEngineStatus(watcher, 'pending', null);
       }
     }
@@ -1216,15 +1238,29 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         // Skip searches already held by another gate: archived, individually
         // disabled, or in a disabled room — a global pause must not relabel them
         // (their own status is authoritative and resume's drip re-gates on it).
-        if (!watcher.row.enabled || watcher.row.archivedAt !== null || !this.roomEnabled(watcher)) {
-          continue;
-        }
+        if (!this.isEligibleToRun(watcher)) continue;
         this.stopEngines(watcher);
+        // A halted member keeps its durable marker; publishEngineStatus lets the
+        // held 'paused' display through, and resume re-derives it back to halted.
         this.publishEngineStatus(watcher, 'paused', 'globally paused');
       }
     } else {
-      // Resume: drip the starts out one-by-one with a gap (see startPendingWatchers)
-      // so re-enabling detection with many searches doesn't burst the ws-connect latch.
+      for (const watcher of this.watchers.values()) {
+        if (!this.isEligibleToRun(watcher)) continue;
+        if (watcher.health.halted) {
+          // Stays halted through the pause — re-assert the display, since the drip
+          // below won't start (and so won't relabel) it (review F1).
+          this.publishEngineStatus(watcher, 'halted', watcher.health.lastDetail);
+        } else if (watcher.health.stickyDegraded) {
+          // Re-seed the recovery clock (review F3) — lastRecoveryAt froze while
+          // paused, so the first post-resume sweep would otherwise fire a spurious
+          // restart and step toward halted for time the search was HELD.
+          watcher.health.lastRecoveryAt = Date.now();
+          watcher.health.stableSince = null;
+        }
+      }
+      // Drip the starts out one-by-one (see startPendingWatchers) so resuming with
+      // many searches doesn't burst the ws-connect latch.
       this.startPendingWatchers();
     }
     this.publishSearchesChanged();
@@ -1297,48 +1333,71 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     const now = Date.now();
     const ladder = this.config.DEGRADED_RESTART_BACKOFF_MS;
     for (const watcher of this.watchers.values()) {
-      const health = watcher.health;
-      if (!health.stickyDegraded) continue;
-      if (!watcher.row.enabled || watcher.row.archivedAt !== null || !this.roomEnabled(watcher)) {
-        continue;
-      }
-      // Stability clear: the socket came up and stayed up — episode over.
-      if (
-        watcher.wsConnected &&
-        health.stableSince !== null &&
-        now - health.stableSince >= this.config.DEGRADED_CLEAR_STABLE_MS
-      ) {
+      // Per-watcher error boundary (review F2): one watcher's throw must never
+      // abort the sweep (and, via the unhandled rejection, the whole tick).
+      try {
+        const health = watcher.health;
+        if (!health.stickyDegraded) continue;
+        if (!this.isEligibleToRun(watcher)) continue;
+        // Stability clear: the socket came up and stayed up — episode over.
+        if (
+          watcher.wsConnected &&
+          health.stableSince !== null &&
+          now - health.stableSince >= this.config.DEGRADED_CLEAR_STABLE_MS
+        ) {
+          this.logger.log(
+            `[${watcher.correlationId}] search ${watcher.row.id} recovered — stable for ${this.config.DEGRADED_CLEAR_STABLE_MS}ms`,
+          );
+          this.clearStickyDegraded(watcher, 'active', 'recovered');
+          continue;
+        }
+        // Recovery restart: still down, engines live, backoff rung elapsed.
+        if (health.halted) continue;
+        if (watcher.wsConnected || watcher.wsEngine === null) continue;
+        if (health.lastDetail === 'no-session' || health.lastDetail === 'guard-halted') continue;
+        // A mass start-drip is in flight (review F4): restartViaDrip would null
+        // this watcher's engines but startPendingWatchers early-returns behind the
+        // latch, leaving it engine-null (blind) until a later tick. Defer instead.
+        if (this.startingWatchers) continue;
+        const waitMs = ladder[Math.min(health.recoveryAttempts, ladder.length - 1)]!;
+        if (health.lastRecoveryAt !== null && now - health.lastRecoveryAt < waitMs) continue;
+        // Ladder exhausted → HALTED (plan 44): stop burning ws-connect budget on a
+        // search that won't heal; it waits for an explicit operator act (Restart /
+        // its own toggle). The DURABLE marker (review F1) survives gate round-trips
+        // so a bulk reopen can't revive it.
+        if (health.recoveryAttempts >= this.config.DEGRADED_MAX_RECOVERY_ATTEMPTS) {
+          health.halted = true;
+          this.stopEngines(watcher);
+          this.publishEngineStatus(watcher, 'halted', health.lastDetail);
+          this.logger.warn(
+            `[${watcher.correlationId}] search ${watcher.row.id} HALTED after ${health.recoveryAttempts} recovery attempts (${health.lastDetail ?? '?'})`,
+          );
+          continue;
+        }
+        health.recoveryAttempts += 1;
+        health.lastRecoveryAt = now;
         this.logger.log(
-          `search ${watcher.row.id} recovered — stable for ${this.config.DEGRADED_CLEAR_STABLE_MS}ms`,
+          `[${watcher.correlationId}] search ${watcher.row.id} recovery restart #${health.recoveryAttempts} (${health.lastDetail ?? '?'})`,
         );
-        this.clearStickyDegraded(watcher, 'active', 'recovered');
-        continue;
-      }
-      // Recovery restart: still down, engines live, backoff rung elapsed.
-      if (watcher.status === 'halted') continue;
-      if (watcher.wsConnected || watcher.wsEngine === null) continue;
-      if (health.lastDetail === 'no-session' || health.lastDetail === 'guard-halted') continue;
-      const waitMs = ladder[Math.min(health.recoveryAttempts, ladder.length - 1)]!;
-      if (health.lastRecoveryAt !== null && now - health.lastRecoveryAt < waitMs) continue;
-      // Ladder exhausted → HALTED (plan 44): stop burning ws-connect budget on a
-      // search that won't heal; it waits for an explicit operator act (Restart /
-      // its own toggle). Bulk gate reopenings deliberately skip it (drip filter).
-      if (health.recoveryAttempts >= this.config.DEGRADED_MAX_RECOVERY_ATTEMPTS) {
-        this.stopEngines(watcher);
-        this.publishEngineStatus(watcher, 'halted', health.lastDetail);
+        // preserveStatus: the row keeps showing degraded until stability clears it.
+        this.restartViaDrip(watcher, true);
+      } catch (error) {
         this.logger.warn(
-          `search ${watcher.row.id} HALTED after ${health.recoveryAttempts} recovery attempts (${health.lastDetail ?? '?'})`,
+          `[${watcher.correlationId}] sticky-degraded sweep failed for ${watcher.row.id}: ${errorMessage(error)}`,
         );
-        continue;
       }
-      health.recoveryAttempts += 1;
-      health.lastRecoveryAt = now;
-      this.logger.log(
-        `search ${watcher.row.id} recovery restart #${health.recoveryAttempts} (${health.lastDetail ?? '?'})`,
-      );
-      // preserveStatus: the row keeps showing degraded until stability clears it.
-      this.restartViaDrip(watcher, true);
     }
+  }
+
+  /**
+   * The run-eligibility core (review F6): a watcher may run only when its intent
+   * is ON, it isn't archived, and its room gate is open. The start/stop/sweep
+   * sites compose their extra clauses (global pause, engine-null, status) on top
+   * — this is the ONE place the gate set is spelled out, so a forgotten gate
+   * (the class this whole delta was patching) can't recur.
+   */
+  private isEligibleToRun(watcher: Watcher): boolean {
+    return watcher.row.enabled && watcher.row.archivedAt === null && this.roomEnabled(watcher);
   }
 
   /**
@@ -1363,9 +1422,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // 'active' status but its drip restart hasn't fired yet, D-dw-20). Without
       // this, a guard trip landing in that window would freeze a lying 'active'
       // for the whole lockout while detection is actually dead (review S2).
-      const intendedRunning =
-        watcher.row.enabled && watcher.row.archivedAt === null && this.roomEnabled(watcher);
-      if (watcher.wsEngine || watcher.pollEngine || intendedRunning) {
+      if (watcher.wsEngine || watcher.pollEngine || this.isEligibleToRun(watcher)) {
         this.stopEngines(watcher);
         // Sticky (plan 43 blind family): after the guard resets and the drip
         // restarts the engines, the row stays degraded until the stability
@@ -1390,14 +1447,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     if (this.detectionPaused || this.startingWatchers) return;
     const pending = [...this.watchers.values()].filter(
       (watcher) =>
-        watcher.row.enabled &&
-        this.roomEnabled(watcher) &&
-        watcher.row.archivedAt === null &&
+        this.isEligibleToRun(watcher) &&
         watcher.wsEngine === null &&
         watcher.pollEngine === null &&
-        // 'stopped' (held) and 'halted' (gave up) both wait for an explicit act.
+        // 'stopped' (held) waits for an explicit re-enable; a halted watcher waits
+        // for an explicit act — keyed off the DURABLE marker, since while a gate
+        // holds it the status reads 'paused' not 'halted' (review F1).
         watcher.status !== 'stopped' &&
-        watcher.status !== 'halted',
+        !watcher.health.halted,
     );
     if (pending.length === 0) return;
     this.startingWatchers = true;
@@ -1431,16 +1488,15 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // snapshot was taken.
       if (this.detectionPaused) return;
       if (this.watchers.get(watcher.row.id) !== watcher) continue;
+      // A gap is real elapsed time — re-check EVERY gate under current state
+      // (isEligibleToRun covers the room gate, which can close mid-drip), plus:
+      // already started, held, or a durable halt (review F1).
       if (
-        !watcher.row.enabled ||
-        // The room gate can close WHILE the drip is in flight (operator pauses
-        // the room mid-start) — re-check it per entry like the other gates, or
-        // the member starts against a closed gate (operator repro 2026-07-10).
-        !this.roomEnabled(watcher) ||
+        !this.isEligibleToRun(watcher) ||
         watcher.wsEngine !== null ||
         watcher.pollEngine !== null ||
         watcher.status === 'stopped' ||
-        watcher.status === 'halted'
+        watcher.health.halted
       ) {
         continue;
       }
@@ -1714,10 +1770,16 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
    *   health (D-ph-2); the episode's history stays in `health` for the reopen.
    */
   private publishEngineStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
-    if (
-      watcher.health.stickyDegraded &&
-      (status === 'active' || status === 'connecting' || status === 'pending')
-    ) {
+    const runningIsh = status === 'active' || status === 'connecting' || status === 'pending';
+    if (runningIsh && watcher.health.halted) {
+      // Durable halt outranks everything (review F1): a gate reopen tries to
+      // re-'pending' the watcher, but a halted search must stay halted until an
+      // explicit act clears `health` via freshHealth().
+      status = 'halted';
+      detail = watcher.health.lastDetail;
+    } else if (runningIsh && watcher.health.stickyDegraded) {
+      // Sticky suppression: don't let a running-ish signal talk over an open
+      // degraded episode; only the stability window / restart clears it.
       status = 'degraded';
       detail = watcher.health.lastDetail;
     }

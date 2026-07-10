@@ -130,11 +130,16 @@ export function SettingsCard({ search, onUpdate, onRemove, onRestart }: Settings
           <Button variant="ghost" disabled={actionBusy} onClick={() => void run(onRestart)}>
             {t('searches.restartCta')}
           </Button>
-          <Button variant="ghost" onClick={() => void run(() => onUpdate({ archived: true }))}>
+          <Button
+            variant="ghost"
+            disabled={actionBusy}
+            onClick={() => void run(() => onUpdate({ archived: true }))}
+          >
             {t('searches.archiveAction')}
           </Button>
           <Button
             variant="ghost"
+            disabled={actionBusy}
             className="text-danger hover:border-danger/60 hover:text-danger"
             onClick={() => setConfirmingDelete(true)}
           >

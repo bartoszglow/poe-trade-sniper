@@ -185,27 +185,35 @@ export function RoomSection({
         )}
         <Badge tone="neutral">{tn('rooms.memberCount', members.length)}</Badge>
         {/* Per-state breakdown (plan 44): every phase covered, only non-zero
-            buckets shown. A health concern (degraded/halted) makes the whole
-            cluster click-to-open so a collapsed room never hides a sick member. */}
-        {members.length > 0 && (
-          <button
-            type="button"
-            data-no-expand={hasHealthConcern ? undefined : true}
-            className={`flex flex-wrap items-center gap-1 ${
-              hasHealthConcern ? 'cursor-pointer' : 'cursor-default'
-            }`}
-            title={hasHealthConcern ? t('rooms.openForHealth') : undefined}
-            onClick={() => {
-              if (hasHealthConcern && collapsed) void run(onToggleCollapsed);
-            }}
-          >
-            {stateBreakdown.map((bucket) => (
-              <Badge key={bucket.id} tone={bucket.tone}>
-                {bucket.count} {t(bucket.labelKey)}
-              </Badge>
-            ))}
-          </button>
-        )}
+            buckets shown. A health concern (degraded/halted) turns the cluster
+            into a click-to-open button so a collapsed room never hides a sick
+            member; otherwise it's inert display text that lets the header's own
+            click-to-expand through — not a dead keyboard stop (review F9). */}
+        {members.length > 0 &&
+          (hasHealthConcern ? (
+            <button
+              type="button"
+              className="flex flex-wrap items-center gap-1"
+              title={t('rooms.openForHealth')}
+              onClick={() => {
+                if (collapsed) void run(onToggleCollapsed);
+              }}
+            >
+              {stateBreakdown.map((bucket) => (
+                <Badge key={bucket.id} tone={bucket.tone}>
+                  {bucket.count} {t(bucket.labelKey)}
+                </Badge>
+              ))}
+            </button>
+          ) : (
+            <span className="flex flex-wrap items-center gap-1">
+              {stateBreakdown.map((bucket) => (
+                <Badge key={bucket.id} tone={bucket.tone}>
+                  {bucket.count} {t(bucket.labelKey)}
+                </Badge>
+              ))}
+            </span>
+          ))}
         <div className="flex-1" />
         {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
         {/* Master switch: bound to the room's OWN gate (room.enabled), a single

@@ -1,4 +1,5 @@
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Badge } from '../components/Badge';
 import { useT } from '../i18n/i18n';
 
 export interface DetectionModes {
@@ -65,12 +66,21 @@ export function AppBar({
           <ModePill label="WS" active={detection.ws > 0} title={t('detection.wsTitle')} />
           <ModePill label="POLL" active={detection.poll > 0} title={t('detection.pollTitle')} />
           {detection.degraded > 0 && (
+            // role=status + aria-label so a screen reader announces the count and
+            // its changes (review F8); the danger tone reuses the Badge atom
+            // instead of hand-rolled classes (review F17). Dot is decorative.
             <span
+              role="status"
               title={t('detection.degradedTitle', { count: String(detection.degraded) })}
-              className="flex items-center gap-1 rounded bg-danger/15 px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-wide text-danger"
+              aria-label={t('detection.degradedTitle', { count: String(detection.degraded) })}
             >
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-danger" />
-              {detection.degraded}
+              <Badge tone="danger">
+                <span
+                  aria-hidden
+                  className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-danger"
+                />
+                {detection.degraded}
+              </Badge>
             </span>
           )}
         </div>

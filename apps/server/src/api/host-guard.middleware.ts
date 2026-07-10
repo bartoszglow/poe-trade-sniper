@@ -27,12 +27,14 @@ export class HostGuardMiddleware implements NestMiddleware {
     if (origin !== undefined) {
       let originHostname: string;
       try {
-        // URL.hostname strips the brackets from IPv6 literals — allow bare ::1.
+        // `new URL('http://[::1]').hostname` keeps the brackets ('[::1]') in this
+        // Node runtime — which is the form ALLOWED_HOSTNAMES already holds, so no
+        // extra bare-'::1' case is needed (review F14).
         originHostname = new URL(origin).hostname.toLowerCase();
       } catch {
         throw new ForbiddenException('this API serves localhost only');
       }
-      if (!ALLOWED_HOSTNAMES.has(originHostname) && originHostname !== '::1') {
+      if (!ALLOWED_HOSTNAMES.has(originHostname)) {
         throw new ForbiddenException('this API serves localhost only');
       }
     }

@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { loadConfig, type AppConfig } from './config/env.js';
 import { createDevPlatform, createNoopPlatform } from './platform/noop-platform.js';
@@ -45,7 +45,27 @@ export interface StartServerOptions {
  * CLI (`main.ts`) and the Electron main process both call this; environment
  * (DB_PATH, STATIC_DIR, PORT) must be set before the call.
  */
+/** Installed once — a last-resort backstop so a stray rejection/exception in a
+ *  fire-and-forget path (a scheduler tick, an SSE write) is LOGGED, never a
+ *  silent process death that kills all detection (review F2 + full-review REL-1).
+ *  Covers both the standalone server and the in-process desktop main. */
+let processBackstopInstalled = false;
+function installProcessBackstop(): void {
+  if (processBackstopInstalled) return;
+  processBackstopInstalled = true;
+  const logger = new Logger('ProcessBackstop');
+  process.on('unhandledRejection', (reason: unknown) => {
+    logger.error(`unhandled rejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
+  });
+  process.on('uncaughtException', (error: Error) => {
+    // Log and keep running: a background throw must not take detection down. A
+    // truly fatal state still surfaces via the failing operation's own errors.
+    logger.error(`uncaught exception: ${error.stack ?? error.message}`);
+  });
+}
+
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
+  installProcessBackstop();
   // Parse config before Nest boots so a bad .env dies with a readable error,
   // not a DI stack trace.
   const config = loadConfig();

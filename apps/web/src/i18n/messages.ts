@@ -1329,7 +1329,6 @@ export const EN_PLURALS = {
   'searchPanel.samples': { one: '{count} sample', other: '{count} samples' },
   'searches.hitCount': { one: '{count} hit', other: '{count} hits' },
   'rooms.memberCount': { one: '{count} search', other: '{count} searches' },
-  'rooms.degradedCount': { one: '{count} degraded', other: '{count} degraded' },
   'rooms.deleteBody': {
     one: 'The room "{name}" contains {count} search. Delete it too, or move it out?',
     other: 'The room "{name}" contains {count} searches. Delete them too, or move them out?',
@@ -1356,12 +1355,6 @@ export const PL_PLURALS: Record<PluralKey, PluralForms> = {
     few: '{count} wyszukiwania',
     many: '{count} wyszukiwań',
     other: '{count} wyszukiwania',
-  },
-  'rooms.degradedCount': {
-    one: '{count} z problemem',
-    few: '{count} z problemem',
-    many: '{count} z problemem',
-    other: '{count} z problemem',
   },
   'rooms.deleteBody': {
     one: 'Pokój „{name}” zawiera {count} wyszukiwanie. Usunąć je razem z pokojem, czy przenieść na zewnątrz?',

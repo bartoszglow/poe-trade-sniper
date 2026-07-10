@@ -1363,6 +1363,110 @@ describe('SearchManager', () => {
       }
     });
 
+    it('a bulk gate reopen (room + global) does NOT revive a halted search (review F1)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager({
+        env: { DEGRADED_MAX_RECOVERY_ATTEMPTS: '1' },
+      });
+      try {
+        await manager.add('AbCdEf001', {});
+        const roomId = manager.createRoom('R').rooms[0]!.id;
+        manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001'] }]);
+        wsEngines[0]!.callbacks!.onStatus('degraded', 'ws-rate-limited');
+        vi.setSystemTime(Date.now() + 300_001);
+        await manager.runSchedulerTick(); // attempt #1
+        vi.setSystemTime(Date.now() + 600_001);
+        await manager.runSchedulerTick(); // -> halted
+        expect(manager.list()[0]!.status).toBe('halted');
+        const enginesAtHalt = wsEngines.length;
+
+        // Room OFF -> the halt is held-displayed as paused, marker durable.
+        manager.setRoomEnabled(roomId, false);
+        expect(manager.list()[0]!.status).toBe('paused');
+        // Room ON -> re-derives to halted, NOT started (no fresh ws connect).
+        manager.setRoomEnabled(roomId, true);
+        expect(manager.list()[0]!.status).toBe('halted');
+        await manager.runSchedulerTick();
+        expect(wsEngines.length).toBe(enginesAtHalt);
+
+        // Global pause round-trip -> still halted, still no revive.
+        manager.setDetectionPaused(true);
+        manager.setDetectionPaused(false);
+        expect(manager.list()[0]!.status).toBe('halted');
+        await manager.runSchedulerTick();
+        expect(wsEngines.length).toBe(enginesAtHalt);
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('held outranks degraded: a gate close keeps the episode, reopen resumes it (D-ph-2, F12)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        const roomId = manager.createRoom('R').rooms[0]!.id;
+        manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001'] }]);
+        wsEngines[0]!.callbacks!.onStatus('degraded', 'ws-rate-limited');
+        const degradedSince = manager.list()[0]!.degradedSince;
+        expect(degradedSince).not.toBeNull();
+
+        // Gate close mid-episode -> held (paused) wins the DISPLAY, history kept.
+        manager.setRoomEnabled(roomId, false);
+        expect(manager.list()[0]!.status).toBe('paused');
+
+        // Reopen -> resumes degraded with the SAME episode start (not a fresh one).
+        manager.setRoomEnabled(roomId, true);
+        expect(manager.list()[0]!.status).toBe('degraded');
+        expect(manager.list()[0]!.degradedSince).toBe(degradedSince);
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('an import INTO a disabled room lands held (paused), not started (review F13)', () => {
+      const { manager, database, wsEngines } = createManager();
+      try {
+        const roomId = manager.createRoom('R').rooms[0]!.id;
+        manager.setRoomEnabled(roomId, false);
+        const enginesBefore = wsEngines.length;
+        const entry: ManagedSearch = {
+          id: 'ImportEd01',
+          realm: 'poe2',
+          league: 'Standard',
+          label: 'imported',
+          autoTravel: false,
+          autoBuy: false,
+          enabled: true,
+          purchaseMode: null,
+          filters: SECURABLE_QUERY,
+          addedAt: '2026-07-10T00:00:00.000Z',
+          roomId: 'file-room-1',
+          archivedAt: null,
+          dealWatch: null,
+        };
+        // The exported room name matches the existing DISABLED room -> reused by
+        // name, so the member lands in a closed gate.
+        const result = manager.importSearches(
+          [entry],
+          [{ id: 'file-room-1', name: 'R', collapsed: false }],
+          'skip',
+        );
+        expect(result.imported).toBe(1);
+        const info = manager.list().find((entry) => entry.id === 'ImportEd01')!;
+        expect(info.roomId).toBe(roomId);
+        expect(info.status).toBe('paused'); // room-held, not a lying pending
+        expect(wsEngines.length).toBe(enginesBefore); // no ws connect against the closed gate
+      } finally {
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
     it('never recovery-restarts (nor halts) a blind-family episode - no-session heals itself', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       const { manager, database, wsEngines } = createManager({

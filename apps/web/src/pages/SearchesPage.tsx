@@ -118,7 +118,9 @@ const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   pending: 'neutral',
   connecting: 'info',
   active: 'ok',
-  degraded: 'danger',
+  // degraded = amber/warn (matches the toggle + room breakdown); halted is the
+  // lone loudest danger so the two are distinguishable on the row (review F10).
+  degraded: 'warn',
   halted: 'danger',
   stopped: 'neutral',
   paused: 'info',

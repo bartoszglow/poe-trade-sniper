@@ -89,9 +89,15 @@ export function AppShell() {
     for (const search of searches) {
       if (!search.enabled) continue;
       total += 1;
-      // The app-wide "something is wrong" beacon: sticky episodes + halted only
-      // (review BEACON) — a transient governor blip must not light it.
-      if (search.degradedSince !== null || search.status === 'halted') degraded += 1;
+      // The app-wide "something is wrong" beacon (review F5): a search STILL in a
+      // sticky degraded phase, or halted. Requiring status==='degraded' — not just
+      // a lingering degradedSince — stops a now-gate-held (paused) search from
+      // lighting it during a deliberate pause.
+      if (
+        (search.status === 'degraded' && search.degradedSince !== null) ||
+        search.status === 'halted'
+      )
+        degraded += 1;
       if (search.status === 'stopped') continue;
       if (search.engine === 'ws') ws += 1;
       else if (search.engine === 'poll') poll += 1;
