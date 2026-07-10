@@ -389,6 +389,42 @@ describe('TravelService', () => {
       service.onApplicationShutdown();
     });
 
+    it('distinguishes on-a-map (code 2, town/hideout message) — not_in_town, no retry', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TradeApiError(400, 'travel: You must be in a town or Hideout area to secure items', 2),
+      );
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      // Same code 2 as not-in-game, but the message pins it to on-a-map: distinct
+      // label, still not retryable (must return to town/hideout first).
+      expect(refreshListing).not.toHaveBeenCalled();
+      expect(lastFailed(travelEvents)?.reason).toBe('not_in_town');
+      service.onApplicationShutdown();
+    });
+
+    it('distinguishes an own-listing failure (code 2, selling-yourself message)', async () => {
+      const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
+        autoTravel: true,
+        headroom: 1,
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+      (tradeApi.travel as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TradeApiError(400, 'travel: You cannot secure items that you are selling yourself', 2),
+      );
+      realtimeBus.publish({ type: 'hit', listing: listingWithToken('jwt-auto') });
+      await flushQueue();
+
+      expect(refreshListing).not.toHaveBeenCalled();
+      expect(lastFailed(travelEvents)?.reason).toBe('own_listing');
+      service.onApplicationShutdown();
+    });
+
     it('does not re-resolve a already-definitive failure (404 code 1)', async () => {
       const { service, tradeApi, realtimeBus, travelEvents, refreshListing } = createService({
         autoTravel: true,

@@ -306,6 +306,11 @@ export const EN = {
   'hitCard.travelNotInGame': 'not in game',
   'hitCard.travelNotInGameHint':
     'Your character must be in-game to travel — open PoE, then click Retry.',
+  'hitCard.travelNotInTown': 'on a map',
+  'hitCard.travelNotInTownHint':
+    'Travel only works from a town or hideout — return to one, then click Retry.',
+  'hitCard.travelOwnListing': 'your own listing',
+  'hitCard.travelOwnListingHint': "This is your own listing — you can't buy from yourself.",
   'hitCard.travelServerError': 'GGG server error',
   'hitCard.travelServerErrorHint':
     "GGG's server hit an internal error — usually brief; retried automatically.",
@@ -348,6 +353,7 @@ export const EN = {
   'searches.autoTravelWarning': 'teleports your character — Instant Buyout only',
   'searches.dealSetupToggle': 'Set up deal watch now',
   'searches.watch': 'Watch search',
+  'searches.adding': 'Adding…',
   'searches.addCta': 'Watch a search',
   'searches.detectionToggle': 'Detection',
   'searches.openOnTradeSite': 'Open this search on the trade site',
@@ -935,6 +941,11 @@ export const PL: Record<MessageKey, string> = {
   'hitCard.travelNotInGame': 'nie jesteś w grze',
   'hitCard.travelNotInGameHint':
     'Twoja postać musi być w grze, aby się przenieść — włącz PoE i kliknij Ponów.',
+  'hitCard.travelNotInTown': 'jesteś na mapie',
+  'hitCard.travelNotInTownHint':
+    'Przeniesienie działa tylko z miasta lub kryjówki — wróć do niej i kliknij Ponów.',
+  'hitCard.travelOwnListing': 'twoja własna oferta',
+  'hitCard.travelOwnListingHint': 'To Twoja oferta — nie kupisz od siebie.',
   'hitCard.travelServerError': 'błąd serwera GGG',
   'hitCard.travelServerErrorHint':
     'Wewnętrzny błąd serwera GGG — zwykle chwilowy; ponawiane automatycznie.',
@@ -976,6 +987,7 @@ export const PL: Record<MessageKey, string> = {
   'searches.dealSetupToggle': 'Skonfiguruj obserwację okazji od razu',
   'searches.autoTravelWarning': 'teleportuje twoją postać — tylko Instant Buyout',
   'searches.watch': 'Obserwuj wyszukiwanie',
+  'searches.adding': 'Dodawanie…',
   'searches.addCta': 'Obserwuj wyszukiwanie',
   'searches.detectionToggle': 'Detekcja',
   'searches.openOnTradeSite': 'Otwórz ten search na stronie handlu',

@@ -2,6 +2,8 @@
 export type TravelFailureReason =
   | 'item_gone'
   | 'not_in_game'
+  | 'not_in_town'
+  | 'own_listing'
   | 'rate_limited'
   | 'server_error'
   | 'bad_response'
@@ -17,15 +19,29 @@ export type TravelFailureReason =
  */
 const RULES: ReadonlyArray<{
   reason: TravelFailureReason;
-  match: (httpStatus: number | null, gggCode: number | null) => boolean;
+  match: (httpStatus: number | null, gggCode: number | null, message: string) => boolean;
 }> = [
   { reason: 'rate_limited', match: (httpStatus) => httpStatus === 429 },
   { reason: 'item_gone', match: (httpStatus, gggCode) => httpStatus === 404 && gggCode === 1 },
   { reason: 'forbidden', match: (httpStatus, gggCode) => httpStatus === 403 && gggCode === 6 },
-  // The character isn't in-game (client at login/character-select, or PoE not
-  // running) — GGG rejects the teleport. Observed 2026-07-07, evidence in
-  // api-notes.md. Not retryable: only entering the game clears it.
-  { reason: 'not_in_game', match: (httpStatus, gggCode) => httpStatus === 400 && gggCode === 2 },
+  // GGG reuses code 2 ("Invalid query") for several DISTINCT travel blockers — the
+  // only thing separating them is the human message. GGG's docs say "use the code,
+  // not the message" (it's subject to change), so this is a deliberate, evidence-
+  // backed exception (three variants observed 2026-07-07/08, api-notes.md): match
+  // the message case-insensitively; an unrecognised code-2 message falls through to
+  // `unknown` rather than mislabelling.
+  {
+    reason: 'not_in_town',
+    match: (_s, gggCode, message) => gggCode === 2 && /town or hideout/i.test(message),
+  },
+  {
+    reason: 'own_listing',
+    match: (_s, gggCode, message) => gggCode === 2 && /selling yourself/i.test(message),
+  },
+  {
+    reason: 'not_in_game',
+    match: (_s, gggCode, message) => gggCode === 2 && /in-game/i.test(message),
+  },
   // GGG's official error-code enum (api-notes.md, fetched 2026-07-07). GGG says
   // "use the code rather than the message", so these match on the code alone —
   // the exact HTTP status pairing per endpoint isn't whisper-confirmed yet.
@@ -37,9 +53,10 @@ const RULES: ReadonlyArray<{
 /**
  * Reasons worth exactly ONE automatic retry — transient or indeterminate, where
  * re-resolving a fresh token and travelling again can plausibly succeed. The
- * definitive ones are excluded: `item_gone` (sold), `not_in_game` (needs the
- * operator in-game), `rate_limited` (retrying worsens it), `forbidden` (a config
- * fault). `unknown`/`null` stay retryable as the safe default for the unseen.
+ * definitive ones are excluded: `item_gone` (sold), `not_in_game`/`not_in_town`
+ * (need the operator in a town/hideout), `own_listing` (can't buy your own),
+ * `rate_limited` (retrying worsens it), `forbidden` (a config fault).
+ * `unknown`/`null` stay retryable as the safe default for the unseen.
  */
 const RETRYABLE_REASONS: ReadonlySet<TravelFailureReason> = new Set([
   'unknown',
@@ -54,6 +71,8 @@ export function isRetryableTravelFailure(reason: TravelFailureReason | null): bo
 export function classifyTravelFailure(
   httpStatus: number | null,
   gggCode: number | null,
+  /** The raw GGG error message — needed to split the several code-2 variants. */
+  message = '',
 ): TravelFailureReason {
-  return RULES.find((rule) => rule.match(httpStatus, gggCode))?.reason ?? 'unknown';
+  return RULES.find((rule) => rule.match(httpStatus, gggCode, message))?.reason ?? 'unknown';
 }

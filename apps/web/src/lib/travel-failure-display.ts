@@ -29,6 +29,18 @@ const TRAVEL_FAILURE_DISPLAY: Partial<Record<TravelFailureReason, FailureDisplay
     tone: 'text-warn',
     hintKey: 'hitCard.travelNotInGameHint',
   },
+  // In-game but on a map — must be in a town/hideout to travel. Actionable → amber.
+  not_in_town: {
+    key: 'hitCard.travelNotInTown',
+    tone: 'text-warn',
+    hintKey: 'hitCard.travelNotInTownHint',
+  },
+  // Your own listing — can't buy from yourself. Muted (nothing to act on).
+  own_listing: {
+    key: 'hitCard.travelOwnListing',
+    tone: 'text-ink-muted',
+    hintKey: 'hitCard.travelOwnListingHint',
+  },
   rate_limited: { key: 'hitCard.travelRateLimited', tone: 'text-gold' },
   // Transient GGG faults (codes 4/5) — auto-retried once; amber, hint on hover.
   server_error: {

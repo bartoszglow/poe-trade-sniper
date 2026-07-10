@@ -209,7 +209,7 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
         } catch (error) {
           const reason =
             error instanceof TradeApiError
-              ? classifyTravelFailure(error.status, error.gggCode)
+              ? classifyTravelFailure(error.status, error.gggCode, error.message)
               : 'unknown';
           this.publish('failed', request, errorMessage(error), reason);
           void this.retryAutoFailure(request, reason);
