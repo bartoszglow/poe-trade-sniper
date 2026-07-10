@@ -8,12 +8,19 @@ import {
 } from '@poe-sniper/shared';
 import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { convertToExalted } from '../market-data/currency-rates.js';
-import { Poe2ScoutClient } from '../market-data/poe2scout.client.js';
+import { ExchangeRatesService } from '../market-data/exchange-rates.service.js';
 import { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import { TradeApiClient } from '../trade-api/trade-api.client.js';
 import { baselineQuery } from './deal-query.js';
 
-/** Rate-limit policies a baseline spends (one search POST + one fetch). */
+/**
+ * Rate-limit policies a baseline spends against the DETECTION-protecting
+ * reserve gate: one search POST + one fetch. The currency-exchange rate round
+ * (D-dw-21) is deliberately NOT in the gate — exchange has its own separate GGG
+ * budget the governor already paces, detection never uses it, and a fresh rate
+ * round briefly zeroes that policy's headroom, which would self-block the very
+ * refresh that fetched the rates (observed live 2026-07-10).
+ */
 const BASELINE_POLICIES = ['search', 'fetch'] as const;
 
 export type BaselineComputation =
@@ -40,9 +47,9 @@ export type BaselineComputation =
  * Computes the price-fixer-resistant market baseline for a deal watch
  * (plan 41, D-dw-2 statistic + D-dw-15 operator-tunable depth): the cheapest N
  * instant-buyout listings (N = the watch's baselineSampleSize), normalized to
- * exalted via poe2scout rates, leading outliers dropped, baseline = median of
- * the cheapest N survivors. Detection always outranks this work via the
- * headroom gate.
+ * exalted via GGG currency-exchange rates (D-dw-21), leading outliers dropped,
+ * baseline = median of the cheapest N survivors. Detection always outranks
+ * this work via the headroom gate.
  */
 @Injectable()
 export class DealBaselineService {
@@ -52,7 +59,7 @@ export class DealBaselineService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(TradeApiClient) private readonly tradeApi: TradeApiClient,
     @Inject(RateLimitGovernor) private readonly governor: RateLimitGovernor,
-    @Inject(Poe2ScoutClient) private readonly poe2scout: Poe2ScoutClient,
+    @Inject(ExchangeRatesService) private readonly exchangeRates: ExchangeRatesService,
   ) {}
 
   async computeBaseline(
@@ -84,10 +91,14 @@ export class DealBaselineService {
     );
     if (search.rateLimited) return { kind: 'rate-limited' };
 
-    // Rates are non-GGG (poe2scout, cached 15 min) — a rate outage degrades to
-    // "only exalted-priced listings are usable", never to made-up numbers.
-    const ratesByApiId = await this.poe2scout.currencyRatesByApiId(league);
-    const divinePriceExalted = await this.poe2scout.divinePriceExalted(league);
+    // Rates come from GGG's own currency exchange (D-dw-21; cached 15 min, its
+    // own rate-limit policy). A rate outage degrades to "only exalted-priced
+    // listings are usable", never to made-up numbers.
+    const { ratesByApiId, divinePriceExalted } = await this.exchangeRates.ratesForLeague(
+      realm,
+      league,
+      correlationId,
+    );
 
     const usable: number[] = [];
     for (const listing of search.listings) {

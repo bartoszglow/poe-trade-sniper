@@ -549,6 +549,26 @@ for deal searches" is parked.
 
 ## Decisions
 
+- **D-dw-21 (operator, 2026-07-10, live incident)** — currency rates move from
+  poe2scout to **GGG's own bulk Currency Exchange**. poe2scout's API vanished
+  (every route 404 — evidence in api-notes) which silently nulled
+  `divinePriceExalted`: the UI fell back to exalted-only display even for
+  divine-unit thresholds — the operator-reported bug. The operator chose the
+  GGG-native source over chasing poe2scout's new API ("czy musimy korzystać z
+  poe scout? Nie możemy opierać się wyłącznie na poe2 trade oficjalnym od
+  GGG?"). Implementation: `TradeApiClient.exchangePost` (own governor policy
+  `'exchange'` — GGG buckets it separately as `trade-exchange-request-limit`,
+  probed) + `ExchangeRatesService` (market-data): per-league 15-min snapshot,
+  3 POSTs/TTL (divine sell+buy sides, chaos buy side), STOCK-WEIGHTED median
+  per side against the decoy-heavy book, divine = mean of both sides;
+  best-effort nulls + last-good-snapshot on failure. The exchange policy is
+  deliberately NOT in the DEAL/BASELINE headroom gates — it has its own GGG
+  budget (governor-paced), detection never touches it, and gating it self-blocked
+  the re-derive right after a fresh rate round (observed live, fixed same day).
+  poe2scout stays only behind
+  price-check name lookups (#37) until its new API surfaces (parked). Trade-off
+  accepted: only divine/chaos normalize now — exotic-currency listings drop out
+  of baselines as unpriceable (conservative direction).
 - **D-dw-20 (operator, 2026-07-07, live incident)** — smooth re-derives + a
   per-watch refresh interval. Root cause found live: a manual "refresh market
   price" (or the hourly drift refresh) that moves the cap re-derives → swaps the

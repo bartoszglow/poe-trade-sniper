@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config/env.js';
-import type { Poe2ScoutClient } from '../market-data/poe2scout.client.js';
+import type { ExchangeRatesService } from '../market-data/exchange-rates.service.js';
 import type { RateLimitGovernor } from '../ratelimit/rate-limit-governor.js';
 import type { RawTradeListing, TradeApiClient } from '../trade-api/trade-api.client.js';
 import { DealBaselineService } from './deal-baseline.service.js';
@@ -33,15 +33,13 @@ function createService(options: {
   const governor = {
     minHeadroom: vi.fn().mockReturnValue(options.headroom ?? 1),
   } as unknown as RateLimitGovernor;
-  const poe2scout = {
-    currencyRatesByApiId: vi
-      .fn()
-      .mockResolvedValue(options.rates === undefined ? new Map([['divine', 700]]) : options.rates),
-    divinePriceExalted: vi
-      .fn()
-      .mockResolvedValue(options.divinePrice === undefined ? 700 : options.divinePrice),
-  } as unknown as Poe2ScoutClient;
-  const service = new DealBaselineService(config, tradeApi, governor, poe2scout);
+  const exchangeRates = {
+    ratesForLeague: vi.fn().mockResolvedValue({
+      ratesByApiId: options.rates === undefined ? new Map([['divine', 700]]) : options.rates,
+      divinePriceExalted: options.divinePrice === undefined ? 700 : options.divinePrice,
+    }),
+  } as unknown as ExchangeRatesService;
+  const service = new DealBaselineService(config, tradeApi, governor, exchangeRates);
   return { service, priceSearch, governor };
 }
 

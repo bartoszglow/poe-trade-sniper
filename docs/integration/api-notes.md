@@ -119,11 +119,18 @@ Served to the UI via cached `GET /api/leagues`.
   `{error: {code, message}}` on failure. Observed live:
   - `404 code 1` → `"Item no longer available"` — the listing sold/vanished (the common case;
     even a just-re-fetched id whispers 404 once the item is gone). Observed 2026-07-01.
-  - `400 code 2` → `"Invalid query; Your account must be in-game to use this feature"` — the
-    character isn't in-game (client at login / character-select, or PoE not running). Verbatim
-    server log 2026-07-07 (search `mk5Go6Eef6`): `POST /api/trade2/whisper → 400`. NOT retryable —
-    only entering the game clears it, so auto-retry skips it (reason `not_in_game`) and the UI shows
-    an actionable label while leaving the manual Retry button for when the operator is back in-game.
+  - `400 code 2` → **three distinct blockers under one code**, split by message text (verbatim
+    server logs 2026-07-07/08; counts from a live session). GGG's docs say "use the code, not the
+    message" (message is subject to change), but here the code is identical for genuinely different
+    states, so `classifyTravelFailure` makes a deliberate, evidence-backed exception: it matches the
+    message case-insensitively, and an unrecognised code-2 message falls through to `unknown` rather
+    than mislabelling. None are auto-retried (all need an operator action first; the manual Retry
+    button stays):
+    - `"…Your account must be in-game to use this feature"` → `not_in_game` (PoE closed / at login).
+    - `"…You must be in a town or Hideout area to secure items"` → `not_in_town` (in-game but on a
+      map — travel only works from town/hideout).
+    - `"…You cannot secure items that you are selling yourself"` → `own_listing` (auto-travel hit
+      your own listing).
   - `403 code 6` → `"Forbidden"` — a missing `X-Requested-With` / wrong Referer (see the whisper
     row above). A _format_ problem, not a business one.
     These are mapped to a stable UI reason by `classifyTravelFailure` (`packages/shared/src/travel-failure.ts`,
@@ -203,8 +210,49 @@ Served to the UI via cached `GET /api/leagues`.
   "Gold Ring" resolve. `TradeDataService` caches this as the versioned
   `TradeDictionary`.
 
+## Currency Exchange (bulk) — `POST /api/trade2/exchange/<realm>/<league>` (D-dw-21)
+
+Probed live 2026-07-10 (Runes of Aldur) via a throwaway `/api/dev/exchange-probe`
+(removed after evidence). This is the GGG-native rates source that replaced
+poe2scout for deal-watch when the aggregator's API vanished (see below).
+
+- **Request** (works as-is, no browser headers needed):
+  `POST /api/trade2/exchange/poe2/<league>` body
+  `{"query":{"status":{"option":"online"},"have":["divine"],"want":["exalted"]},"sort":{"have":"asc"},"engine":"new"}`
+  → 200. `have` = what the buyer pays, `want` = what the buyer receives.
+- **Rate-limit policy is its OWN bucket**: `x-rate-limit-policy: trade-exchange-request-limit`,
+  rules `Account 3:5:60` + `Ip 7:15:60, 15:90:120, 45:300:1800` — separate from the
+  search policy (three probe POSTs moved only this policy's state counters). Keyed
+  `'exchange'` in the governor; headers teach the rest.
+- **Response**: `{id, complexity, result: {<hash>: {id, item: null, listing:
+{indexed, account: {name, online: {league, status}}, offers: [{exchange:
+{currency, amount, whisper}, item: {currency, amount, stock, id, whisper}}],
+whisper, whisper_token}}}` — `offers[].exchange` = the buyer's cost,
+  `offers[].item` = what the buyer receives (with the seller's `stock`).
+- **`sort:{have:'asc'}` = best-for-buyer first**, and the book is decoy-heavy:
+  observed sell-divine book `1 div → 500 ex (stock 13155)` — the real wall — then
+  `360/350/321` and a scam tail of `1 div → 1 ex (stock 6600)`; buy-divine book
+  had a `5 ex → 1 div (stock 7)` bait before the real `550 ex (stock 135)`. A
+  plain top-N median therefore LIES; `ExchangeRatesService` uses a STOCK-WEIGHTED
+  median per side and prices divine as the mean of both sides (evidence day:
+  sell 500 / buy 550 → 525; poe2scout had said 714 five days earlier — the rate
+  really moved, that was not sort confusion).
+- Multi-currency `have`/`want` arrays: UNTRIED (`TODO(verify)`) — production
+  fetches one pair per POST (3 POSTs per league per 15-min TTL: divine both
+  sides + chaos buy side), which the separate exchange budget absorbs easily.
+- Consequence for baselines: only divine/chaos (+ exalted at 1) normalize now;
+  listings priced in other currencies are excluded as unpriceable (conservative —
+  they were poe2scout-converted before).
+
 ## poe2scout aggregator (`api.poe2scout.com/api`) — NON-GGG, off the budget (#37)
 
+- **2026-07-10 OUTAGE / API REMODEL: every route under `api.poe2scout.com` now
+  404s** (`/api/poe2/Leagues`, `/api/poe2/leagues`, `/api/poe2`, `/api`, even the
+  API root; the website itself is 200). Deal-watch rates moved to the GGG
+  Currency Exchange above (D-dw-21); `Poe2ScoutClient`'s rate methods are dead
+  code kept only until the price-check name-lookup (#37) is reworked against
+  whatever their new API turns out to be — until then price-check name lookups
+  degrade to "unpriced" (best-effort posture already handles it).
 - Base `https://api.poe2scout.com/api`. Realm `poe2`. Routes (verified 2026-07-03
   via the live openapi.json): `GET /poe2/Leagues` → `[{Value, IsCurrent,
 DivinePrice, BaseCurrencyApiId}]` (base is `exalted`); `GET /poe2/Leagues/

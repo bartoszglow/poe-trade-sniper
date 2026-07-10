@@ -69,7 +69,11 @@ interface DealJob {
   settlers: Array<() => void>;
 }
 
-/** GGG-spending policies a deal op draws on — the headroom reserve gate (D-pc-2 posture). */
+/** GGG-spending policies a deal op draws on — the headroom reserve gate (D-pc-2
+ *  posture). The exchange policy (D-dw-21 rates) is deliberately NOT gated here:
+ *  it has its own separate GGG budget (governor-paced), and a fresh rate round
+ *  zeroes its headroom briefly, which would self-block the re-derive that runs
+ *  right after the rates fetch (observed live 2026-07-10). */
 const DEAL_POLICIES = ['search', 'fetch'] as const;
 
 /**

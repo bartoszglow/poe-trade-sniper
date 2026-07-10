@@ -86,6 +86,7 @@ const POLICY_FETCH = 'fetch';
 const POLICY_WHISPER = 'whisper';
 const POLICY_ACCOUNT = 'account';
 const POLICY_DATA = 'data';
+const POLICY_EXCHANGE = 'exchange';
 
 /** The Referer the whisper endpoint expects — the search's trade page. Delegates
  *  to the shared url builder so the format lives in exactly one place. */
@@ -430,6 +431,49 @@ export class TradeApiClient {
     }
     const payload = (await response.json()) as { id?: string; result?: string[]; total?: number };
     return { id: payload.id ?? null, total: payload.total ?? 0, rateLimited: false };
+  }
+
+  /**
+   * POST to the bulk Currency Exchange API — the rates source that replaces
+   * poe2scout for deal-watch (D-dw-21). Returns the raw payload + the safe
+   * rate-limit headers so callers (and the discovery probe) can classify without
+   * this client guessing the undocumented shape. `withBrowserHeaders` adds the
+   * X-Requested-With + exchange-page Referer pair (the whisper endpoint's
+   * requirement — probed for exchange too). TODO(verify): response shape —
+   * evidence in api-notes.md § "Currency Exchange".
+   */
+  async exchangePost(
+    realm: string,
+    league: string,
+    body: unknown,
+    correlationId: string,
+    withBrowserHeaders = false,
+  ): Promise<{ status: number; payload: unknown; rateHeaders: Record<string, string> | null }> {
+    const url = `${this.config.POE_BASE_URL}/api/trade2/exchange/${realm}/${encodeURIComponent(league)}`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (withBrowserHeaders) {
+      headers['X-Requested-With'] = 'XMLHttpRequest';
+      headers['Referer'] =
+        `${this.config.POE_BASE_URL}/trade2/exchange/${realm}/${encodeURIComponent(league)}`;
+    }
+    const response = await this.request(
+      POLICY_EXCHANGE,
+      0,
+      url,
+      { method: 'POST', headers, body: JSON.stringify(body) },
+      correlationId,
+    );
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // Non-JSON body (HTML error page) — callers see status + null payload.
+    }
+    return {
+      status: response.status,
+      payload,
+      rateHeaders: extractRateLimitHeaders(response.headers),
+    };
   }
 
   /** Login probe: /my-account answers 200 only for a real logged-in session. */
