@@ -100,6 +100,41 @@ const GUARD_STAGGER_HEADROOM_FACTOR = 1.2;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Sticky-degraded health record (plan 43). Runtime-only, one per watcher: the
+ * flap window, the sticky flag itself, and the recovery-restart bookkeeping.
+ * Carried across a deal id-swap like the displayed status (D-dw-20).
+ */
+interface WatcherHealth {
+  /** The operator-visible flag — set by the degrade families (D-deg-1), cleared
+   *  ONLY by the stability window (D-deg-3) or a manual restart (D-deg-4). */
+  stickyDegraded: boolean;
+  /** ISO time the current sticky episode began — drives "degraded for 23m". */
+  degradedSince: string | null;
+  /** The detail code the episode is displayed under. */
+  lastDetail: string | null;
+  /** Recovery-restart bookkeeping: ladder index + last attempt time (D-deg-2). */
+  recoveryAttempts: number;
+  lastRecoveryAt: number | null;
+  /** Recent ws-close timestamps — the flap detector's sliding window. */
+  wsDrops: number[];
+  /** When the live socket last came (and stayed) up while sticky — the stability
+   *  countdown anchor; any close resets it. */
+  stableSince: number | null;
+}
+
+function freshHealth(): WatcherHealth {
+  return {
+    stickyDegraded: false,
+    degradedSince: null,
+    lastDetail: null,
+    recoveryAttempts: 0,
+    lastRecoveryAt: null,
+    wsDrops: [],
+    stableSince: null,
+  };
+}
+
 interface Watcher {
   row: ManagedSearch;
   /**
@@ -122,6 +157,8 @@ interface Watcher {
   wsRateLimited: boolean;
   status: EngineStatus;
   statusDetail: string | null;
+  /** Sticky-degraded + recovery bookkeeping (plan 43). */
+  health: WatcherHealth;
   correlationId: string;
   hitCount: number;
   lastHitAt: string | null;
@@ -216,6 +253,19 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     // N per-search scans, PERF-6) — without it the UI shows "0 hits" after restart.
     this.hydrateAllHitStats();
     this.pruneHits();
+    // Boot phase reconcile (plan 44): createWatcher seeds 'pending' for EVERY
+    // enabled row, ignoring the gates. A member in a disabled room (or under a
+    // global pause) must show its HELD phase, not 'starting' — the drip below
+    // skips it (roomEnabled filter) and nothing else would relabel it, so a
+    // room-off member would sit at a lying 'pending'/gold toggle after restart.
+    for (const watcher of this.watchers.values()) {
+      if (!watcher.row.enabled || watcher.row.archivedAt !== null) continue;
+      if (this.detectionPaused) {
+        this.publishEngineStatus(watcher, 'paused', 'globally paused');
+      } else if (!this.roomEnabled(watcher)) {
+        this.publishEngineStatus(watcher, 'paused', 'room paused');
+      }
+    }
     this.startPendingWatchers();
     this.schedulerTimer = setInterval(() => {
       void this.runSchedulerTick();
@@ -368,9 +418,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         this.stopEngines(watcher);
         this.publishEngineStatus(watcher, 'stopped', 'paused');
       } else if (enabled && !wasEnabled) {
-        // Re-enabled — start now, unless a gate holds it (global pause or a
-        // disabled room), in which case it waits labelled and comes up when the
-        // gate lifts.
+        // Re-enabled — an EXPLICIT per-search act: it revives a halted/sticky
+        // search with a clean health slate (plan 44 revival rule), then starts
+        // unless a gate holds it (global pause / disabled room).
+        watcher.health = freshHealth();
         this.startEnabledWatcher(watcher);
       } else if (
         options.purchaseMode !== undefined &&
@@ -499,6 +550,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     // resolves; a genuine failure still degrades it.
     newWatcher.status = priorStatus;
     newWatcher.statusDetail = priorStatusDetail;
+    // Health (sticky degraded, flap window, recovery ladder — plan 43) survives
+    // the swap too: a re-derive must not amnesty a sick search.
+    newWatcher.health = watcher.health;
     const reordered = [...this.watchers.entries()].map((entry) =>
       entry[0] === oldId ? ([newRow.id, newWatcher] as [string, Watcher]) : entry,
     );
@@ -665,7 +719,12 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     // — and the drip's `status !== 'stopped'` filter would EXCLUDE a 'stopped'
     // watcher forever (enabled=true, engines null: the deal-add strand) — so
     // normalize it to 'pending' before dripping.
-    if (!preserveStatus || watcher.status === 'stopped' || watcher.status === 'paused') {
+    if (
+      !preserveStatus ||
+      watcher.status === 'stopped' ||
+      watcher.status === 'paused' ||
+      watcher.status === 'halted'
+    ) {
       this.publishEngineStatus(watcher, 'pending', null);
     }
     this.startPendingWatchers();
@@ -962,10 +1021,10 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         this.watchers.set(row.id, watcher);
         if (row.archivedAt !== null) {
           // Archived imports stay archived — createWatcher already marked them.
-        } else if (this.detectionPaused) {
-          this.publishEngineStatus(watcher, 'paused', 'globally paused');
         } else if (row.enabled) {
-          this.startWatcher(watcher);
+          // Gate on global pause AND the room (plan 44) — an import into a
+          // disabled room must be HELD, not started against a closed gate.
+          this.startEnabledWatcher(watcher);
         }
         imported += 1;
       } catch (error) {
@@ -1133,7 +1192,11 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // startWatcher doesn't publish until the socket reports — so if the row was
       // sitting at a stale 'stopped'/'paused' (e.g. a re-enable), show 'pending'
       // at once, or the toggle (ON) and the status would disagree until connect.
-      if (watcher.status === 'stopped' || watcher.status === 'paused') {
+      if (
+        watcher.status === 'stopped' ||
+        watcher.status === 'paused' ||
+        watcher.status === 'halted'
+      ) {
         this.publishEngineStatus(watcher, 'pending', null);
       }
       this.startWatcher(watcher);
@@ -1180,6 +1243,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       }
       if (this.detectionPaused) return;
       this.startPendingWatchers();
+      this.sweepStickyDegraded();
 
       // Poll only the watchers whose ws is NOT currently connected — i.e. cover
       // the reconnect gap. When ws is up, the search is served by push and is
@@ -1194,8 +1258,22 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       if (pollWatchers.length === 0) return;
       const watcher = pollWatchers[this.roundRobinIndex % pollWatchers.length]!;
       this.roundRobinIndex = (this.roundRobinIndex + 1) % Math.max(pollWatchers.length, 1);
+      // Lingering-degraded fix (plan 43 throughput family): a transient tick
+      // ERROR used to stick on the row forever because healthy ticks are
+      // status-silent. Capture the pre-tick state — clearing must never erase a
+      // degrade the tick itself just produced (a rateLimited tick re-labels the
+      // detail, which the post-check sees). The rate-limited twin is emitted by
+      // the poll engine itself ('polling (recovered)'). Sticky episodes are
+      // owned by the stability window, not this.
+      const hadTransientError =
+        !watcher.health.stickyDegraded &&
+        watcher.status === 'degraded' &&
+        watcher.statusDetail === 'error';
       try {
         await (watcher.pollEngine as PollEngine).tick();
+        if (hadTransientError && watcher.statusDetail === 'error') {
+          this.publishEngineStatus(watcher, 'active', 'polling (recovered)');
+        }
       } catch (error) {
         // Raw reason to the logs only; the UI status carries a localized 'error' code.
         this.logger.warn(`poll tick failed: ${errorMessage(error)}`);
@@ -1206,6 +1284,77 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     }
   }
 
+  /**
+   * The sticky-degraded sweep (plan 43), piggybacking the 12s scheduler tick:
+   * clears an episode once the live socket has stayed healthy through the
+   * stability window (D-deg-3), and recycles the engines of a still-broken one
+   * on the recovery backoff ladder (D-deg-2) — via the guard-safe drip, never a
+   * burst. Blind-family episodes sit out: guard-halted engines are null (the
+   * post-reset drip owns them) and a missing session makes a recycle pointless
+   * (the ws engine already retries on its own).
+   */
+  private sweepStickyDegraded(): void {
+    const now = Date.now();
+    const ladder = this.config.DEGRADED_RESTART_BACKOFF_MS;
+    for (const watcher of this.watchers.values()) {
+      const health = watcher.health;
+      if (!health.stickyDegraded) continue;
+      if (!watcher.row.enabled || watcher.row.archivedAt !== null || !this.roomEnabled(watcher)) {
+        continue;
+      }
+      // Stability clear: the socket came up and stayed up — episode over.
+      if (
+        watcher.wsConnected &&
+        health.stableSince !== null &&
+        now - health.stableSince >= this.config.DEGRADED_CLEAR_STABLE_MS
+      ) {
+        this.logger.log(
+          `search ${watcher.row.id} recovered — stable for ${this.config.DEGRADED_CLEAR_STABLE_MS}ms`,
+        );
+        this.clearStickyDegraded(watcher, 'active', 'recovered');
+        continue;
+      }
+      // Recovery restart: still down, engines live, backoff rung elapsed.
+      if (watcher.status === 'halted') continue;
+      if (watcher.wsConnected || watcher.wsEngine === null) continue;
+      if (health.lastDetail === 'no-session' || health.lastDetail === 'guard-halted') continue;
+      const waitMs = ladder[Math.min(health.recoveryAttempts, ladder.length - 1)]!;
+      if (health.lastRecoveryAt !== null && now - health.lastRecoveryAt < waitMs) continue;
+      // Ladder exhausted → HALTED (plan 44): stop burning ws-connect budget on a
+      // search that won't heal; it waits for an explicit operator act (Restart /
+      // its own toggle). Bulk gate reopenings deliberately skip it (drip filter).
+      if (health.recoveryAttempts >= this.config.DEGRADED_MAX_RECOVERY_ATTEMPTS) {
+        this.stopEngines(watcher);
+        this.publishEngineStatus(watcher, 'halted', health.lastDetail);
+        this.logger.warn(
+          `search ${watcher.row.id} HALTED after ${health.recoveryAttempts} recovery attempts (${health.lastDetail ?? '?'})`,
+        );
+        continue;
+      }
+      health.recoveryAttempts += 1;
+      health.lastRecoveryAt = now;
+      this.logger.log(
+        `search ${watcher.row.id} recovery restart #${health.recoveryAttempts} (${health.lastDetail ?? '?'})`,
+      );
+      // preserveStatus: the row keeps showing degraded until stability clears it.
+      this.restartViaDrip(watcher, true);
+    }
+  }
+
+  /**
+   * Manual operator restart (plan 43, D-deg-4): full engine recycle via the
+   * guard-safe drip with a CLEAN slate — sticky flag, flap window and the
+   * backoff ladder all reset, so the row honestly re-walks pending →
+   * connecting → active (or re-degrades on its own merits).
+   */
+  restartSearch(searchId: string): SearchRuntimeInfo {
+    const watcher = this.requireWatcher(searchId);
+    watcher.health = freshHealth();
+    this.restartViaDrip(watcher, false);
+    this.publishSearchesChanged();
+    return this.toRuntimeInfo(watcher);
+  }
+
   /** Stops every engine; watchers auto-restart on the next tick post-reset. */
   private windDownForGuard(): void {
     for (const watcher of this.watchers.values()) {
@@ -1214,10 +1363,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       // 'active' status but its drip restart hasn't fired yet, D-dw-20). Without
       // this, a guard trip landing in that window would freeze a lying 'active'
       // for the whole lockout while detection is actually dead (review S2).
-      const intendedRunning = watcher.row.enabled && watcher.row.archivedAt === null;
+      const intendedRunning =
+        watcher.row.enabled && watcher.row.archivedAt === null && this.roomEnabled(watcher);
       if (watcher.wsEngine || watcher.pollEngine || intendedRunning) {
         this.stopEngines(watcher);
-        this.publishEngineStatus(watcher, 'degraded', 'guard-halted');
+        // Sticky (plan 43 blind family): after the guard resets and the drip
+        // restarts the engines, the row stays degraded until the stability
+        // window proves the recovery — no instant 'active'.
+        this.enterStickyDegraded(watcher, 'guard-halted');
       }
     }
   }
@@ -1242,7 +1395,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         watcher.row.archivedAt === null &&
         watcher.wsEngine === null &&
         watcher.pollEngine === null &&
-        watcher.status !== 'stopped',
+        // 'stopped' (held) and 'halted' (gave up) both wait for an explicit act.
+        watcher.status !== 'stopped' &&
+        watcher.status !== 'halted',
     );
     if (pending.length === 0) return;
     this.startingWatchers = true;
@@ -1278,9 +1433,14 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       if (this.watchers.get(watcher.row.id) !== watcher) continue;
       if (
         !watcher.row.enabled ||
+        // The room gate can close WHILE the drip is in flight (operator pauses
+        // the room mid-start) — re-check it per entry like the other gates, or
+        // the member starts against a closed gate (operator repro 2026-07-10).
+        !this.roomEnabled(watcher) ||
         watcher.wsEngine !== null ||
         watcher.pollEngine !== null ||
-        watcher.status === 'stopped'
+        watcher.status === 'stopped' ||
+        watcher.status === 'halted'
       ) {
         continue;
       }
@@ -1335,12 +1495,44 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     this.startPollCoverage(watcher, context);
   }
 
+  /**
+   * Enter (or refresh) the sticky-degraded state (plan 43, D-deg-1). Publishes
+   * the degraded status once with the episode's detail; while sticky, the
+   * ws/poll handlers suppress their own publishes so the flag can't be talked
+   * over — it clears only via the stability window or a manual restart.
+   */
+  private enterStickyDegraded(watcher: Watcher, detail: string): void {
+    const alreadySticky = watcher.health.stickyDegraded;
+    watcher.health.stickyDegraded = true;
+    watcher.health.degradedSince ??= new Date().toISOString();
+    watcher.health.lastDetail = detail;
+    watcher.health.stableSince = null;
+    if (!alreadySticky) {
+      // Seed the recovery clock at entry so the first restart fires one full
+      // backoff rung after the episode began, not immediately.
+      watcher.health.lastRecoveryAt = Date.now();
+    }
+    this.publishEngineStatus(watcher, 'degraded', detail);
+  }
+
+  private clearStickyDegraded(watcher: Watcher, status: EngineStatus, detail: string | null): void {
+    watcher.health = freshHealth();
+    this.publishEngineStatus(watcher, status, detail);
+  }
+
   /** ws connected → drop poll; ws lost/connecting → (re)start fresh poll coverage. */
   private onWsStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
     if (status === 'active') {
       watcher.wsConnected = true;
       watcher.wsRateLimited = false;
       this.stopPollCoverage(watcher);
+      if (watcher.health.stickyDegraded) {
+        // Sticky: a reconnect starts the stability countdown instead of an
+        // instant 'active' — the flap-free window is what clears the flag
+        // (D-deg-3, swept by the scheduler tick).
+        watcher.health.stableSince ??= Date.now();
+        return;
+      }
       this.publishEngineStatus(watcher, 'active', detail);
       return;
     }
@@ -1356,6 +1548,34 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
         correlationId: watcher.correlationId,
       });
     }
+    if (status === 'degraded') {
+      // Flap window: every ws-level degrade is a drop candidate (D-deg-1).
+      const now = Date.now();
+      watcher.health.wsDrops.push(now);
+      watcher.health.wsDrops = watcher.health.wsDrops.filter(
+        (at) => now - at <= this.config.DEGRADED_FLAP_WINDOW_MS,
+      );
+      // Sticky families: 1013 + the blind gates enter immediately; ordinary
+      // reconnect churn only once it becomes a PATTERN (Q2: pattern-only).
+      if (
+        detail === WS_RATE_LIMITED_DETAIL ||
+        detail === 'no-session' ||
+        detail === 'guard-halted'
+      ) {
+        this.enterStickyDegraded(watcher, detail);
+        return;
+      }
+      if (watcher.health.wsDrops.length >= this.config.DEGRADED_FLAP_DROPS) {
+        this.enterStickyDegraded(watcher, 'ws-unstable');
+        return;
+      }
+    }
+    if (watcher.health.stickyDegraded) {
+      // A new close during the stability countdown resets it; the displayed
+      // status is already the sticky degraded — nothing to publish.
+      watcher.health.stableSince = null;
+      return;
+    }
     // Publish when: no poll (ws owns the display), OR entering the 1013 wait (surface
     // it over poll), OR just LEFT the 1013 wait — clear the stale message even though
     // poll still covers, since poll emits no status on steady ticks so nothing else
@@ -1368,13 +1588,9 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
   private onPollStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
     // ws push wins the display when connected; ignore poll chatter then.
     if (watcher.wsConnected) return;
-    // During the WS 1013 wait, keep showing "waiting to reconnect; detecting via poll"
-    // ONLY while poll is actually healthy — let a poll degradation/stop through so a
-    // real coverage gap surfaces instead of hiding behind the reassuring message.
-    if (watcher.wsRateLimited && status === 'active') {
-      this.publishEngineStatus(watcher, 'degraded', WS_RATE_LIMITED_DETAIL);
-      return;
-    }
+    // Sticky suppression (poll's reassuring 'active' vs an open episode, incl.
+    // the 1013 wait) lives in publishEngineStatus — the one phase setter. A poll
+    // DEGRADATION still passes so a real coverage gap surfaces with its reason.
     this.publishEngineStatus(watcher, status, detail);
   }
 
@@ -1487,7 +1703,24 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
     return null;
   }
 
+  /**
+   * THE phase setter (plan 44, D-ph-3) — every status transition flows through
+   * here, so the machine's rules live in ONE place:
+   * - Sticky suppression: while a sticky-degraded episode is open, a running-ish
+   *   signal (pending/connecting/active) must not talk over the flag — only the
+   *   stability window / restart / an explicit per-search act clears it (they
+   *   reset `health` first, which disarms this rewrite).
+   * - Held statuses (stopped/paused) always pass — a closed gate outranks
+   *   health (D-ph-2); the episode's history stays in `health` for the reopen.
+   */
   private publishEngineStatus(watcher: Watcher, status: EngineStatus, detail: string | null): void {
+    if (
+      watcher.health.stickyDegraded &&
+      (status === 'active' || status === 'connecting' || status === 'pending')
+    ) {
+      status = 'degraded';
+      detail = watcher.health.lastDetail;
+    }
     watcher.status = status;
     watcher.statusDetail = detail;
     this.realtimeBus.publish({
@@ -1695,6 +1928,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       wsRateLimited: false,
       status: row.enabled && !archived ? 'pending' : 'stopped',
       statusDetail: archived ? 'archived' : row.enabled ? null : 'paused',
+      health: freshHealth(),
       correlationId: randomUUID(),
       hitCount: 0,
       lastHitAt: null,
@@ -1741,6 +1975,7 @@ export class SearchManager implements OnApplicationBootstrap, OnApplicationShutd
       engine: this.currentEngineKind(watcher),
       status: watcher.status,
       statusDetail: watcher.statusDetail,
+      degradedSince: watcher.health.stickyDegraded ? watcher.health.degradedSince : null,
       hitCount: watcher.hitCount,
       lastHitAt: watcher.lastHitAt,
       marketPrice: this.composeMarketPrice(watcher),

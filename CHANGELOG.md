@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Search phase model — clear states everywhere (plans 43 + 44).** A search's
+  intent (its Active toggle, its room's toggle, global detection) is now cleanly
+  separated from its live phase, so the toggle never lies: it stays gold only
+  while actually detecting, turns amber when on-but-not-running (starting or in
+  trouble), and blue when a room/global pause is holding it. A failing search is
+  flagged **degraded** and auto-restarts on a back-off schedule; if it still
+  can't recover it goes **halted** and waits for you (Restart detection in the
+  panel, or toggle it off/on). Rooms now show a per-state breakdown of their
+  members (e.g. "4 active · 2 paused · 1 degraded") right in the header — visible
+  even when collapsed — and the app bar lights a beacon when something needs
+  attention.
+- **Room master switch is a true group gate.** Turning a room off no longer
+  overwrites each search's own on/off — an individually-paused search stays
+  paused through a room off→on, and members held by a disabled room read
+  "paused", not "off".
+- **Manual "Restart detection"** action per search (clears a stuck degraded).
+
+### Fixed
+
+- **Currency rates come from GGG's own bulk exchange** now that the poe2scout
+  aggregator's API went offline — divine/exalted pricing works again (deal
+  thresholds set in divine no longer silently show everything in exalted).
+- **Hideout-travel failures read clearly**: the app tells apart "not in game",
+  "on a map (must be in town/hideout)", and "your own listing" instead of a
+  generic failure, and auto-retries only the transient ones.
+- **The Hits view updates live** when a new hit arrives (it matched the Live Hits
+  panel before only after a manual refresh).
+- **The Active toggle and status can no longer disagree** — a paused or degraded
+  search never shows a healthy "active" toggle.
+- Security: the local API rejects cross-site requests (Origin/CSRF hardening).
+
 - **Rate-limit aggressiveness slider** (Settings, plan 41 D-dw-19): choose how
   hard the app runs against the trade site's own request limits (learned live,
   never guessed) — from 50% (extra margin) up to 100% (right at the limit),

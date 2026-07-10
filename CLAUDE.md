@@ -34,6 +34,22 @@ Read this first, every session.
 
 ## State of the build
 
+State/health session (2026-07-10, plans 43+44): the search **phase model** was
+reworked to a spec/status split (intent — search/room/global `enabled` — is
+user-only; **phase** is system-only, one derivation point). New/changed:
+room master switch is a **layered gate** (D-room-1 v2, migration 0014 — never
+overwrites a member's own `enabled`); a **sticky degraded** family (plan 43:
+flap detector, 5-min stability window, 5/10/30-min recovery ladder) that ends in
+a new **`halted`** phase after the ladder exhausts (revived only by an explicit
+per-search act); **option-B toggle** visuals (position = intent, colour = truth:
+gold running / amber on-but-not-running / blue gate-held); room header shows a
+**per-state breakdown** of members; AppBar degraded beacon. GGG **currency
+exchange** now sources deal rates (D-dw-21) after poe2scout's API 404'd; **travel
+code-2** split into not_in_game/not_in_town/own_listing. Security: host-guard
+gained an **Origin/CSRF check** (review SEC-1). Full review record:
+`docs/process/reviews/2026-07-10-full-codebase.md` (open non-blocking: REL-1
+unhandledRejection backstop, PERF-1 activity-table pruning).
+
 Phases 1–4 shipped + preliminary Electron shell: detection (SSE, ws/poll with
 demotion + safety guard), browser-free travel, full operator UI, dual-path
 auth (in-app Chrome login + cookie paste), session encrypted at rest.

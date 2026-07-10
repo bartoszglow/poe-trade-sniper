@@ -121,11 +121,21 @@ export interface SearchPreview {
 /** Engine currently serving a search's detection. */
 export type EngineKind = 'ws' | 'poll';
 
+/**
+ * The search PHASE machine (plan 44) realized on the legacy value set:
+ * `pending`/`connecting` = starting · `active` = running · `stopped`/`paused` =
+ * held (intentionally not running; user/archive vs gate) · `degraded` = failure
+ * being healed (plan 43 ladder) · `halted` = the system gave up after the
+ * recovery ladder exhausted — revived ONLY by an explicit per-search act
+ * (Restart / its own toggle), never by bulk gate reopenings.
+ */
 export type EngineStatus =
   | 'pending'
   | 'connecting'
   | 'active'
   | 'degraded'
+  /** Recovery ladder exhausted — waits for the operator (plan 44). */
+  | 'halted'
   | 'stopped'
   /** Halted by the global detection pause (distinct from a per-search stop). */
   | 'paused';
@@ -135,6 +145,9 @@ export interface SearchRuntimeInfo extends ManagedSearch {
   engine: EngineKind | null;
   status: EngineStatus;
   statusDetail: string | null;
+  /** ISO time the current STICKY degraded began (plan 43), null when healthy —
+   *  drives the "degraded for 23m" display. */
+  degradedSince: string | null;
   hitCount: number;
   lastHitAt: string | null;
   /**

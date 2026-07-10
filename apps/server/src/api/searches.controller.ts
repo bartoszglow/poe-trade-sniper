@@ -239,6 +239,13 @@ export class SearchesController {
     return result.info;
   }
 
+  /** Manual detection restart (plan 43, D-deg-4): full guard-safe engine
+   *  recycle with a clean health slate — clears a sticky degraded. */
+  @Post('searches/:id/restart')
+  restart(@Param('id') searchId: string): SearchRuntimeInfo {
+    return this.searchManager.restartSearch(searchId);
+  }
+
   /** Baseline price history, newest first (plan 41, D-dw-12). */
   @Get('searches/:id/deal-history')
   dealHistory(

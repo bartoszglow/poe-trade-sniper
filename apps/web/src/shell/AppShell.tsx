@@ -85,14 +85,18 @@ export function AppShell() {
     let ws = 0;
     let poll = 0;
     let total = 0;
+    let degraded = 0;
     for (const search of searches) {
       if (!search.enabled) continue;
       total += 1;
+      // The app-wide "something is wrong" beacon: sticky episodes + halted only
+      // (review BEACON) — a transient governor blip must not light it.
+      if (search.degradedSince !== null || search.status === 'halted') degraded += 1;
       if (search.status === 'stopped') continue;
       if (search.engine === 'ws') ws += 1;
       else if (search.engine === 'poll') poll += 1;
     }
-    return { ws, poll, total };
+    return { ws, poll, total, degraded };
   }, [searches]);
 
   // Live event wins; the status poll covers page loads after the trip.

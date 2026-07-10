@@ -25,6 +25,8 @@ interface SearchDetailPanelProps {
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
   /** Delete this row (the settings card owns the confirm + action now). */
   onRemove: () => Promise<void>;
+  /** Manual detection restart (plan 43, D-deg-4). */
+  onRestart: () => Promise<void>;
   /** Set when the panel was opened via the DEAL chip / pencil / locate (Q3). */
   scrollTarget: PanelScrollTarget | null;
 }
@@ -43,6 +45,7 @@ export function SearchDetailPanel({
   buyControl,
   onUpdate,
   onRemove,
+  onRestart,
   scrollTarget,
 }: SearchDetailPanelProps) {
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -103,7 +106,12 @@ export function SearchDetailPanel({
         <ItemCard search={search} />
       </div>
       <div ref={settingsRef} className="min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-4">
-        <SettingsCard search={search} onUpdate={onUpdate} onRemove={onRemove} />
+        <SettingsCard
+          search={search}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onRestart={onRestart}
+        />
       </div>
     </div>
   );

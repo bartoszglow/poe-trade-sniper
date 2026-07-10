@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { RoomDeleteMode, RoomInfo, SearchRuntimeInfo } from '@poe-sniper/shared';
 import { roomDragId, roomDropId } from '../lib/search-layout-dnd';
 import { shouldRowClickExpand } from '../lib/row-expand';
+import { roomHasHealthConcern, roomStateBreakdown } from '../lib/room-state-breakdown';
 import { useExpandTransition } from '../hooks/usePanelExpansion';
 import { useT, useTn } from '../i18n/i18n';
 import { ApiError } from '../lib/api';
@@ -101,6 +102,10 @@ export function RoomSection({
   }
 
   const CollapseIcon = collapsed ? ChevronRight : ChevronDown;
+  // Per-state member breakdown on the header (all phases covered) — a collapsed
+  // room must not hide what its members are doing (plan 44).
+  const stateBreakdown = roomStateBreakdown(members);
+  const hasHealthConcern = roomHasHealthConcern(members);
   // Animate expand/collapse like the search detail panel (grid 0fr→1fr, ~200ms,
   // reduced-motion aware). `forceCollapsed` (transient, drag-over) rides the same
   // transition — the member list mounts through the collapse so it can animate.
@@ -179,6 +184,28 @@ export function RoomSection({
           </span>
         )}
         <Badge tone="neutral">{tn('rooms.memberCount', members.length)}</Badge>
+        {/* Per-state breakdown (plan 44): every phase covered, only non-zero
+            buckets shown. A health concern (degraded/halted) makes the whole
+            cluster click-to-open so a collapsed room never hides a sick member. */}
+        {members.length > 0 && (
+          <button
+            type="button"
+            data-no-expand={hasHealthConcern ? undefined : true}
+            className={`flex flex-wrap items-center gap-1 ${
+              hasHealthConcern ? 'cursor-pointer' : 'cursor-default'
+            }`}
+            title={hasHealthConcern ? t('rooms.openForHealth') : undefined}
+            onClick={() => {
+              if (hasHealthConcern && collapsed) void run(onToggleCollapsed);
+            }}
+          >
+            {stateBreakdown.map((bucket) => (
+              <Badge key={bucket.id} tone={bucket.tone}>
+                {bucket.count} {t(bucket.labelKey)}
+              </Badge>
+            ))}
+          </button>
+        )}
         <div className="flex-1" />
         {errorMessage && <span className="text-xs text-danger">{errorMessage}</span>}
         {/* Master switch: bound to the room's OWN gate (room.enabled), a single

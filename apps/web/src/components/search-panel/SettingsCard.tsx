@@ -13,6 +13,9 @@ interface SettingsCardProps {
   search: SearchRuntimeInfo;
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
   onRemove: () => Promise<void>;
+  /** Manual detection restart (plan 43, D-deg-4) — full engine recycle with a
+   *  clean health slate; clears a sticky degraded. */
+  onRestart: () => Promise<void>;
 }
 
 /**
@@ -29,7 +32,7 @@ interface SettingsCardProps {
  * sibling card restores the original id, and a stale draft would silently
  * re-point the search to the dead auto id.
  */
-export function SettingsCard({ search, onUpdate, onRemove }: SettingsCardProps) {
+export function SettingsCard({ search, onUpdate, onRemove, onRestart }: SettingsCardProps) {
   const t = useT();
   const dealManaged = search.dealWatch !== null;
   const [draftLabel, setDraftLabel] = useState(search.label);
@@ -44,7 +47,13 @@ export function SettingsCard({ search, onUpdate, onRemove }: SettingsCardProps) 
     setDraftInput(search.id);
   }
 
+  // In-flight guard (review FE-2): a double-clicked Restart must not double-POST
+  // a full engine recycle (each spends ws-connect budget).
+  const [actionBusy, setActionBusy] = useState(false);
+
   async function run(action: () => Promise<void>): Promise<void> {
+    if (actionBusy) return;
+    setActionBusy(true);
     setErrorMessage(null);
     try {
       await action();
@@ -52,6 +61,8 @@ export function SettingsCard({ search, onUpdate, onRemove }: SettingsCardProps) 
       setErrorMessage(
         error instanceof ApiError && error.userFacing ? error.message : t('common.requestFailed'),
       );
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -116,6 +127,9 @@ export function SettingsCard({ search, onUpdate, onRemove }: SettingsCardProps) 
           iteration 2026-07-05 — off the row header, into the panel). */}
       <div className="mt-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          <Button variant="ghost" disabled={actionBusy} onClick={() => void run(onRestart)}>
+            {t('searches.restartCta')}
+          </Button>
           <Button variant="ghost" onClick={() => void run(() => onUpdate({ archived: true }))}>
             {t('searches.archiveAction')}
           </Button>

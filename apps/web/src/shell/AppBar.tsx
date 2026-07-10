@@ -6,6 +6,8 @@ export interface DetectionModes {
   poll: number;
   /** Enabled (non-paused) searches — when 0 the pills are hidden. */
   total: number;
+  /** Sticky-degraded searches (plan 43) — the app-wide health beacon. */
+  degraded: number;
 }
 
 interface AppBarProps {
@@ -62,6 +64,15 @@ export function AppBar({
         <div className="flex items-center gap-1">
           <ModePill label="WS" active={detection.ws > 0} title={t('detection.wsTitle')} />
           <ModePill label="POLL" active={detection.poll > 0} title={t('detection.pollTitle')} />
+          {detection.degraded > 0 && (
+            <span
+              title={t('detection.degradedTitle', { count: String(detection.degraded) })}
+              className="flex items-center gap-1 rounded bg-danger/15 px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-wide text-danger"
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-danger" />
+              {detection.degraded}
+            </span>
+          )}
         </div>
       )}
       <span className="flex items-center gap-1.5 text-xs text-ink-muted">

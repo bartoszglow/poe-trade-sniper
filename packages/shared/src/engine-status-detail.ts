@@ -12,5 +12,6 @@ export type EngineStatusDetailCode =
   | 'guard-halted' // safety guard tripped — connections halted until reset
   | 'ws-rate-limited' // GGG told the live socket to back off (1013); poll covers
   | 'ws-reconnecting' // live socket dropped; reconnecting, poll covers meanwhile
+  | 'ws-unstable' // repeated ws drops in a short window — sticky degraded, auto-restarting (plan 43)
   | 'rate-limited' // the rate governor is pausing polling
   | 'error'; // an unexpected engine error (raw detail stays in the logs)

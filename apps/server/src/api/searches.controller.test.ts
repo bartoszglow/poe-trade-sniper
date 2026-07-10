@@ -23,6 +23,7 @@ function runtimeInfo(id: string): SearchRuntimeInfo {
     engine: null,
     status: 'active',
     statusDetail: null,
+    degradedSince: null,
     hitCount: 0,
     lastHitAt: null,
     marketPrice: null,

@@ -213,6 +213,28 @@ export const envSchema = z.object({
    * detection meanwhile). Retrying on the fast ladder just sustains the 1013.
    */
   WS_RATE_LIMIT_BACKOFF_MS: z.coerce.number().int().min(30_000).default(300_000),
+
+  // --- sticky degraded + timed recovery (plan 43) ---
+  /** This many ws closes inside the flap window escalate a masked reconnect
+   *  churn to a STICKY degraded ('ws-unstable') — one drop is routine, a
+   *  pattern is a problem the operator must see (D-deg-1). */
+  DEGRADED_FLAP_DROPS: z.coerce.number().int().min(2).default(3),
+  /** The flap-detection window. */
+  DEGRADED_FLAP_WINDOW_MS: z.coerce.number().int().min(60_000).default(600_000),
+  /** Recovery-restart ladder for sticky-degraded watchers (capped at the last
+   *  rung) — each attempt is a full guard-safe engine recycle (D-deg-2). */
+  DEGRADED_RESTART_BACKOFF_MS: z
+    .string()
+    .regex(/^\d+(,\d+)*$/, 'comma-separated milliseconds, e.g. 300000,600000,1800000')
+    .default('300000,600000,1800000')
+    .transform((csv) => csv.split(',').map(Number)),
+  /** A sticky degraded clears only after the live socket stays healthy this
+   *  long — no more instant active↔degraded flapping (D-deg-3). */
+  DEGRADED_CLEAR_STABLE_MS: z.coerce.number().int().min(30_000).default(300_000),
+  /** After this many recovery restarts the search goes HALTED (plan 44) — the
+   *  system stops burning budget on it and waits for an explicit operator act
+   *  (Restart / its own toggle). Default ≈ 2.2 h of healing (5+10+30×4 min). */
+  DEGRADED_MAX_RECOVERY_ATTEMPTS: z.coerce.number().int().min(1).default(6),
   /**
    * Proportional jitter added to every ws reconnect delay (0..1 of the delay), so
    * a synchronized mass close (a fleet-wide 1013) doesn't resync all searches into

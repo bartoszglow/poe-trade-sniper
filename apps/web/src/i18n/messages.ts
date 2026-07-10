@@ -113,6 +113,8 @@ export const EN = {
   // Detection mode (app bar pills)
   'detection.wsTitle': 'Live push (WebSocket) — instant detection',
   'detection.pollTitle': 'Polling fallback — periodic checks',
+  'detection.degradedTitle':
+    '{count} search(es) degraded — auto-recovery is on; click a red badge for details',
 
   // Update banner
   'update.available': 'A new version ({version}) is available.',
@@ -171,8 +173,23 @@ export const EN = {
   'engineDetail.guardHalted': 'safety guard tripped — connections halted until reset',
   'engineDetail.wsRateLimited': 'rate-limited by GGG — waiting to reconnect; detecting via poll',
   'engineDetail.wsReconnecting': 'live connection dropped — reconnecting; detecting via poll',
+  'engineDetail.wsUnstable':
+    'live connection unstable (repeated drops) — auto-restarting; detecting via poll',
+  'engineStatus.halted': 'halted',
+  'engineStatusDesc.halted':
+    'Auto-recovery gave up after repeated failures — detection is OFF for this search until you restart it (Restart detection in the panel, or toggle it off and on).',
   'engineDetail.rateLimited': 'rate-limited — the governor is pausing requests',
   'engineDetail.error': 'engine error — see the Network view for details',
+  'searches.degradedFor': 'degraded for {time}',
+  'searches.restartCta': 'Restart detection',
+  // Room-header per-state breakdown (compact labels next to a count).
+  'roomState.active': 'active',
+  'roomState.starting': 'starting',
+  'roomState.degraded': 'degraded',
+  'roomState.halted': 'halted',
+  'roomState.paused': 'paused',
+  'roomState.stopped': 'off',
+  'rooms.openForHealth': 'A search needs attention — open the room',
 
   // Live hits panel
   'hitsPanel.title': 'Live hits',
@@ -748,6 +765,8 @@ export const PL: Record<MessageKey, string> = {
   // Detection mode (app bar pills)
   'detection.wsTitle': 'Push na żywo (WebSocket) — natychmiastowe wykrywanie',
   'detection.pollTitle': 'Tryb zapasowy (polling) — okresowe sprawdzanie',
+  'detection.degradedTitle':
+    '{count} wyszukiwań z problemem — automatyczne przywracanie działa; szczegóły pod czerwoną plakietką',
 
   // Update banner
   'update.available': 'Dostępna jest nowa wersja ({version}).',
@@ -808,8 +827,22 @@ export const PL: Record<MessageKey, string> = {
   'engineDetail.wsRateLimited':
     'limit żądań GGG — czekam na ponowne połączenie; wykrywam przez poll',
   'engineDetail.wsReconnecting': 'połączenie live zerwane — ponawiam; wykrywam przez poll',
+  'engineDetail.wsUnstable':
+    'niestabilne połączenie live (powtarzające się zerwania) — automatyczne restarty; wykrywam przez poll',
+  'engineStatus.halted': 'zatrzymany po awarii',
+  'engineStatusDesc.halted':
+    'Automatyczne przywracanie poddało się po kolejnych niepowodzeniach — wykrywanie dla tego wyszukiwania jest WYŁĄCZONE, dopóki go nie zrestartujesz (Zrestartuj wykrywanie w panelu albo przełącz toggle off/on).',
   'engineDetail.rateLimited': 'limit żądań — regulator wstrzymuje zapytania',
   'engineDetail.error': 'błąd silnika — szczegóły w widoku Sieć',
+  'searches.degradedFor': 'problem od {time}',
+  'searches.restartCta': 'Zrestartuj wykrywanie',
+  'roomState.active': 'aktywne',
+  'roomState.starting': 'uruchamianie',
+  'roomState.degraded': 'problem',
+  'roomState.halted': 'awaria',
+  'roomState.paused': 'wstrzymane',
+  'roomState.stopped': 'wyłączone',
+  'rooms.openForHealth': 'Wyszukiwanie wymaga uwagi — otwórz pokój',
 
   // Live hits panel
   'hitsPanel.title': 'Trafienia na żywo',
@@ -1296,6 +1329,7 @@ export const EN_PLURALS = {
   'searchPanel.samples': { one: '{count} sample', other: '{count} samples' },
   'searches.hitCount': { one: '{count} hit', other: '{count} hits' },
   'rooms.memberCount': { one: '{count} search', other: '{count} searches' },
+  'rooms.degradedCount': { one: '{count} degraded', other: '{count} degraded' },
   'rooms.deleteBody': {
     one: 'The room "{name}" contains {count} search. Delete it too, or move it out?',
     other: 'The room "{name}" contains {count} searches. Delete them too, or move them out?',
@@ -1322,6 +1356,12 @@ export const PL_PLURALS: Record<PluralKey, PluralForms> = {
     few: '{count} wyszukiwania',
     many: '{count} wyszukiwań',
     other: '{count} wyszukiwania',
+  },
+  'rooms.degradedCount': {
+    one: '{count} z problemem',
+    few: '{count} z problemem',
+    many: '{count} z problemem',
+    other: '{count} z problemem',
   },
   'rooms.deleteBody': {
     one: 'Pokój „{name}” zawiera {count} wyszukiwanie. Usunąć je razem z pokojem, czy przenieść na zewnątrz?',

@@ -22,6 +22,10 @@ export class PollEngine implements DetectionEngine {
   private context: EngineContext | null = null;
   private callbacks: EngineCallbacks | null = null;
   private running = false;
+  /** True after a rate-limited tick — the next good tick emits a recovery
+   *  status so the row doesn't linger on 'degraded' forever (plan 43;
+   *  steady good ticks are otherwise status-silent). */
+  private lastTickRateLimited = false;
 
   constructor(
     private readonly config: PollConfig,
@@ -53,8 +57,13 @@ export class PollEngine implements DetectionEngine {
     // watcher that already published its terminal state.
     if (!this.running) return;
     if (execution.rateLimited) {
+      this.lastTickRateLimited = true;
       this.callbacks.onStatus('degraded', 'rate-limited');
       return;
+    }
+    if (this.lastTickRateLimited) {
+      this.lastTickRateLimited = false;
+      this.callbacks.onStatus('active', 'polling (recovered)');
     }
 
     const freshIds = execution.ids.filter((listingId) => !this.seenListingIds.has(listingId));

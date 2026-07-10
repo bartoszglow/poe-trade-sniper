@@ -1,9 +1,12 @@
-/** Accent colour when on — gold by default; 'info' (blue) marks a paused row. */
-type SwitchTone = 'gold' | 'info';
+/** Accent colour when on (plan 44, option B: the toggle's POSITION is intent,
+ *  its COLOUR is truth) — gold = running; 'warn' (amber) = on but not running
+ *  (starting/degraded/halted); 'info' (blue) = held by a pause gate. */
+type SwitchTone = 'gold' | 'info' | 'warn';
 
 const ON_TONE_CLASSES: Record<SwitchTone, string> = {
   gold: 'bg-gold',
   info: 'bg-info',
+  warn: 'bg-warn',
 };
 
 interface SwitchProps {

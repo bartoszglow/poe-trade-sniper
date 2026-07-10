@@ -77,6 +77,7 @@ import { useServerStatus } from '../hooks/useServerStatus';
 import { useT, useTn } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/messages';
 import { formatApproxMarketPrice } from '../lib/market-price';
+import { formatRelativeMagnitude } from '../lib/relative-time';
 import { resolveBuyControl, type BuyControl } from '../lib/resolve-buy-control';
 import { shouldRowClickExpand } from '../lib/row-expand';
 import { duplicatedAddedAts, stableRowKey } from '../lib/search-row-key';
@@ -118,6 +119,7 @@ const STATUS_TONES: Record<EngineStatus, BadgeTone> = {
   connecting: 'info',
   active: 'ok',
   degraded: 'danger',
+  halted: 'danger',
   stopped: 'neutral',
   paused: 'info',
 };
@@ -127,6 +129,7 @@ const STATUS_LABEL_KEYS: Record<EngineStatus, MessageKey> = {
   connecting: 'engineStatus.connecting',
   active: 'engineStatus.active',
   degraded: 'engineStatus.degraded',
+  halted: 'engineStatus.halted',
   stopped: 'engineStatus.stopped',
   paused: 'engineStatus.paused',
 };
@@ -137,6 +140,7 @@ const STATUS_DESC_KEYS: Record<EngineStatus, MessageKey> = {
   connecting: 'engineStatusDesc.connecting',
   active: 'engineStatusDesc.active',
   degraded: 'engineStatusDesc.degraded',
+  halted: 'engineStatusDesc.halted',
   stopped: 'engineStatusDesc.stopped',
   paused: 'engineStatusDesc.paused',
 };
@@ -153,6 +157,7 @@ const STATUS_SHOWS_DETAIL: Record<EngineStatus, boolean> = {
   connecting: true,
   active: false,
   degraded: true,
+  halted: true,
   stopped: false,
   paused: false,
 };
@@ -167,6 +172,7 @@ const STATUS_DETAIL_KEYS: Partial<Record<EngineStatusDetailCode, MessageKey>> = 
   'guard-halted': 'engineDetail.guardHalted',
   'ws-rate-limited': 'engineDetail.wsRateLimited',
   'ws-reconnecting': 'engineDetail.wsReconnecting',
+  'ws-unstable': 'engineDetail.wsUnstable',
   'rate-limited': 'engineDetail.rateLimited',
   error: 'engineDetail.error',
 };
@@ -466,8 +472,10 @@ function SearchRow({
   highlighted,
   detectionPaused,
   spotlitAt,
+  nowMs,
   onUpdate,
   onRemove,
+  onRestart,
   onPanelOpenChange,
 }: {
   search: SearchRuntimeInfo;
@@ -478,8 +486,12 @@ function SearchRow({
   detectionPaused: boolean;
   /** Fresh locate-click timestamp for THIS row (Q3) — auto-opens the panel. */
   spotlitAt: number | null;
+  /** The page's ticking clock — drives the "degraded for Xm" duration. */
+  nowMs: number;
   onUpdate: (payload: UpdateSearchPayload) => Promise<void>;
   onRemove: () => Promise<void>;
+  /** Manual detection restart (plan 43, D-deg-4). */
+  onRestart: () => Promise<void>;
   /** Report detail-panel open/close up to the page so an open panel keeps its
    *  auto-expanded room from folding out from under it (D-room-3). */
   onPanelOpenChange?: (searchId: string, open: boolean) => void;
@@ -639,7 +651,12 @@ function SearchRow({
             checked={search.enabled}
             onChange={(checked) => void run(() => onUpdate({ enabled: checked }))}
             label={t('searches.activeFor', { label: search.label })}
-            tone={search.status === 'paused' ? 'info' : 'gold'}
+            // Option B (plan 44): position = intent, colour = truth — gold only
+            // while actually running; blue under a pause gate; amber otherwise
+            // (starting/degraded/halted: on, but not detecting).
+            tone={
+              search.status === 'active' ? 'gold' : search.status === 'paused' ? 'info' : 'warn'
+            }
           />
           {t('searches.activeToggle')}
         </span>
@@ -656,8 +673,17 @@ function SearchRow({
       </div>
       {/* Surface the status detail only when it adds something the badge doesn't
           (see statusDetailKey / STATUS_SHOWS_DETAIL) — active/paused/stopped are
-          already fully said by the badge, and a raw/unmapped detail is never shown. */}
-      {detailKey && <div className="mt-1.5 text-xs text-ink-faint">{t(detailKey)}</div>}
+          already fully said by the badge, and a raw/unmapped detail is never shown.
+          A sticky degraded (plan 43) also says HOW LONG it has been broken. */}
+      {detailKey && (
+        <div className="mt-1.5 text-xs text-ink-faint">
+          {t(detailKey)}
+          {search.degradedSince !== null &&
+            ` · ${t('searches.degradedFor', {
+              time: formatRelativeMagnitude(search.degradedSince, nowMs),
+            })}`}
+        </div>
+      )}
       {errorMessage && <div className="mt-1.5 text-xs text-danger">{errorMessage}</div>}
       {/* Animated expand/collapse (D-42-1): grid 0fr→1fr height transition,
           ~200ms ease-out, disabled under prefers-reduced-motion. */}
@@ -675,6 +701,7 @@ function SearchRow({
                 buyControl={buyControl}
                 onUpdate={onUpdate}
                 onRemove={onRemove}
+                onRestart={onRestart}
                 scrollTarget={scrollTarget}
               />
             </div>
@@ -880,6 +907,7 @@ export function SearchesPage() {
     add,
     update,
     remove,
+    restartSearch,
     reorderLayout,
     createRoom,
     updateRoom,
@@ -1170,7 +1198,9 @@ export function SearchesPage() {
         autoBuy: search.autoBuy,
       })}
       onUpdate={(payload) => update(search.id, payload)}
+      nowMs={nowMs}
       onRemove={() => remove(search.id)}
+      onRestart={() => restartSearch(search.id)}
       onPanelOpenChange={reportPanelOpen}
       spotlitAt={
         spotlight !== null && spotlight.searchId === search.id && isSpotlightFresh(spotlight, nowMs)

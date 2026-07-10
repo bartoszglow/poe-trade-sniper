@@ -118,6 +118,15 @@ export function useSearches() {
     [refresh],
   );
 
+  /** Manual detection restart (plan 43, D-deg-4) — clears a sticky degraded. */
+  const restartSearch = useCallback(
+    async (searchId: string) => {
+      await apiSend<SearchRuntimeInfo>('POST', `/api/searches/${searchId}/restart`);
+      refresh();
+    },
+    [refresh],
+  );
+
   /** Commit a drag-and-drop result: top-level order + room membership in one call (#33). */
   const reorderLayout = useCallback(
     async (nextLayout: SearchLayoutEntry[]) => {
@@ -171,6 +180,7 @@ export function useSearches() {
     add,
     update,
     remove,
+    restartSearch,
     reorderLayout,
     createRoom,
     updateRoom,

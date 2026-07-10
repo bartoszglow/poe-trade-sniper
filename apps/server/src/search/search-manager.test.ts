@@ -44,11 +44,17 @@ class FakeWsEngine implements DetectionEngine {
 }
 
 function createManager(
-  options: { resolvedQuery?: unknown; guard?: OutboundGuard; gate?: PermissionGateService } = {},
+  options: {
+    resolvedQuery?: unknown;
+    guard?: OutboundGuard;
+    gate?: PermissionGateService;
+    /** Extra env overrides for the config (e.g. a short recovery ladder). */
+    env?: Record<string, string>;
+  } = {},
 ) {
   const resolvedQuery = options.resolvedQuery ?? SECURABLE_QUERY;
   const database = openDatabase(':memory:');
-  const config = loadConfig({});
+  const config = loadConfig(options.env ?? {});
   const realtimeBus = new RealtimeBus();
   const events: string[] = [];
   realtimeBus.subscribe((event) => events.push(event.type));
@@ -1216,6 +1222,259 @@ describe('SearchManager', () => {
     }
   });
 
+  describe('sticky degraded + timed recovery (plan 43)', () => {
+    it('a 1013 goes sticky: a reconnect does NOT flip back to active until the stable window', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        const ws = wsEngines[0]!;
+        ws.callbacks!.onStatus('degraded', 'ws-rate-limited');
+        expect(manager.list()[0]!.status).toBe('degraded');
+        expect(manager.list()[0]!.degradedSince).not.toBeNull();
+
+        // The socket comes back — previously this flipped active instantly (the flap).
+        ws.callbacks!.onStatus('active', 'live websocket connected');
+        expect(manager.list()[0]!.status).toBe('degraded');
+
+        // Not yet stable long enough → still degraded.
+        vi.setSystemTime(Date.now() + 60_000);
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('degraded');
+
+        // Past DEGRADED_CLEAR_STABLE_MS (5 min default) → recovered.
+        vi.setSystemTime(Date.now() + 300_000);
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('active');
+        expect(manager.list()[0]!.degradedSince).toBeNull();
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('a mid-window drop resets the stability countdown', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        const ws = wsEngines[0]!;
+        ws.callbacks!.onStatus('degraded', 'ws-rate-limited');
+        ws.callbacks!.onStatus('active', 'live websocket connected');
+        vi.setSystemTime(Date.now() + 240_000); // 4 min stable…
+        ws.callbacks!.onStatus('degraded', 'ws-reconnecting'); // …then drops again
+        ws.callbacks!.onStatus('active', 'live websocket connected');
+        vi.setSystemTime(Date.now() + 240_000); // 4 min into the NEW countdown
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('degraded'); // old anchor must not count
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('repeated ws drops in the flap window escalate to sticky ws-unstable', async () => {
+      const { manager, database, wsEngines } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        const ws = wsEngines[0]!;
+        // Two drops: still masked (poll covers, row not degraded-sticky).
+        ws.callbacks!.onStatus('degraded', 'ws-reconnecting');
+        ws.callbacks!.onStatus('active', 'live websocket connected');
+        ws.callbacks!.onStatus('degraded', 'ws-reconnecting');
+        expect(manager.list()[0]!.degradedSince).toBeNull();
+        // Third drop inside the window → a pattern → sticky.
+        ws.callbacks!.onStatus('active', 'live websocket connected');
+        ws.callbacks!.onStatus('degraded', 'ws-reconnecting');
+        expect(manager.list()[0]!.status).toBe('degraded');
+        expect(manager.list()[0]!.statusDetail).toBe('ws-unstable');
+        expect(manager.list()[0]!.degradedSince).not.toBeNull();
+      } finally {
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('recovery-restarts a still-broken sticky watcher on the backoff ladder', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        wsEngines[0]!.callbacks!.onStatus('degraded', 'ws-rate-limited');
+        const enginesBefore = wsEngines.length;
+
+        // Before the first rung (5 min) — no restart.
+        await manager.runSchedulerTick();
+        expect(wsEngines.length).toBe(enginesBefore);
+
+        // Past rung 0 → one recycle (a NEW ws engine via the drip).
+        vi.setSystemTime(Date.now() + 300_001);
+        await manager.runSchedulerTick();
+        expect(wsEngines.length).toBe(enginesBefore + 1);
+        // Still degraded (preserveStatus) and NOT immediately re-restarted
+        // (rung 1 = 10 min now applies).
+        expect(manager.list()[0]!.status).toBe('degraded');
+        vi.setSystemTime(Date.now() + 300_001);
+        await manager.runSchedulerTick();
+        expect(wsEngines.length).toBe(enginesBefore + 1);
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('exhausts the ladder into HALTED; only an explicit act revives it (plan 44)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager({
+        env: { DEGRADED_MAX_RECOVERY_ATTEMPTS: '1' },
+      });
+      try {
+        await manager.add('AbCdEf001', {});
+        wsEngines[0]!.callbacks!.onStatus('degraded', 'ws-rate-limited');
+
+        // Rung 0 elapses -> recovery attempt #1.
+        vi.setSystemTime(Date.now() + 300_001);
+        await manager.runSchedulerTick();
+        const enginesAfterAttempt = wsEngines.length;
+        expect(manager.list()[0]!.status).toBe('degraded');
+
+        // Rung 1 elapses with attempts >= max -> HALTED, engines stopped.
+        vi.setSystemTime(Date.now() + 600_001);
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('halted');
+        // No further ticks restart it - halted waits for the operator.
+        vi.setSystemTime(Date.now() + 3_600_000);
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('halted');
+        expect(wsEngines.length).toBe(enginesAfterAttempt);
+
+        // The search's OWN toggle off->on is an explicit act -> clean revival.
+        manager.update('AbCdEf001', { enabled: false });
+        const revived = manager.update('AbCdEf001', { enabled: true });
+        expect(revived.status).not.toBe('halted');
+        expect(revived.degradedSince).toBeNull();
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('never recovery-restarts (nor halts) a blind-family episode - no-session heals itself', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const { manager, database, wsEngines } = createManager({
+        env: { DEGRADED_MAX_RECOVERY_ATTEMPTS: '1' },
+      });
+      try {
+        await manager.add('AbCdEf001', {});
+        wsEngines[0]!.callbacks!.onStatus('degraded', 'no-session');
+        const enginesBefore = wsEngines.length;
+        vi.setSystemTime(Date.now() + 3_600_000);
+        await manager.runSchedulerTick();
+        // No restart spend, no halted - the ws engine retries on its own and
+        // the episode clears via the stability window once a session exists.
+        expect(wsEngines.length).toBe(enginesBefore);
+        expect(manager.list()[0]!.status).toBe('degraded');
+      } finally {
+        vi.useRealTimers();
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('a thrown poll tick shows degraded/error, then clears on the next good tick', async () => {
+      const { manager, database, executeSearch } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        executeSearch.mockRejectedValueOnce(new Error('network sneeze'));
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('degraded');
+        expect(manager.list()[0]!.statusDetail).toBe('error');
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('active');
+      } finally {
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('a transient poll problem clears on the next good tick (lingering fix)', async () => {
+      const { manager, database, executeSearch } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        executeSearch.mockResolvedValueOnce({ ids: [], total: 0, rateLimited: true });
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('degraded');
+        expect(manager.list()[0]!.statusDetail).toBe('rate-limited');
+        // Next rotation succeeds → the row recovers instead of lingering.
+        await manager.runSchedulerTick();
+        expect(manager.list()[0]!.status).toBe('active');
+      } finally {
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+
+    it('manual restart clears the sticky slate and re-walks from pending', async () => {
+      const { manager, database, wsEngines } = createManager();
+      try {
+        await manager.add('AbCdEf001', {});
+        wsEngines[0]!.callbacks!.onStatus('degraded', 'ws-rate-limited');
+        const enginesBefore = wsEngines.length;
+        const info = manager.restartSearch('AbCdEf001');
+        expect(info.degradedSince).toBeNull();
+        // Fresh engines re-walk the honest path; poll cover may already have
+        // published its synchronous 'active' — the point is: no sticky degraded.
+        expect(info.status).not.toBe('degraded');
+        expect(wsEngines.length).toBe(enginesBefore + 1);
+      } finally {
+        manager.onApplicationShutdown();
+        database.$client.close();
+      }
+    });
+  });
+
+  it('a member in a DISABLED room boots as room-paused, not a lying pending (plan 44)', async () => {
+    const { manager, database } = createManager();
+    try {
+      await manager.add('AbCdEf001', {});
+      await manager.add('AbCdEf002', {});
+      const roomId = manager.createRoom('Helmets').rooms[0]!.id;
+      manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001', 'AbCdEf002'] }]);
+      // Individually pause ONE member, then disable the room, then reload.
+      manager.update('AbCdEf001', { enabled: false });
+      manager.setRoomEnabled(roomId, false);
+      manager.onApplicationShutdown();
+
+      const reloaded = new SearchManager(
+        loadConfig({}),
+        database,
+        [],
+        {} as TradeApiClient,
+        new RealtimeBus(),
+        ARMED_GUARD,
+        ALLOW_GATE,
+        new LiveOfferRegistry(loadConfig({})),
+        new HitDecoratorRegistry(),
+      );
+      reloaded.onApplicationBootstrap();
+      try {
+        // The individually-disabled member is 'stopped' (off); the enabled one
+        // held by the room reads 'paused', NOT 'pending' (the reported bug).
+        expect(reloaded.list().find((entry) => entry.id === 'AbCdEf001')?.status).toBe('stopped');
+        expect(reloaded.list().find((entry) => entry.id === 'AbCdEf002')?.status).toBe('paused');
+      } finally {
+        reloaded.onApplicationShutdown();
+      }
+    } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
   it('re-enabling a disabled search never leaves it at a stale stopped (toggle/status consistency)', async () => {
     const { manager, database } = createManager();
     try {
@@ -1280,6 +1539,67 @@ describe('SearchManager', () => {
       manager.setDetectionPaused(false);
       expect(manager.list().find((entry) => entry.id === 'AbCdEf001')?.status).toBe('active');
     } finally {
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  // Mid-STARTING gate races (operator repro 2026-07-10): closing any gate while
+  // the staggered start-drip is in flight must stop the not-yet-started members
+  // from coming up against the closed gate.
+  async function dripRaceSetup() {
+    vi.useFakeTimers();
+    const harness = createManager();
+    await harness.manager.add('AbCdEf001', {});
+    await harness.manager.add('AbCdEf002', {});
+    const roomId = harness.manager.createRoom('Helmets').rooms[0]!.id;
+    harness.manager.reorder([{ kind: 'room', id: roomId, searchIds: ['AbCdEf001', 'AbCdEf002'] }]);
+    harness.manager.setRoomEnabled(roomId, false);
+    // Reopen: the FIRST member starts synchronously, the second waits one gap.
+    harness.manager.setRoomEnabled(roomId, true);
+    return { ...harness, roomId, enginesMidDrip: harness.wsEngines.length };
+  }
+
+  it('pausing the ROOM mid-drip stops the not-yet-started member (gate re-check)', async () => {
+    const { manager, database, wsEngines, roomId, enginesMidDrip } = await dripRaceSetup();
+    try {
+      manager.setRoomEnabled(roomId, false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(wsEngines.length).toBe(enginesMidDrip); // second member never started
+      const second = manager.list().find((entry) => entry.id === 'AbCdEf002')!;
+      expect(second.status).toBe('paused');
+    } finally {
+      vi.useRealTimers();
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it('global detection OFF mid-drip stops the not-yet-started member', async () => {
+    const { manager, database, wsEngines, enginesMidDrip } = await dripRaceSetup();
+    try {
+      manager.setDetectionPaused(true);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(wsEngines.length).toBe(enginesMidDrip);
+      const second = manager.list().find((entry) => entry.id === 'AbCdEf002')!;
+      expect(second.status).toBe('paused');
+    } finally {
+      vi.useRealTimers();
+      manager.onApplicationShutdown();
+      database.$client.close();
+    }
+  });
+
+  it("disabling the search's OWN toggle mid-drip stops its pending start", async () => {
+    const { manager, database, wsEngines, enginesMidDrip } = await dripRaceSetup();
+    try {
+      manager.update('AbCdEf002', { enabled: false });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(wsEngines.length).toBe(enginesMidDrip);
+      const second = manager.list().find((entry) => entry.id === 'AbCdEf002')!;
+      expect(second.status).toBe('stopped');
+    } finally {
+      vi.useRealTimers();
       manager.onApplicationShutdown();
       database.$client.close();
     }
