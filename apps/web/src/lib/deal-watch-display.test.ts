@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { DealWatchStatusCode } from '@poe-sniper/shared';
+import type { DealWatchState, DealWatchStatusCode } from '@poe-sniper/shared';
 import {
   DEAL_DOT_CLASSES,
   DEAL_PATCH_ERROR_KEYS,
   DEAL_STATUS_DISPLAY,
   computeClientCutoffExalted,
+  cutoffExaltedForState,
   dealQueryPinsItem,
   formatDealCutoffChip,
   formatDealThresholdChip,
@@ -145,10 +146,63 @@ describe('computeClientCutoffExalted', () => {
     ).toBeNull();
   });
 
-  it('returns null for absolute-divine (the server owns the live rate)', () => {
+  it('computes the absolute-divine cutoff from the divine rate (baseline − threshold×rate)', () => {
+    // The reported bug: baseline 699 div, threshold 30 div → buy-below 669 div,
+    // NOT the 836-div GGG filter cap. In exalted at a 505 rate:
     expect(
-      computeClientCutoffExalted({ mode: 'absolute', thresholdValue: 5, unit: 'divine' }, 500),
+      computeClientCutoffExalted(
+        { mode: 'absolute', thresholdValue: 30, unit: 'divine' },
+        353_050,
+        505,
+      ),
+    ).toBe(353_050 - 30 * 505); // 337_900 ex — strictly BELOW the 353_050 baseline
+  });
+
+  it('returns null for absolute-divine only when the rate is unknown', () => {
+    expect(
+      computeClientCutoffExalted(
+        { mode: 'absolute', thresholdValue: 5, unit: 'divine' },
+        500,
+        null,
+      ),
     ).toBeNull();
+  });
+});
+
+describe('cutoffExaltedForState', () => {
+  // cutoffExaltedForState reads only mode/thresholdValue/unit/baseline/divineRate.
+  function dealState(overrides: Partial<DealWatchState>): DealWatchState {
+    return {
+      mode: 'absolute',
+      thresholdValue: 30,
+      unit: 'divine',
+      baseline: { amountExalted: 353_050 } as DealWatchState['baseline'],
+      divinePriceExalted: 505,
+      capExalted: 422_306, // the WRONG value the chip used to show (≈ cutoff × 1.25 — the GGG filter cap, above baseline)
+      ...overrides,
+    } as DealWatchState;
+  }
+
+  it('is the deal cutoff (baseline − threshold), NOT capExalted (plan 46 regression)', () => {
+    const cutoff = cutoffExaltedForState(dealState({}));
+    expect(cutoff).toBe(353_050 - 30 * 505); // 337_900 — the true buy-below
+    // The bug was showing capExalted (422_306), which is ABOVE the baseline.
+    expect(cutoff).toBeLessThan(353_050);
+    expect(cutoff).not.toBe(422_306);
+  });
+
+  it('computes a percent cutoff without needing a rate', () => {
+    expect(cutoffExaltedForState(dealState({ mode: 'percent', thresholdValue: 20 }))).toBe(
+      353_050 * 0.8,
+    );
+  });
+
+  it('is null before the first baseline lands', () => {
+    expect(cutoffExaltedForState(dealState({ baseline: null }))).toBeNull();
+  });
+
+  it('is null for a divine threshold when the rate is unknown', () => {
+    expect(cutoffExaltedForState(dealState({ divinePriceExalted: null }))).toBeNull();
   });
 });
 

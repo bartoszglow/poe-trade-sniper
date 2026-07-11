@@ -105,10 +105,10 @@ export function formatDealThresholdChip(
  * percent-mode watch also reads as a concrete price, not just a relative %.
  */
 export function formatDealCutoffChip(
-  capExalted: number,
+  cutoffExalted: number,
   divinePriceExalted: number | null,
 ): string {
-  return `< ${formatExaltedAmount(capExalted, divinePriceExalted)}`;
+  return `< ${formatExaltedAmount(cutoffExalted, divinePriceExalted)}`;
 }
 
 /**
@@ -204,13 +204,40 @@ export function formatSignedExaltedAmount(
 export function computeClientCutoffExalted(
   config: { mode: DealWatchMode; thresholdValue: number; unit: DealWatchUnit },
   baselineExalted: number | null,
+  /** Divine→exalted rate (state.divinePriceExalted); needed only for a divine
+   *  absolute threshold. Null when unknown → a divine cutoff is not computable. */
+  divineRate: number | null = null,
 ): number | null {
   if (baselineExalted === null) return null;
   if (config.mode === 'percent') {
     return Math.max(0, baselineExalted * (1 - config.thresholdValue / 100));
   }
-  if (config.unit === 'divine') return null;
-  return Math.max(0, baselineExalted - config.thresholdValue);
+  // Absolute: convert the unit threshold to exalted, then subtract from the
+  // baseline. Mirrors the server's computeCutoffExalted — this is the TRUE deal
+  // cutoff (the "buy below"), NOT the margin-widened GGG price-filter cap.
+  const thresholdExalted =
+    config.unit === 'divine'
+      ? divineRate === null
+        ? null
+        : config.thresholdValue * divineRate
+      : config.thresholdValue;
+  return thresholdExalted === null ? null : Math.max(0, baselineExalted - thresholdExalted);
+}
+
+/**
+ * The deal CUTOFF (the "buy below") in exalted for a persisted watch state —
+ * `baseline − threshold`, divine-aware via the state's own rate snapshot. This is
+ * the single source for showing an active watch's buy-below; callers must NOT read
+ * `state.capExalted`, which is the margin-widened GGG price-FILTER cap, not the
+ * deal threshold (they differ by DEAL_CAP_MARGIN_RATIO — the source of the
+ * "buy-below above baseline" bug, plan 46).
+ */
+export function cutoffExaltedForState(state: DealWatchState): number | null {
+  return computeClientCutoffExalted(
+    { mode: state.mode, thresholdValue: state.thresholdValue, unit: state.unit },
+    state.baseline?.amountExalted ?? null,
+    state.divinePriceExalted,
+  );
 }
 
 /**

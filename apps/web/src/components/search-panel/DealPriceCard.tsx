@@ -17,6 +17,7 @@ import {
   DEAL_PATCH_ERROR_KEYS,
   DEAL_STATUS_DISPLAY,
   computeClientCutoffExalted,
+  cutoffExaltedForState,
   dealDefinitionOf,
   dealQueryPinsItem,
   formatExaltedAmount,
@@ -138,20 +139,14 @@ export function DealPriceCard({
     ? computeClientCutoffExalted(
         { mode: draftMode, thresholdValue: parsedThreshold, unit: draftUnit },
         baselineExalted,
+        divineRate,
       )
     : null;
 
-  // The ACTIVE buy-below price (persisted config, not the draft): the server's
-  // capExalted is the exact derived cutoff (incl. divine conversion + margin);
-  // the client-side math only covers the gap before the first derive lands.
-  const persistedCutoffExalted =
-    state === null
-      ? null
-      : (state.capExalted ??
-        computeClientCutoffExalted(
-          { mode: state.mode, thresholdValue: state.thresholdValue, unit: state.unit },
-          baselineExalted,
-        ));
+  // The ACTIVE buy-below price (persisted config, not the draft). This is the deal
+  // CUTOFF (baseline − threshold) — NOT state.capExalted, which is the GGG price
+  // FILTER cap (cutoff × the +margin buffer that keeps the derived id stable), plan 46.
+  const persistedCutoffExalted = state === null ? null : cutoffExaltedForState(state);
 
   const broadQuery = !dealQueryPinsItem(dealDefinitionOf(state, search.filters));
   const statusDisplay = state !== null ? DEAL_STATUS_DISPLAY[state.status] : null;

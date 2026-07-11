@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Deal watches show the true buy-below price.** The BUY BELOW readouts (the row
+  chip and the deal card) now display the deal cutoff — baseline minus your
+  threshold — instead of the wider GGG price-filter cap. Previously a watch with a
+  699-div baseline and a 30-div threshold showed "buy below 836 div" (a value
+  _above_ the baseline); it now correctly reads 669 div. The actual GGG search
+  filter is unchanged — only the displayed number was wrong.
 - **Currency rates come from GGG's own bulk exchange** now that the poe2scout
   aggregator's API went offline — divine/exalted pricing works again (deal
   thresholds set in divine no longer silently show everything in exalted).

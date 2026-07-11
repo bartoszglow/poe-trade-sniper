@@ -1,6 +1,7 @@
 import type { SearchRuntimeInfo } from '@poe-sniper/shared';
 import { useT } from '../i18n/i18n';
 import {
+  cutoffExaltedForState,
   DEAL_DOT_CLASSES,
   DEAL_STATUS_DISPLAY,
   formatDealCutoffChip,
@@ -28,6 +29,9 @@ export function DealWatchControl({ search, onExpandDeal }: DealWatchControlProps
   const statusDisplay = state !== null ? DEAL_STATUS_DISPLAY[state.status] : null;
 
   if (state === null || statusDisplay === null) return null;
+  // The true buy-below (baseline − threshold), NOT state.capExalted (the wider GGG
+  // price-filter cap) — plan 46. Null before the first derive lands.
+  const cutoffExalted = cutoffExaltedForState(state);
   return (
     <Tooltip content={t(statusDisplay.labelKey)} focusable={false}>
       <button
@@ -43,11 +47,11 @@ export function DealWatchControl({ search, onExpandDeal }: DealWatchControlProps
           />
           {formatDealThresholdChip(state.mode, state.thresholdValue, state.unit)}
         </Badge>
-        {/* The actual buy-below price (D-dw-6 cap) — null before the first
-            derive lands, so a fresh percent-mode watch shows only the % chip. */}
-        {state.capExalted !== null && (
+        {/* The actual buy-below price — null before the first derive lands, so a
+            fresh percent-mode watch shows only the % chip. */}
+        {cutoffExalted !== null && (
           <Badge tone="neutral">
-            {formatDealCutoffChip(state.capExalted, state.divinePriceExalted)}
+            {formatDealCutoffChip(cutoffExalted, state.divinePriceExalted)}
           </Badge>
         )}
       </button>
