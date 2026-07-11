@@ -11,6 +11,7 @@ import {
   isRetryableTravelFailure,
   offerKey,
   type DomainEvent,
+  type Listing,
   type TravelEvent,
   type TravelFailureReason,
 } from '@poe-sniper/shared';
@@ -133,19 +134,38 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
   ): Promise<{ found: boolean }> {
     const search = this.searchManager.getSearchRef(searchId);
     if (!search) return { found: false };
-    const listing = await this.searchManager.refreshListing(searchId, listingId, offerKey);
-    if (!listing?.hideoutToken) {
-      this.realtimeBus.publish({
-        type: 'travel',
-        phase: 'failed',
-        source: 'manual',
+    // A manual re-resolve spends a SEARCH-bucket hit (the 30-min-lockout tier).
+    // Guard the governor exactly like the auto path (review REL-1): under the
+    // reserve, refuse instead of draining detection/deal budget — a mashed burst
+    // of Travel/Buy clicks across rows self-limits once headroom runs low. The
+    // failure rides the travel-event channel so the card shows "try again".
+    if (this.governor.minHeadroom(RETRY_POLICIES) < this.config.TRAVEL_RETRY_MIN_HEADROOM) {
+      this.publishRetryFailure(
         searchId,
         listingId,
-        itemName: listing?.itemName ?? null,
-        detail: 'no longer listed',
-        reason: 'item_gone',
-        at: new Date().toISOString(),
-      });
+        null,
+        'insufficient budget — try again shortly',
+        'rate_limited',
+      );
+      return { found: false };
+    }
+    let listing: Listing | null;
+    try {
+      listing = await this.searchManager.refreshListing(searchId, listingId, offerKey);
+    } catch (error) {
+      // The tier-2 re-search can throw (review SRV-500) — surface it as a failed
+      // travel event, never a bare 500 with no feedback and budget already spent.
+      this.publishRetryFailure(searchId, listingId, null, errorMessage(error), 'server_error');
+      return { found: false };
+    }
+    if (!listing?.hideoutToken) {
+      this.publishRetryFailure(
+        searchId,
+        listingId,
+        listing?.itemName ?? null,
+        'no longer listed',
+        'item_gone',
+      );
       return { found: false };
     }
     this.enqueue({
@@ -156,6 +176,28 @@ export class TravelService implements OnApplicationBootstrap, OnApplicationShutd
       source: 'manual',
     });
     return { found: true };
+  }
+
+  /** A failed manual re-resolve, tagged with the ORIGINAL listingId so the card
+   *  that triggered it tracks the outcome. */
+  private publishRetryFailure(
+    searchId: string,
+    listingId: string,
+    itemName: string | null,
+    detail: string,
+    reason: TravelFailureReason,
+  ): void {
+    this.realtimeBus.publish({
+      type: 'travel',
+      phase: 'failed',
+      source: 'manual',
+      searchId,
+      listingId,
+      itemName,
+      detail,
+      reason,
+      at: new Date().toISOString(),
+    });
   }
 
   private maybeAutoTravel(event: DomainEvent): void {

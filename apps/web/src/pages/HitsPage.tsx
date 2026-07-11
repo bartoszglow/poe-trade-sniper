@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { Hit } from '@poe-sniper/shared';
 import { DealBadge } from '../components/DealBadge';
 import { Field } from '../components/Field';
+import { HitActions, HitBuyStatus } from '../components/HitActions';
 import { ItemDetailView } from '../components/ItemDetailView';
 import { PriceTag } from '../components/PriceTag';
 import { RarityName } from '../components/RarityName';
@@ -10,14 +11,19 @@ import { Select } from '../components/Select';
 import { TextInput } from '../components/TextInput';
 import { useEventStream } from '../hooks/EventStreamProvider';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useHitActions } from '../hooks/useHitActions';
 import { useSearches } from '../hooks/useSearches';
+import { useServerStatus } from '../hooks/useServerStatus';
 import { useT } from '../i18n/i18n';
 import { apiGet } from '../lib/api';
+import { isHitActionable } from '../lib/hit-actions';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 /** Coalesce bursts of live hits into a single page-0 refetch. */
 const LIVE_MERGE_DEBOUNCE_MS = 400;
+/** Re-render cadence that ages hits out of the action window while viewing. */
+const ACTION_TICK_MS = 30_000;
 
 type SortOption = 'newest' | 'oldest' | 'name';
 
@@ -48,7 +54,15 @@ function buildQuery(filters: Filters, offset: number): string {
 export function HitsPage() {
   const t = useT();
   const { searches } = useSearches();
-  const { hitsVersion } = useEventStream();
+  const { hitsVersion, travelStateByListingId, buyStateByListingId } = useEventStream();
+  const { travel, buy, travelRetry, buyRetry } = useHitActions();
+  // Manual Buy is offered only when the macOS control permission is present
+  // (desktop + granted); on web this is false, so only Travel shows.
+  const { status } = useServerStatus();
+  const canBuy = status?.capabilities.canControl ?? false;
+  // Clock snapshot in state so render stays pure; the tick ages hits out of the
+  // action window (Travel/Buy hide once a hit passes HIT_ACTION_MAX_AGE_MS).
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   // Debounce the free-text box so we don't refetch on every keystroke.
   const debouncedText = useDebouncedValue(filters.text, SEARCH_DEBOUNCE_MS);
@@ -67,6 +81,11 @@ export function HitsPage() {
   // Next offset to fetch — a ref so loadPage reads the current value without
   // being recreated (and resetting itself) every time it changes.
   const offsetRef = useRef(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), ACTION_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   const { searchId, from, to, sort } = filters;
   const loadPage = useCallback(
@@ -207,32 +226,54 @@ export function HitsPage() {
           <ul className="flex flex-col gap-1.5">
             {hits.map((hit) => {
               const expanded = expandedHitId === hit.id;
+              // Recently-detected hits stay actionable: Travel/Buy re-resolve a
+              // fresh token server-side (a persisted hit never carries one). The
+              // action cluster is a SIBLING of the expand button — never nested,
+              // which would be invalid (button-in-button).
+              const actionable = isHitActionable(hit.detectedAt, nowMs);
               return (
                 <li key={hit.id} className="rounded-md border border-edge bg-surface-1 px-3 py-2">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    aria-expanded={expanded}
-                    onClick={() => setExpandedHitId(expanded ? null : hit.id)}
-                  >
-                    {expanded ? (
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-                    )}
-                    <span className="font-mono text-[0.65rem] text-ink-faint">
-                      {new Date(hit.detectedAt).toLocaleString()}
-                    </span>
-                    <RarityName name={hit.itemName} rarity={hit.item?.rarity ?? null} />
-                    {hit.deal && <DealBadge deal={hit.deal} />}
-                    <div className="flex-1" />
-                    <PriceTag price={hit.price} />
-                    {hit.seller && (
-                      <span className="hidden truncate text-xs text-ink-faint sm:inline">
-                        {hit.seller}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center gap-2 text-left"
+                      aria-expanded={expanded}
+                      onClick={() => setExpandedHitId(expanded ? null : hit.id)}
+                    >
+                      {expanded ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                      )}
+                      <span className="font-mono text-[0.65rem] text-ink-faint">
+                        {new Date(hit.detectedAt).toLocaleString()}
                       </span>
+                      <RarityName name={hit.itemName} rarity={hit.item?.rarity ?? null} />
+                      {hit.deal && <DealBadge deal={hit.deal} />}
+                      <div className="flex-1" />
+                      <PriceTag price={hit.price} />
+                      {hit.seller && (
+                        <span className="hidden truncate text-xs text-ink-faint sm:inline">
+                          {hit.seller}
+                        </span>
+                      )}
+                    </button>
+                    {actionable && (
+                      <HitActions
+                        travelState={travelStateByListingId[hit.listingId]}
+                        tokenFresh={false}
+                        canBuy={canBuy}
+                        onTravel={() => travel(hit)}
+                        onBuy={() => buy(hit)}
+                        onTravelRetry={() => travelRetry(hit)}
+                        onBuyRetry={() => buyRetry(hit)}
+                      />
                     )}
-                  </button>
+                  </div>
+                  {/* Ungated on `actionable`: a buy in flight when the hit crosses
+                      the 60-min edge must keep showing its status (review STATUS-DROP);
+                      HitBuyStatus renders nothing when there is no buy state. */}
+                  <HitBuyStatus buyState={buyStateByListingId[hit.listingId]} />
                   {expanded &&
                     (hit.item ? (
                       <div className="mt-2 pl-5">

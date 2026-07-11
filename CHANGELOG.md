@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paused through a room off→on, and members held by a disabled room read
   "paused", not "off".
 - **Manual "Restart detection"** action per search (clears a stuck degraded).
+- **Travel & Buy from the Hits view (plan 45).** Recently-detected hits (up to 60
+  minutes old) now carry Travel and Buy buttons in the browsable Hits view, not
+  just the live panel — a missed hit can still be actioned. Because a stored hit
+  no longer holds a live token, each action re-resolves a fresh one server-side;
+  Buy now does this for aged hits too (it previously greyed out). The manual
+  re-resolve is budget-guarded so a burst of clicks can't drain detection budget,
+  and a re-resolve that fails (offer gone, no budget, or a search error) reports
+  back on the hit instead of silently doing nothing.
 
 ### Fixed
 

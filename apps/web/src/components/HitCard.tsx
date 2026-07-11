@@ -1,26 +1,12 @@
-import { useState } from 'react';
-import { RotateCcw, ShoppingCart, Zap } from 'lucide-react';
 import type { DealHitInfo, Listing } from '@poe-sniper/shared';
 import type { BuyState, TravelState } from '../hooks/EventStreamProvider';
 import { useT } from '../i18n/i18n';
-import type { MessageKey } from '../i18n/messages';
 import { composeDealContext } from '../lib/deal-display';
-import { travelFailureDisplay } from '../lib/travel-failure-display';
-import { Button } from './Button';
 import { DealBadge } from './DealBadge';
+import { HitActions, HitBuyStatus } from './HitActions';
 import { PriceTag } from './PriceTag';
 import { RarityName } from './RarityName';
 import { formatRelativeMagnitude } from '../lib/relative-time';
-
-/** Buy automation phase → compact status line ('unsupported' is hidden). */
-const BUY_PHASE_DISPLAY: Partial<Record<BuyState['phase'], { key: MessageKey; tone: string }>> = {
-  started: { key: 'hitCard.buying', tone: 'text-gold' },
-  'window-found': { key: 'hitCard.buying', tone: 'text-gold' },
-  'item-located': { key: 'hitCard.buying', tone: 'text-gold' },
-  moved: { key: 'hitCard.buyReady', tone: 'text-ok' },
-  aborted: { key: 'hitCard.buyAborted', tone: 'text-ink-faint' },
-  failed: { key: 'hitCard.buyFailed', tone: 'text-danger' },
-};
 
 interface HitCardProps {
   /** The folded feed entity — deal-mode hits carry their discount context (plan 41). */
@@ -42,8 +28,10 @@ interface HitCardProps {
   marketPriceLabel?: string | null;
   onTravel: () => void;
   onBuy: () => void;
-  /** Re-resolve a fresh token server-side, then travel (for aged/failed hits). */
-  onRetry: () => Promise<void>;
+  /** Re-resolve a fresh token server-side, then travel (aged/failed hits). */
+  onTravelRetry: () => Promise<void>;
+  /** Re-resolve a fresh token server-side, then buy on arrival (aged hits). */
+  onBuyRetry: () => Promise<void>;
   /** Spotlight the source search on the Searches view (#34 follow-up). */
   onLocateSearch: () => void;
 }
@@ -60,26 +48,11 @@ export function HitCard({
   marketPriceLabel = null,
   onTravel,
   onBuy,
-  onRetry,
+  onTravelRetry,
+  onBuyRetry,
   onLocateSearch,
 }: HitCardProps) {
   const t = useT();
-  const phase = travelState?.phase;
-  const travelBusy = phase === 'queued' || phase === 'started';
-  const buyDisplay = buyState ? BUY_PHASE_DISPLAY[buyState.phase] : undefined;
-  const travelFail = travelFailureDisplay(travelState?.reason);
-  const [retrying, setRetrying] = useState(false);
-
-  // Re-resolve a fresh token, then travel. Used for the failed-phase Retry and for a stale
-  // (token-expired) Travel — both work regardless of the original token's age.
-  async function reResolveTravel(): Promise<void> {
-    setRetrying(true);
-    try {
-      await onRetry();
-    } finally {
-      setRetrying(false);
-    }
-  }
 
   return (
     <div
@@ -138,67 +111,22 @@ export function HitCard({
           <span className="truncate text-xs text-ink-faint">{listing.seller}</span>
         )}
         <div className="flex-1" />
+        {/* Only securable (instant-buyout) listings carry a token — the sole hits
+            that can travel. An aged card keeps its (now-stale) token field, so the
+            cluster still shows and re-resolves on click. */}
         {listing.hideoutToken && (
-          <div className="flex items-center gap-2">
-            {phase === 'queued' && <span className="text-xs text-gold">{t('hitCard.queued')}</span>}
-            {phase === 'started' && (
-              <span className="text-xs text-gold">{t('hitCard.traveling')}</span>
-            )}
-            {phase === 'success' && (
-              <span className="text-xs text-ok">{t('hitCard.traveled')}</span>
-            )}
-            {phase === 'failed' && (
-              <>
-                <span
-                  className={`text-xs ${travelFail.tone}`}
-                  title={travelFail.hintKey ? t(travelFail.hintKey) : undefined}
-                >
-                  {t(travelFail.key)}
-                </span>
-                <Button
-                  variant="ghost"
-                  className="!px-2 !py-0.5 text-xs"
-                  disabled={retrying}
-                  title={t('hitCard.retryTitle')}
-                  onClick={() => void reResolveTravel()}
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  {retrying ? t('hitCard.retrying') : t('hitCard.retry')}
-                </Button>
-              </>
-            )}
-            {!phase && (
-              <Button
-                variant="primary"
-                className="!px-2 !py-0.5 text-xs"
-                disabled={travelBusy || retrying}
-                title={tokenFresh ? t('hitCard.travelTitle') : t('hitCard.retryTitle')}
-                onClick={() => (tokenFresh ? onTravel() : void reResolveTravel())}
-              >
-                <Zap className="h-3 w-3" />
-                {retrying ? t('hitCard.retrying') : t('hitCard.travel')}
-              </Button>
-            )}
-            {canBuy && !travelBusy && (
-              <Button
-                variant="ghost"
-                className="!px-2 !py-0.5 text-xs"
-                disabled={!tokenFresh}
-                title={tokenFresh ? t('hitCard.buyTitle') : t('hitCard.tokenExpired')}
-                onClick={onBuy}
-              >
-                <ShoppingCart className="h-3 w-3" />
-                {t('hitCard.buy')}
-              </Button>
-            )}
-          </div>
+          <HitActions
+            travelState={travelState}
+            tokenFresh={tokenFresh}
+            canBuy={canBuy}
+            onTravel={onTravel}
+            onBuy={onBuy}
+            onTravelRetry={onTravelRetry}
+            onBuyRetry={onBuyRetry}
+          />
         )}
       </div>
-      {buyDisplay && (
-        <div className="mt-1 text-xs">
-          <span className={buyDisplay.tone}>{t(buyDisplay.key)}</span>
-        </div>
-      )}
+      <HitBuyStatus buyState={buyState} />
     </div>
   );
 }

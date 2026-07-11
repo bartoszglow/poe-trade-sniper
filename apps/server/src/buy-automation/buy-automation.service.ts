@@ -141,6 +141,17 @@ export class BuyAutomationService implements OnApplicationBootstrap, OnApplicati
     }
   }
 
+  /**
+   * Cancels a pending manual-buy intent (review CORR-1). The buy/retry endpoint
+   * marks the intent BEFORE re-resolving; when the re-resolve reports the offer
+   * gone (or is refused) no travel ever fires, so the intent would linger and a
+   * later Travel-ONLY re-resolve on the same listing could inherit it and buy.
+   * Evicting on that branch keeps the buy intent from crossing the Travel/Buy line.
+   */
+  clearManualBuy(listingId: string): void {
+    this.forceBuyListingIds.delete(listingId);
+  }
+
   private maybeBuy(event: DomainEvent): void {
     if (event.type !== 'travel') return;
     // Fires on ANY travel success — auto OR manual (D-19): Buy is independent of

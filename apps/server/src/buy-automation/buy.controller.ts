@@ -1,12 +1,6 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  ForbiddenException,
-  Inject,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Inject, Post } from '@nestjs/common';
 import { z } from 'zod';
+import { parseOrBadRequest } from '../api/request-validation.js';
 import { PermissionGateService } from '../permissions/permission-gate.service.js';
 import { TravelService } from '../travel/travel.service.js';
 import { BuyAutomationService } from './buy-automation.service.js';
@@ -28,6 +22,18 @@ const buySchema = z.object({
   itemName: z.string().min(1).optional(),
 });
 
+/**
+ * Buy RETRY for an aged hit (the Hits view / an aged live card) — NO token in the
+ * body (a persisted hit never carries one; it is stripped at read time). The
+ * server re-resolves a fresh token for the offer, then buys on arrival — the same
+ * "travel there AND grab" as `buy`, but via the re-resolve path (`retryTravel`).
+ */
+const buyRetrySchema = z.object({
+  searchId: z.string().min(1),
+  listingId: z.string().min(1),
+  offerKey: z.string().min(1),
+});
+
 @Controller('buy')
 export class BuyController {
   constructor(
@@ -38,28 +44,40 @@ export class BuyController {
 
   @Post()
   buy(@Body() body: unknown): { queued: true; position: number } {
-    const parsed = buySchema.safeParse(body);
-    if (!parsed.success) {
-      throw new BadRequestException(
-        parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
-      );
-    }
+    const parsed = parseOrBadRequest(buySchema, body);
     if (!this.gate.canControl()) {
       throw new ForbiddenException('macOS control permission required to buy');
     }
     // Mark buy-on-arrival BEFORE enqueuing, so the travel-success handler sees it.
-    this.buyAutomation.requestManualBuy(parsed.data.listingId);
+    this.buyAutomation.requestManualBuy(parsed.listingId);
     const { position } = this.travelService.enqueue({
-      hideoutToken: parsed.data.token,
+      hideoutToken: parsed.token,
       search: {
-        realm: parsed.data.realm,
-        league: parsed.data.league,
-        searchId: parsed.data.searchId,
+        realm: parsed.realm,
+        league: parsed.league,
+        searchId: parsed.searchId,
       },
-      listingId: parsed.data.listingId,
-      itemName: parsed.data.itemName ?? null,
+      listingId: parsed.listingId,
+      itemName: parsed.itemName ?? null,
       source: 'manual',
     });
     return { queued: true, position };
+  }
+
+  @Post('retry')
+  async buyRetry(@Body() body: unknown): Promise<{ found: boolean }> {
+    const { searchId, listingId, offerKey } = parseOrBadRequest(buyRetrySchema, body);
+    if (!this.gate.canControl()) {
+      throw new ForbiddenException('macOS control permission required to buy');
+    }
+    // Mark buy-on-arrival BEFORE re-resolving, so the travel-success handler sees
+    // it. retryTravel re-tags its travel events with this ORIGINAL listingId, so a
+    // successful re-resolved travel matches and the buy fires.
+    this.buyAutomation.requestManualBuy(listingId);
+    const result = await this.travelService.retryTravel(searchId, listingId, offerKey);
+    // If nothing will travel (offer gone or the re-resolve was refused), evict the
+    // intent so a later Travel-ONLY on this listing never inherits it (review CORR-1).
+    if (!result.found) this.buyAutomation.clearManualBuy(listingId);
+    return result;
   }
 }

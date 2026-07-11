@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { Eraser, PanelRightClose, Zap } from 'lucide-react';
-import { offerKey, type Listing } from '@poe-sniper/shared';
 import { Badge } from '../components/Badge';
 import { HitCard } from '../components/HitCard';
 import { useEventStream } from '../hooks/EventStreamProvider';
+import { useHitActions } from '../hooks/useHitActions';
 import { resolveByListingId } from '../lib/live-hits';
 import { useSearches } from '../hooks/useSearches';
 import { useServerStatus } from '../hooks/useServerStatus';
 import { useT } from '../i18n/i18n';
-import { apiSend } from '../lib/api';
 import { formatApproxMarketPrice, marketPriceForListing } from '../lib/market-price';
-import { spotlightSearch } from '../lib/search-spotlight';
 
 /** Client-side mirror of the server's stale-token guard (240 s). */
 const TOKEN_FRESH_MS = 240_000;
@@ -22,11 +19,10 @@ const STALE_HIT_MS = 300_000;
 
 export function HitsPanel({ onHide }: { onHide: () => void }) {
   const t = useT();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { connected, liveHits, travelStateByListingId, buyStateByListingId, clearLiveHits } =
     useEventStream();
   const { searches } = useSearches();
+  const { travel, buy, travelRetry, buyRetry, locateSearch } = useHitActions();
   // Manual Buy = travel + grab; only offered when the macOS control permission
   // is present (desktop + granted). On web this is false, so Buy never renders.
   const { status } = useServerStatus();
@@ -46,60 +42,6 @@ export function HitsPanel({ onHide }: { onHide: () => void }) {
   function handleClear(): void {
     clearLiveHits();
     setClearTick((tick) => tick + 1);
-  }
-
-  function travel(listing: Listing): void {
-    const search = searches.find((candidate) => candidate.id === listing.searchId);
-    if (!search || !listing.hideoutToken) return;
-    void apiSend('POST', '/api/travel', {
-      token: listing.hideoutToken,
-      realm: search.realm,
-      league: search.league,
-      searchId: search.id,
-      listingId: listing.listingId,
-      itemName: listing.itemName,
-    }).catch(() => {
-      // Failure also arrives as a travel event on the stream; nothing to do here.
-    });
-  }
-
-  // Buy = travel + grab: enqueues the same travel and marks this listing for
-  // buy-on-arrival, so the buy pipeline runs on travel success (even if the
-  // search's autoBuy is off). The server re-checks the control permission.
-  function buy(listing: Listing): void {
-    const search = searches.find((candidate) => candidate.id === listing.searchId);
-    if (!search || !listing.hideoutToken) return;
-    void apiSend('POST', '/api/buy', {
-      token: listing.hideoutToken,
-      realm: search.realm,
-      league: search.league,
-      searchId: search.id,
-      listingId: listing.listingId,
-      itemName: listing.itemName,
-    }).catch(() => {
-      // Failure surfaces as travel/buy events on the stream; nothing to do here.
-    });
-  }
-
-  // Spotlight the hit's source search on the Searches view (#34 follow-up):
-  // navigates there and hands the highlight over via the one-slot spotlight
-  // store — a later click on another hit replaces it.
-  function locateSearch(listing: Listing): void {
-    spotlightSearch(listing.searchId);
-    // No duplicate history entry when the operator is already on Searches.
-    if (location.pathname !== '/') void navigate('/');
-  }
-
-  // Retry travel on an aged hit: the stored token is expired, so the server re-resolves a
-  // FRESH token (re-fetch by id, else re-search + match by offer identity). No token sent.
-  async function retry(listing: Listing): Promise<void> {
-    await apiSend<{ found: boolean }>('POST', '/api/travel/retry', {
-      searchId: listing.searchId,
-      listingId: listing.listingId,
-      offerKey: offerKey(listing),
-    }).catch(() => {
-      // Outcome (traveled / "no longer listed") arrives as a travel event on the stream.
-    });
   }
 
   return (
@@ -168,7 +110,8 @@ export function HitsPanel({ onHide }: { onHide: () => void }) {
                 )}
                 onTravel={() => travel(listing)}
                 onBuy={() => buy(listing)}
-                onRetry={() => retry(listing)}
+                onTravelRetry={() => travelRetry(listing)}
+                onBuyRetry={() => buyRetry(listing)}
                 onLocateSearch={() => locateSearch(listing)}
               />
             ))}

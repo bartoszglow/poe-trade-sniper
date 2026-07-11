@@ -524,4 +524,72 @@ describe('TravelService', () => {
     const failed = travelEvents.find((event) => event.phase === 'failed');
     expect(failed?.detail).toContain('expired');
   });
+
+  describe('retryTravel (manual re-resolve — the Hits-view / aged-card path)', () => {
+    it('re-travels and re-tags events with the ORIGINAL listingId (buy-on-arrival keys on it)', async () => {
+      const { service, tradeApi, travelEvents, refreshListing } = createService({
+        headroom: 1,
+        // The re-resolved offer comes back under a DIFFERENT listing id (GGG
+        // re-serves offers under new ids) — the events must still carry the original.
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+
+      const result = await service.retryTravel('s1', 'orig-listing', 'Storm Veil offerkey');
+      await flushQueue();
+
+      expect(result).toEqual({ found: true });
+      expect(refreshListing).toHaveBeenCalledWith('s1', 'orig-listing', 'Storm Veil offerkey');
+      expect((tradeApi.travel as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('fresh-token');
+      // Every event (queued/started/success) carries the ORIGINAL id, not 'listing1'.
+      expect(travelEvents.length).toBeGreaterThan(0);
+      expect(travelEvents.every((event) => event.listingId === 'orig-listing')).toBe(true);
+      expect(travelEvents.at(-1)?.phase).toBe('success');
+      service.onApplicationShutdown();
+    });
+
+    it('reports item_gone (no travel) when the offer is no longer listed', async () => {
+      const { service, tradeApi, travelEvents } = createService({
+        headroom: 1,
+        refreshListingResult: null,
+      });
+
+      const result = await service.retryTravel('s1', 'orig-listing', 'k');
+
+      expect(result).toEqual({ found: false });
+      expect(tradeApi.travel).not.toHaveBeenCalled();
+      const failed = travelEvents.find((event) => event.phase === 'failed');
+      expect(failed?.reason).toBe('item_gone');
+      expect(failed?.listingId).toBe('orig-listing');
+      service.onApplicationShutdown();
+    });
+
+    it('refuses under the budget reserve without spending a re-resolve (review REL-1)', async () => {
+      const { service, tradeApi, travelEvents, refreshListing } = createService({
+        headroom: 0.2, // < TRAVEL_RETRY_MIN_HEADROOM (0.3)
+        refreshListingResult: listingWithToken('fresh-token'),
+      });
+
+      const result = await service.retryTravel('s1', 'orig-listing', 'k');
+
+      expect(result).toEqual({ found: false });
+      expect(refreshListing).not.toHaveBeenCalled(); // never spent
+      expect(tradeApi.travel).not.toHaveBeenCalled();
+      const failed = travelEvents.find((event) => event.phase === 'failed');
+      expect(failed?.reason).toBe('rate_limited'); // rides the card's travel-status channel
+      service.onApplicationShutdown();
+    });
+
+    it('surfaces a tier-2 re-search throw as a failed event, not a bare 500 (review SRV-500)', async () => {
+      const { service, travelEvents, refreshListing } = createService({ headroom: 1 });
+      (refreshListing as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('search boom'));
+
+      const result = await service.retryTravel('s1', 'orig-listing', 'k');
+
+      expect(result).toEqual({ found: false });
+      const failed = travelEvents.find((event) => event.phase === 'failed');
+      expect(failed?.reason).toBe('server_error');
+      expect(failed?.listingId).toBe('orig-listing');
+      service.onApplicationShutdown();
+    });
+  });
 });
