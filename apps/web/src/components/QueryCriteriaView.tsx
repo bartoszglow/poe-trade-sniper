@@ -11,12 +11,13 @@ import {
 } from '../lib/query-criteria';
 import { DetailCard, DetailRows } from './DetailCard';
 
-/** Best-effort `status.option` labels (only `securable` is a verified mapping). */
-const STATUS_OPTION_LABELS: Record<string, string> = {
-  securable: 'Instant Buyout',
-  online: 'Online',
-  onlineleague: 'Online in League',
-  any: 'Any',
+/** Best-effort `status.option` → catalog key (only `securable` is a verified mapping);
+ *  an unknown option falls back to its raw token. */
+const STATUS_OPTION_KEYS: Record<string, MessageKey> = {
+  securable: 'criteria.status.securable',
+  online: 'criteria.status.online',
+  onlineleague: 'criteria.status.onlineleague',
+  any: 'criteria.status.any',
 };
 
 /** Known filter-group keys → catalog titles; unknown groups show their raw key. */
@@ -78,8 +79,11 @@ export function QueryCriteriaView({
   }
 
   const disabledTag = t('criteria.disabledTag');
+  const statusOptionKey = criteria.statusOption ? STATUS_OPTION_KEYS[criteria.statusOption] : null;
   const statusLabel = criteria.statusOption
-    ? (STATUS_OPTION_LABELS[criteria.statusOption] ?? criteria.statusOption)
+    ? statusOptionKey
+      ? t(statusOptionKey)
+      : criteria.statusOption
     : null;
 
   const purchaseRows: DetailRowData[] = [];

@@ -295,6 +295,7 @@ export const EN = {
   'onboarding.legendActive': 'detection on',
   'onboarding.legendTravel': 'auto-warp on hit',
   'onboarding.legendBuy': 'macOS app only',
+  'onboarding.navRail': 'nav',
   'onboarding.hitsTitle': 'Hits stream in live — act fast',
   'onboarding.hitsBody':
     'New listings appear instantly in the Live hits panel on the right. The travel window is short: hideout tokens die after ~4 minutes (the button turns into a re-check after that).',
@@ -335,6 +336,9 @@ export const EN = {
   'hitCard.travelBadResponseHint':
     'GGG returned an unexpected response — usually transient; retried automatically.',
   'hitCard.travelRateLimited': 'rate-limited — try again shortly',
+  'hitCard.travelForbidden': 'access forbidden',
+  'hitCard.travelForbiddenHint':
+    'GGG refused the request (403) — usually a session or config problem; check your session in Settings.',
   'hitCard.buying': 'buying…',
   'hitCard.buyReady': 'cursor on item',
   'hitCard.buyAborted': 'buy aborted',
@@ -439,6 +443,10 @@ export const EN = {
   'criteria.other': 'Other',
   'criteria.empty': 'No criteria — this search matches everything.',
   'criteria.loading': 'Resolving criteria…',
+  'criteria.status.securable': 'Instant Buyout',
+  'criteria.status.online': 'Online',
+  'criteria.status.onlineleague': 'Online in League',
+  'criteria.status.any': 'Any',
 
   // Hits page
   'hits.title': 'Hits',
@@ -946,6 +954,7 @@ export const PL: Record<MessageKey, string> = {
   'onboarding.legendActive': 'wykrywanie włączone',
   'onboarding.legendTravel': 'auto-teleport przy trafieniu',
   'onboarding.legendBuy': 'tylko aplikacja macOS',
+  'onboarding.navRail': 'menu',
   'onboarding.hitsTitle': 'Trafienia spływają na żywo — działaj szybko',
   'onboarding.hitsBody':
     'Nowe oferty pojawiają się natychmiast w panelu Trafienia na żywo po prawej. Okno na podróż jest krótkie: token kryjówki wygasa po ~4 minutach (potem przycisk zmienia się w ponowne sprawdzenie).',
@@ -986,6 +995,9 @@ export const PL: Record<MessageKey, string> = {
   'hitCard.travelBadResponseHint':
     'GGG zwróciło nieoczekiwaną odpowiedź — zwykle chwilowe; ponawiane automatycznie.',
   'hitCard.travelRateLimited': 'limit zapytań — spróbuj za chwilę',
+  'hitCard.travelForbidden': 'brak dostępu',
+  'hitCard.travelForbiddenHint':
+    'GGG odrzuciło żądanie (403) — zwykle problem z sesją lub konfiguracją; sprawdź sesję w Ustawieniach.',
   'hitCard.buying': 'kupowanie…',
   'hitCard.buyReady': 'kursor na przedmiocie',
   'hitCard.buyAborted': 'zakup przerwany',
@@ -1089,6 +1101,10 @@ export const PL: Record<MessageKey, string> = {
   'criteria.other': 'Inne',
   'criteria.empty': 'Brak kryteriów — to wyszukiwanie pasuje do wszystkiego.',
   'criteria.loading': 'Pobieranie kryteriów…',
+  'criteria.status.securable': 'Natychmiastowy zakup',
+  'criteria.status.online': 'Online',
+  'criteria.status.onlineleague': 'Online w lidze',
+  'criteria.status.any': 'Dowolny',
 
   // Hits page
   'hits.title': 'Trafienia',

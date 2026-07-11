@@ -42,6 +42,12 @@ const TRAVEL_FAILURE_DISPLAY: Partial<Record<TravelFailureReason, FailureDisplay
     hintKey: 'hitCard.travelOwnListingHint',
   },
   rate_limited: { key: 'hitCard.travelRateLimited', tone: 'text-gold' },
+  // 403 / gggCode 6 — a session or config fault (not retryable). Danger, hint on hover.
+  forbidden: {
+    key: 'hitCard.travelForbidden',
+    tone: 'text-danger',
+    hintKey: 'hitCard.travelForbiddenHint',
+  },
   // Transient GGG faults (codes 4/5) — auto-retried once; amber, hint on hover.
   server_error: {
     key: 'hitCard.travelServerError',

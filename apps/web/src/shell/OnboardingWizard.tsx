@@ -185,9 +185,9 @@ function HowToStep({ goNext, goBack }: StepProps) {
           {t('onboarding.searchTravelWarning')}
         </p>
         <p className="text-xs text-ink-muted">
-          <b className="text-ink">ACTIVE</b> — {t('onboarding.legendActive')} ·{' '}
-          <b className="text-ink">TRAVEL</b> — {t('onboarding.legendTravel')} ·{' '}
-          <b className="text-ink">BUY</b> — {t('onboarding.legendBuy')}
+          <b className="text-ink">{t('searches.activeToggle')}</b> — {t('onboarding.legendActive')}{' '}
+          · <b className="text-ink">{t('hitCard.travel')}</b> — {t('onboarding.legendTravel')} ·{' '}
+          <b className="text-ink">{t('searches.buyToggle')}</b> — {t('onboarding.legendBuy')}
         </p>
       </div>
       <footer className="flex items-center gap-2 border-t border-edge px-5 py-3">
@@ -214,7 +214,7 @@ function HitsStep({ isDesktopWidth, goBack, closeWizard }: StepProps) {
             <p className="text-sm text-ink-muted">{t('onboarding.hitsBody')}</p>
             <div className="flex gap-2 text-center text-[11px] text-ink-faint">
               <span className="w-10 rounded-md border border-dashed border-edge-strong px-1 py-1.5">
-                nav
+                {t('onboarding.navRail')}
               </span>
               <span className="flex-1 rounded-md border border-dashed border-edge-strong px-1 py-1.5">
                 {t('nav.searches')}
