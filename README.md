@@ -11,7 +11,8 @@ there.
 > Available for **Windows · macOS · Linux** — [grab the latest release ↓](#install)
 
 ![platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
-![license](https://img.shields.io/badge/license-UNLICENSED-lightgrey)
+![license](https://img.shields.io/badge/license-proprietary%20freeware-lightgrey)
+![price](https://img.shields.io/badge/price-free-brightgreen)
 
 ![PoE Trade Sniper — live WebSocket detection streaming new listings in real time](docs/screenshots/main-search.png)
 
@@ -41,7 +42,9 @@ This app collapses that whole chain into **one alert and one warp**:
   caught; infinite scroll, item details laid out as clean cards.
 - 🌍 **English & Polish** UI out of the box.
 - 🔒 **Private by design.** Your session is encrypted at rest in your OS
-  keychain. Nothing is sent anywhere except Path of Exile itself. Debug logs are
+  keychain. Your data goes nowhere: the app talks only to Path of Exile, plus a
+  version check against the GitHub releases page (no account, machine or usage
+  data attached — and it's off unless you run a packaged build). Debug logs are
   redacted — they never contain your cookie or session token.
 - 🛡️ **Built-in safety brake.** Hard per-minute ceilings on all outbound traffic
   so the app can never run away and hammer the trade API on your behalf.
@@ -60,8 +63,9 @@ Download the installer for your OS from the
 | Linux   | `...-x64.AppImage` | `chmod +x` then run |
 
 > **Heads-up: the builds are unsigned.** Code-signing certificates cost money,
-> so for now your OS will warn you the first time. The app is open and the
-> traffic is auditable — but here's how to get past the warning:
+> so for now your OS will warn you the first time. The source is public, so you
+> can read exactly what the app does before trusting it — and every GGG request
+> it makes is logged for you to inspect. Here's how to get past the warning:
 >
 > - **Windows** — SmartScreen says "Windows protected your PC" → click **More
 >   info** → **Run anyway**.
@@ -177,6 +181,29 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the
 Windows / macOS / Linux installers on their native runners and uploads them to a
 **draft** GitHub Release. Review the draft, then click **Publish** — only then
 does the in-app update check surface it to users.
+
+---
+
+## Licence
+
+**Free to use. Not open source.** See [LICENSE](LICENSE) for the full terms —
+the short version:
+
+- ✅ **Use it, free, forever.** No account, no key, no paywall, no telemetry.
+- ✅ **Read the code.** The source is public so you can audit exactly what the
+  app does with your PoE session before you trust it. That's the whole reason
+  this repo is open.
+- ❌ **Don't copy, modify, republish or sell it.** Being able to read the source
+  doesn't license you to reuse it. All rights reserved.
+- 💛 **Donations are gifts** — thank-yous, not purchases. They buy no feature, no
+  support and no entitlement, and nothing is ever locked behind them.
+- ⚠️ **No warranty, and your account is your risk** — see the ban question in the
+  [FAQ](#faq) and §9–§11 of the licence. This tool automates your real account;
+  GGG decides what's allowed and can change its mind.
+
+Third-party open-source components ship under their own licences — see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (regenerate with
+`node scripts/generate-third-party-notices.mjs`).
 
 ---
 

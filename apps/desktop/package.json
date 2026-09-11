@@ -39,6 +39,14 @@
       {
         "from": "../server/db/migrations",
         "to": "migrations"
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
       }
     ],
     "mac": {

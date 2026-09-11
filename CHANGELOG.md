@@ -7,8 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Your PoE session is now encrypted at rest on Windows and Linux too.** It
+  always was on macOS, but the other two platforms silently fell back to storing
+  it in plain text — the code promised an encrypted path that had never been
+  built. The packaged app now protects the key with the OS itself (Keychain on
+  macOS, DPAPI on Windows, libsecret/kwallet on Linux). If a machine genuinely
+  has no secure store (a Linux box with no keyring), the app says so plainly
+  instead of quietly pretending. A session that can no longer be decrypted — a
+  restored backup, a reset keychain — now simply asks you to log in again
+  instead of erroring.
+
 ### Added
 
+- **A licence, at last.** PoE Trade Sniper is **free to use, but not open
+  source** (see `LICENSE`). You may read the code — the repo is public precisely
+  so you can audit what the app does with your PoE session before trusting it —
+  but not copy, modify, republish or sell it. Donations are gifts: they buy no
+  feature, no support and no entitlement, and nothing is ever locked behind
+  them. The licence also spells out what the README already hinted at: the app
+  comes with no warranty, and your account is your own risk. `THIRD-PARTY-NOTICES.md`
+  now credits every open-source component the app is built on, and both files
+  ship inside the app.
+- **Activity history no longer grows forever.** The timeline is capped at the
+  newest 2000 travel→buy sequences (`ACTIVITY_MAX_ROWS`), matching the existing
+  caps on hit history and price checks.
+- **Report-a-bug and repo links** on the About page — previously placeholders, so
+  there was no way to reach the project from inside the app.
 - **Search phase model — clear states everywhere (plans 43 + 44).** A search's
   intent (its Active toggle, its room's toggle, global detection) is now cleanly
   separated from its live phase, so the toggle never lies: it stays gold only
@@ -36,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **README no longer overstates privacy.** It claimed nothing is sent anywhere
+  except Path of Exile; the packaged app also asks GitHub whether a newer version
+  exists. That check sends no account, machine or usage data — but the claim was
+  inaccurate, so it now says what actually happens.
 - **Deal watches show the true buy-below price.** The BUY BELOW readouts (the row
   chip and the deal card) now display the deal cutoff — baseline minus your
   threshold — instead of the wider GGG price-filter cap. Previously a watch with a

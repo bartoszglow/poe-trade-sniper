@@ -8,3 +8,4 @@ export const CAPTURE_SOURCE = Symbol('CAPTURE_SOURCE');
 export const TRADE_VISION = Symbol('TRADE_VISION');
 export const INPUT_CONTROLLER = Symbol('INPUT_CONTROLLER');
 export const USER_INPUT_WATCHER = Symbol('USER_INPUT_WATCHER');
+export const SECRET_KEY_STORE = Symbol('SECRET_KEY_STORE');

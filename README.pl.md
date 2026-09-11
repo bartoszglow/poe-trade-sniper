@@ -11,7 +11,8 @@ whisperów.** Przełączasz się do gry, a przedmiot już tam jest.
 > Dostępna na **Windows · macOS · Linux** — [pobierz najnowszą wersję ↓](#instalacja)
 
 ![platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
-![license](https://img.shields.io/badge/license-UNLICENSED-lightgrey)
+![license](https://img.shields.io/badge/licencja-freeware%20propriety-lightgrey)
+![price](https://img.shields.io/badge/cena-za%20darmo-brightgreen)
 
 ![PoE Trade Sniper — wykrywanie na żywo przez WebSocket, nowe oferty w czasie rzeczywistym](docs/screenshots/main-search.png)
 
@@ -45,9 +46,10 @@ aplikacja zwija cały ten łańcuch do **jednego powiadomienia i jednego skoku**
   kartach.
 - 🌍 **Interfejs po angielsku i po polsku** od ręki.
 - 🔒 **Prywatność z założenia.** Twoja sesja jest szyfrowana w spoczynku w
-  keychainie systemu. Nic nie jest wysyłane nigdzie poza samo Path of Exile.
-  Logi diagnostyczne są zredagowane — nigdy nie zawierają ciasteczka ani tokenu
-  sesji.
+  keychainie systemu. Twoje dane nigdzie nie wychodzą: aplikacja łączy się tylko
+  z Path of Exile oraz — w wersji spakowanej — sprawdza numer wersji na stronie
+  wydań GitHuba (bez danych konta, maszyny czy użycia). Logi diagnostyczne są
+  zredagowane — nigdy nie zawierają ciasteczka ani tokenu sesji.
 - 🛡️ **Wbudowany hamulec bezpieczeństwa.** Twarde limity ruchu wychodzącego na
   minutę, żeby aplikacja nigdy nie mogła się rozpędzić i zalać trade API w Twoim
   imieniu.
@@ -66,8 +68,10 @@ Pobierz instalator dla swojego systemu ze
 | Linux   | `...-x64.AppImage` | `chmod +x` i uruchom |
 
 > **Uwaga: buildy są niepodpisane.** Certyfikaty do podpisywania kodu kosztują,
-> więc na razie system ostrzeże Cię przy pierwszym uruchomieniu. Aplikacja jest
-> otwarta, a jej ruch da się zaudytować — a oto jak ominąć ostrzeżenie:
+> więc na razie system ostrzeże Cię przy pierwszym uruchomieniu. Kod źródłowy
+> jest jawny, więc możesz sprawdzić, co aplikacja naprawdę robi, zanim jej
+> zaufasz — a każde zapytanie do GGG jest logowane do wglądu. Oto jak ominąć
+> ostrzeżenie:
 >
 > - **Windows** — SmartScreen pokaże „Windows protected your PC" → kliknij **More
 >   info** → **Run anyway**.
@@ -187,6 +191,30 @@ Wypchnięcie taga `v*` uruchamia `.github/workflows/release.yml`, który buduje
 instalatory Windows / macOS / Linux na natywnych runnerach i wrzuca je do
 **szkicu** (draft) GitHub Release. Przejrzyj szkic, potem kliknij **Publish** —
 dopiero wtedy in-app update check pokaże wersję użytkownikom.
+
+---
+
+## Licencja
+
+**Darmowa w użyciu. Nie open source.** Pełne warunki: [LICENSE](LICENSE)
+(wersja angielska jest wiążąca). W skrócie:
+
+- ✅ **Używaj za darmo, bez ograniczeń.** Bez konta, bez klucza, bez paywalla,
+  bez telemetrii.
+- ✅ **Czytaj kod.** Źródła są jawne, żebyś mógł sprawdzić, co aplikacja robi
+  z Twoją sesją PoE, zanim jej zaufasz. To jedyny powód, dla którego to repo
+  jest publiczne.
+- ❌ **Nie kopiuj, nie modyfikuj, nie publikuj ponownie, nie sprzedawaj.** To, że
+  możesz przeczytać kod, nie daje Ci prawa do jego użycia. Wszelkie prawa
+  zastrzeżone.
+- 💛 **Dotacje to darowizny** — podziękowanie, nie zakup. Nie kupują żadnej
+  funkcji, wsparcia ani uprawnień; nic nigdy nie jest za nimi zamknięte.
+- ⚠️ **Bez gwarancji, ryzyko konta jest po Twojej stronie** — zobacz pytanie
+  o bany w [FAQ](#faq) oraz §9–§11 licencji. To narzędzie automatyzuje Twoje
+  prawdziwe konto; to GGG decyduje, co jest dozwolone, i może zmienić zdanie.
+
+Komponenty open source innych autorów mają własne licencje — zobacz
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ---
 

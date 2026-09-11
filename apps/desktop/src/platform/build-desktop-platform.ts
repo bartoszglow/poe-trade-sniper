@@ -2,6 +2,7 @@ import type { DesktopPlatform } from '@poe-sniper/server';
 import { createElectronCaptureSource } from './capture-source.electron.js';
 import { createElectronPermissionProbe } from './permission-probe.electron.js';
 import { createNutInputController } from './input-controller.nut.js';
+import { createSafeStorageSecretKeyStore } from './secret-key-store.electron.js';
 import { createRawPixelTradeVision } from './trade-vision.adapter.js';
 import { createUiohookUserInputWatcher } from './user-input-watcher.uiohook.js';
 
@@ -30,5 +31,9 @@ export function createDesktopPlatform(): DesktopPlatform {
     tradeVision: createRawPixelTradeVision(),
     inputController: createNutInputController(permissionProbe),
     userInputWatcher: createUiohookUserInputWatcher(),
+    // OS-backed on macOS/Windows/Linux alike — the standalone keychain fallback
+    // is macOS-only, so this is what keeps the session off-disk-in-clear on the
+    // packaged Windows/Linux builds.
+    secretKeyStore: createSafeStorageSecretKeyStore(),
   };
 }

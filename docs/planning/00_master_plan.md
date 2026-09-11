@@ -1,10 +1,25 @@
 ---
 type: project
-status: active
+status: delivered
 tags: [poe2, sniper, trade, nestjs, react, electron, sqlite, rewrite]
 created: 2026-06-11
-updated: 2026-06-12
+updated: 2026-07-17
 ---
+
+> **STATUS 2026-07-17 — all phases (0–5) delivered.** This plan is kept as the
+> architectural charter and historical record; it is NOT a live task list. For
+> what the app is today, read `CLAUDE.md` → "State of the build". Two premises
+> below have since been overtaken by reality:
+>
+> - **§2 / D-3 "no i18n"** — superseded. Full EN + PL i18n shipped 2026-06-12
+>   (`apps/web/src/i18n/`, EN is the `MessageKey` source of truth, PL is
+>   compiler-checked). Every new user-facing string needs both.
+> - **"single-user tool"** — the project is now aimed at a public release
+>   (bilingual public README, 3-OS release workflow, in-app update check). The
+>   scope cuts in §2 were argued from single-operator use; anything security- or
+>   distribution-shaped must be re-judged against a public audience, not against
+>   "it's just Bartosz's machine". Open release blockers are tracked in
+>   `CLAUDE.md`.
 
 # PoE Trade Sniper — Master Plan (ground-up rewrite)
 
@@ -308,6 +323,12 @@ See the prototype's git log + `~/.claude/.../memory/project_poe2_live_sniper.md`
   **Cut over from the prototype here.**
 - **Phase 6+ (future_ideas):** analytics from `hits`, multi-account, alert sounds
   per search, price-trend awareness, IPC optimization, signing/notarization.
+
+> **All of Phase 0–5 shipped** (0–4 + preliminary shell on 2026-06-12; Phase 5
+> full on 2026-06-12, tip `eae9c11`). Much of the "Phase 6+" list also shipped
+> since: the in-app update check (check-only), rooms, deal watch, price check,
+> the activity timeline, and the macOS Buy-automation track. Signing/notarization
+> is the notable Phase 6 item still **not** done — see `docs/operations/packaging.md`.
 
 ---
 

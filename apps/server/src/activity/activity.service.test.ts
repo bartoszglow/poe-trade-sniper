@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { BuyAutomationEvent, TravelEvent } from '@poe-sniper/shared';
+import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
-import { hits, searches } from '../db/schema.js';
+import { activity, hits, searches } from '../db/schema.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
 import { ActivityService } from './activity.service.js';
 
-function setup() {
+function setup(overrides: Record<string, string> = {}) {
   const database = openDatabase(':memory:');
   const bus = new RealtimeBus();
-  const service = new ActivityService(database, bus);
+  const service = new ActivityService(database, bus, loadConfig({ ...overrides }));
   service.onApplicationBootstrap();
   return { database, bus, service };
 }
@@ -139,5 +140,67 @@ describe('ActivityService', () => {
     expect(sold?.returnedHome).toBe(true);
     expect(failed?.outcome).toBe('travel-failed');
     expect(failed?.finishedAt).not.toBeNull();
+  });
+});
+
+describe('ActivityService pruning (bounded growth)', () => {
+  /** Seeds `count` finished sequences, oldest first (`started_at` ascending). */
+  function seed(database: ReturnType<typeof openDatabase>, count: number): void {
+    for (let index = 0; index < count; index += 1) {
+      database
+        .insert(activity)
+        .values({
+          id: `a${index}`,
+          searchId: 's1',
+          listingId: `l${index}`,
+          source: 'auto',
+          itemName: `item-${index}`,
+          price: null,
+          seller: null,
+          item: null,
+          // Zero-padded so the ISO string sorts the same way the number does.
+          startedAt: `2026-01-01T00:${String(index).padStart(2, '0')}:00.000Z`,
+          finishedAt: `2026-01-01T00:${String(index).padStart(2, '0')}:30.000Z`,
+          outcome: 'placed',
+          returnedHome: true,
+          steps: [],
+        })
+        .run();
+    }
+  }
+
+  it('prunes to the newest ACTIVITY_MAX_ROWS on boot, dropping the OLDEST rows', () => {
+    const database = openDatabase(':memory:');
+    seed(database, 55);
+
+    const service = new ActivityService(
+      database,
+      new RealtimeBus(),
+      loadConfig({ ACTIVITY_MAX_ROWS: '50' }),
+    );
+    service.onApplicationBootstrap();
+
+    const records = service.listActivity({ ...ALL, limit: 100 });
+    expect(records).toHaveLength(50);
+    // The 5 oldest (item-0..item-4) are gone; the newest survives.
+    const names = records.map((record) => record.itemName);
+    expect(names).toContain('item-54');
+    expect(names).not.toContain('item-0');
+    expect(names).not.toContain('item-4');
+    expect(names).toContain('item-5');
+  });
+
+  it('leaves the table alone while it is under the cap', () => {
+    const database = openDatabase(':memory:');
+    seed(database, 10);
+
+    const service = new ActivityService(
+      database,
+      new RealtimeBus(),
+      loadConfig({ ACTIVITY_MAX_ROWS: '50' }),
+    );
+    service.onApplicationBootstrap();
+
+    expect(service.listActivity({ ...ALL, limit: 100 })).toHaveLength(10);
   });
 });

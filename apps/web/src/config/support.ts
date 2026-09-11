@@ -31,9 +31,21 @@ export interface SupportLink {
 /** The author. Name is shown as-is; the one-line bio is the i18n key `about.bio`. */
 export const AUTHOR_NAME = 'Bartosz Głowacki';
 
+/**
+ * The project's GitHub home. Every repo-derived link below is built from this, so
+ * a rename is a one-line change.
+ *
+ * NOTE: the same slug is also configured for the desktop shell's update check
+ * (`apps/desktop/src/main.ts`, `GITHUB_RELEASES_REPO`) and for electron-builder's
+ * publish target (`apps/desktop/package.json`). Those live in other runtimes (an
+ * Electron main and a build manifest) and cannot import this module.
+ */
+export const REPO_OWNER = 'bartoszglow';
+export const REPO_URL = `https://github.com/${REPO_OWNER}/poe-trade-sniper`;
+
 /** Author / contact links. Fill the ones you want shown; leave the rest as ''. */
 export const AUTHOR_LINKS: SupportLink[] = [
-  { id: 'github', label: 'GitHub', url: '', icon: ExternalLink }, // TODO(bartosz): https://github.com/<you>
+  { id: 'github', label: 'GitHub', url: `https://github.com/${REPO_OWNER}`, icon: ExternalLink },
   { id: 'x', label: 'X', url: '', icon: ExternalLink }, //       TODO(bartosz): https://x.com/<handle>
   { id: 'discord', label: 'Discord', url: '', icon: MessageCircle }, // TODO(bartosz): invite/profile
   { id: 'email', label: 'Email', url: '', icon: Mail }, //      TODO(bartosz): mailto:<address>
@@ -48,8 +60,8 @@ export const DONATION_LINKS: SupportLink[] = [
 
 /** Free ways to help — only shown if the repo is public. */
 export const PROJECT_LINKS: SupportLink[] = [
-  { id: 'star', labelKey: 'about.star', url: '', icon: Star }, //   TODO(bartosz): https://github.com/<you>/poe-trade-sniper
-  { id: 'bug', labelKey: 'about.reportBug', url: '', icon: Bug }, // TODO(bartosz): <repo>/issues/new
+  { id: 'star', labelKey: 'about.star', url: REPO_URL, icon: Star },
+  { id: 'bug', labelKey: 'about.reportBug', url: `${REPO_URL}/issues/new`, icon: Bug },
 ];
 
 /** True while every support/author/project link is still a placeholder. */

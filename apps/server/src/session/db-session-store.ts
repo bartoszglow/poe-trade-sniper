@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { Logger } from '@nestjs/common';
 import type { SessionState } from '@poe-sniper/shared';
 import { appState } from '../db/schema.js';
 import type { SniperDatabase } from '../db/migrate.js';
@@ -13,6 +14,8 @@ const SESSION_KEY = 'session';
  * rows are still readable and get encrypted on the next save.
  */
 export class DbSessionStore implements SessionStore {
+  private readonly logger = new Logger(DbSessionStore.name);
+
   constructor(
     private readonly database: SniperDatabase,
     private readonly cipher: SessionCipher,
@@ -22,7 +25,15 @@ export class DbSessionStore implements SessionStore {
     const row = this.database.select().from(appState).where(eq(appState.key, SESSION_KEY)).get();
     if (!row) return null;
     if (isEncryptedPayload(row.value)) {
-      return JSON.parse(this.cipher.decrypt(row.value)) as SessionState;
+      try {
+        return JSON.parse(this.cipher.decrypt(row.value)) as SessionState;
+      } catch {
+        // The key is gone (OS store reset, restored backup, different machine).
+        // An undecryptable session IS no session — degrade to a re-login instead
+        // of throwing out of every getSession() call and wedging the app.
+        this.logger.warn('stored session could not be decrypted — treating as signed out');
+        return null;
+      }
     }
     return row.value as SessionState;
   }

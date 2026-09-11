@@ -5,6 +5,7 @@ import {
   CAPTURE_SOURCE,
   INPUT_CONTROLLER,
   PERMISSION_PROBE,
+  SECRET_KEY_STORE,
   TRADE_VISION,
   USER_INPUT_WATCHER,
 } from './platform.tokens.js';
@@ -15,6 +16,7 @@ const ALL_TOKENS = [
   TRADE_VISION,
   INPUT_CONTROLLER,
   USER_INPUT_WATCHER,
+  SECRET_KEY_STORE,
 ];
 
 function providerValue(
@@ -37,6 +39,7 @@ describe('PlatformModule.register (boot contract)', () => {
     expect(providerValue(dynamicModule, TRADE_VISION)).toBe(platform.tradeVision);
     expect(providerValue(dynamicModule, INPUT_CONTROLLER)).toBe(platform.inputController);
     expect(providerValue(dynamicModule, USER_INPUT_WATCHER)).toBe(platform.userInputWatcher);
+    expect(providerValue(dynamicModule, SECRET_KEY_STORE)).toBe(platform.secretKeyStore);
   });
 
   it('is global and exports every port token (consumers resolve without importing it)', () => {

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { z } from 'zod';
 import { loadConfig } from '../config/env.js';
 import { openDatabase } from '../db/migrate.js';
+import { createKeychainSecretKeyStore } from '../platform/keychain-secret-key-store.js';
 import { DbSessionStore } from './db-session-store.js';
 import { SessionCipher } from './session-cipher.js';
 import { SessionService } from './session.service.js';
@@ -26,7 +27,11 @@ if (!parsed.success) {
 const config = loadConfig();
 const database = openDatabase(config.DB_PATH);
 try {
-  const sessionService = new SessionService(new DbSessionStore(database, new SessionCipher()));
+  // Standalone CLI — no Electron, so the keychain store (same one the standalone
+  // server gets from the no-op platform) supplies the key.
+  const sessionService = new SessionService(
+    new DbSessionStore(database, new SessionCipher(createKeychainSecretKeyStore())),
+  );
   const status = sessionService.importFromPrototypeExport(parsed.data);
   console.warn(
     `Imported ${status.cookieNames.length} pathofexile.com cookie(s): ${status.cookieNames.join(', ')}`,

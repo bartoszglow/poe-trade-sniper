@@ -34,60 +34,72 @@ Read this first, every session.
 
 ## State of the build
 
-State/health session (2026-07-10, plans 43+44): the search **phase model** was
-reworked to a spec/status split (intent — search/room/global `enabled` — is
-user-only; **phase** is system-only, one derivation point). New/changed:
-room master switch is a **layered gate** (D-room-1 v2, migration 0014 — never
-overwrites a member's own `enabled`); a **sticky degraded** family (plan 43:
-flap detector, 5-min stability window, 5/10/30-min recovery ladder) that ends in
-a new **`halted`** phase after the ladder exhausts (revived only by an explicit
-per-search act); **option-B toggle** visuals (position = intent, colour = truth:
-gold running / amber on-but-not-running / blue gate-held); room header shows a
-**per-state breakdown** of members; AppBar degraded beacon. GGG **currency
-exchange** now sources deal rates (D-dw-21) after poe2scout's API 404'd; **travel
-code-2** split into not_in_game/not_in_town/own_listing. Security: host-guard
-gained an **Origin/CSRF check** (review SEC-1). Full review record:
-`docs/process/reviews/2026-07-10-full-codebase.md` (open non-blocking: REL-1
-unhandledRejection backstop, PERF-1 activity-table pruning).
+_Last synced 2026-07-17. This section describes what the app IS; the history of
+how it got there lives in `CHANGELOG.md` and `docs/planning/`._
 
-Phases 1–4 shipped + preliminary Electron shell: detection (SSE, ws/poll with
-demotion + safety guard), browser-free travel, full operator UI, dual-path
-auth (in-app Chrome login + cookie paste), session encrypted at rest.
-Live-validated 2026-06-12: session probe, ws connect (GGG live is back; 1013
-backoff handled), league endpoint. Remaining: first-hit/travel live proof,
-full Phase 5 packaging. Self-review: `docs/process/reviews/2026-06-12-self-review.md`.
+### What exists today
 
-macOS desktop-automation track (2026-06-24): **Phase 1** permission framework
-(Screen Recording + Accessibility, Option A, capability gate) and **Phase 2**
-per-search Buy automation (focus → capture → detect → human-like move, **NO
-click**; Electron-only; independent of auto-travel, D-19) shipped + reviewed (52
-findings → fix plan `docs/planning/25`, fixes applied D-20). Native input/capture
-(`nut.js`/`uiohook`/`desktopCapturer` + raw-pixel CV) still needs on-Mac hardware
-validation: capture-stream non-black, CV thresholds, uiohook-for-synthetic.
+**All phases (0–5) are shipped.** The app is a working Electron desktop sniper:
+detection → deal watch → travel → buy automation, with a full operator UI in
+English and Polish. `pnpm verify` green (server 444 · web 176 · desktop 11).
+Version is still `0.1.0` and **nothing has ever been tagged or released** —
+`CHANGELOG.md` `[Unreleased]` holds everything since 2026-06-13.
 
-Extra hard rule learned in Phase 1: see `docs/process/conventions.md` — every
-NestJS constructor param needs an explicit `@Inject(...)` (tsx emits no
-decorator metadata).
+- **Detection** — ONE persistent WS socket per search (like a browser tab); the
+  poll engine covers only the reconnect gap. `OutboundGuard` (hard per-minute
+  ceilings, manual reset) + the rate-limit governor reading live
+  `X-Rate-Limit-*` headers are the load-bearing safety layer.
+- **Search phase model** (plans 43+44) — intent (search/room/global `enabled`) is
+  user-only; **phase** is system-only with one derivation point
+  (`publishEngineStatus`). Sticky-degraded family → flap detector, 5-min
+  stability window, 5/10/30-min recovery ladder, terminal **`halted`** phase.
+  Rooms are a layered gate (D-room-1 v2) that never overwrites a member's own
+  `enabled`.
+- **Deal watch** (plan 41) — price-fixer-resistant baseline, self-created
+  content-addressed GGG search with a value-converted price cap, auto-swapping
+  the row's id once it drifts by more than 5%. Rates come from GGG **currency
+  exchange** (D-dw-21) since poe2scout's API 404s.
+- **Operator UX** — rooms, live-hits panel, archive/restore, first-run
+  onboarding, price check, activity timeline, Travel/Buy from the Hits view.
+- **Buy automation** (D-18/D-19/D-20) — Electron-only, independent of
+  auto-travel, ends at a human-like mouse MOVE (**no click**), gated on the
+  macOS permission capability.
+- **Session at rest** — AES-256-GCM. The key comes from the platform's
+  `SecretKeyStore` port: Electron `safeStorage` in the packaged app (OS-backed on
+  macOS/Windows/Linux), the macOS `security` CLI for the standalone server. No
+  OS store → plaintext + a loud warning (a keyring-less box still works). An
+  undecryptable session degrades to "signed out", never a throw.
+- **Distribution scaffolding** — public bilingual `README.md` / `README.pl.md`;
+  `.github/workflows/release.yml` builds mac dmg + win nsis + linux AppImage on a
+  `v*` tag (draft release); `GET /api/update` checks GitHub Releases and shows a
+  banner (**check-only** — silent auto-update needs signing).
 
-Deal-watch (2026-07-05, plan 41): **#41 deal mode** shipped end-to-end — flip a
-search into deal mode; the server maintains a price-fixer-resistant baseline
-(median of cheapest usable listings, exalted-normalized via poe2scout rates),
-derives a price-capped GGG search (self-created content-addressed id, no-option
-value-converted cap — evidence in `api-notes.md` §"Self-created searches"),
-auto-swaps the row's id on >5% drift, and emits `deal` events with discount
-context; full operator UI (row chip, modal with baseline+trend sparkline, deal
-feed kind, distinct alerts). Phase 0 live-probed; both phases shipped after
-adversarial reviews with all confirmed findings fixed pre-commit. Remaining:
-multi-day id-aging evidence (P0.2b tail), Phase 3 live validation with the
-operator, Activity re-derive feed entry (parked).
+### Not yet proven
 
-Operator-UX + tooling session (2026-07-02→03): shipped **#33 rooms** (named
-groups, DnD, master switch, auto-expand), **#34 live-hits panel** (resize/hide +
-click-to-locate spotlight), **#35 search archive/restore**, **#36 first-run
-onboarding** (wizard + checklist), **#37 price check** (clipboard→trade2/poe2scout,
-budget-gated, versioned dictionary, in-app panel + Price Checks nav view + desktop
-hotkey/overlay), plus login/logout UX, universal ConfirmDialog. Plans in
-`docs/planning/33–37`. **Still needs on-Mac hardware validation:** the price-check
-desktop layer (synthetic Cmd+C under Wine + click-through overlay) — same gap as
-the Buy-automation natives. Full pending list + parked items:
-memory `session-2026-07-state-and-pending`.
+- **On-Mac hardware validation** of the natives — capture-stream non-black (O-6),
+  uiohook-for-synthetic (O-7), HiDPI mapping (O-8), the raw-pixel CV thresholds
+  (`TODO(verify)`), and the price-check desktop layer (synthetic Cmd+C under
+  Wine + click-through overlay). All still unvalidated.
+- **Live proof** — first hit/travel end-to-end, first DEAL alert, deal-watch
+  Phase 3 with the operator, P0.2b multi-day id-aging.
+- **CI is Ubuntu-only** — the macOS/Windows native paths are never exercised on
+  their target OS.
+
+### Blocking a public release
+
+- ~~No LICENSE~~ — **done** (D-23): proprietary freeware EULA, source-available.
+  The repo stays public for auditability; the licence, not secrecy, prevents
+  copying. `THIRD-PARTY-NOTICES.md` is generated and ships in `extraResources`.
+- **No code signing / notarization** — `"identity": null`. D-18 recorded a real
+  Developer ID as a **hard release prerequisite**: without a stable Team ID the
+  macOS TCC grants (Screen Recording + Accessibility) reset on every update.
+- **No crash/error reporting** and only partial support links (repo + bug report
+  are wired; social/donation still empty) — failures on other machines are
+  invisible.
+- **ToS exposure of Buy automation** — synthetic input into a live game is the
+  most exposed surface and the least validated; shipping it to strangers is a
+  decision, not a default.
+
+Review records live in `docs/process/reviews/`. Extra hard rule learned in Phase
+1 (see `docs/process/conventions.md`): every NestJS constructor param needs an
+explicit `@Inject(...)` — tsx emits no decorator metadata.

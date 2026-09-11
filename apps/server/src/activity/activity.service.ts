@@ -6,7 +6,7 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { and, desc, eq, gte, like, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm';
 import type {
   ActivityOutcome,
   ActivityRecord,
@@ -16,11 +16,15 @@ import type {
   ListingPrice,
   TravelEvent,
 } from '@poe-sniper/shared';
+import { APP_CONFIG, type AppConfig } from '../config/env.js';
 import { DATABASE } from '../db/db.module.js';
 import type { SniperDatabase } from '../db/migrate.js';
 import { activity, hits } from '../db/schema.js';
 import { errorMessage } from '../util/error-message.js';
 import { RealtimeBus } from '../events/realtime-bus.js';
+
+/** Prune cadence — amortizes the DELETE over many buys (mirrors the hits prune). */
+const PRUNE_EVERY_N_FINISHED = 50;
 
 export interface ActivityQuery {
   search: string | null;
@@ -45,13 +49,18 @@ export class ActivityService implements OnApplicationBootstrap, OnApplicationShu
   /** The in-progress record per listingId. */
   private readonly openByListing = new Map<string, ActivityRecord>();
 
+  /** Terminal records persisted since the last prune (see `pruneActivity`). */
+  private finishedSincePrune = 0;
+
   constructor(
     @Inject(DATABASE) private readonly database: SniperDatabase,
     @Inject(RealtimeBus) private readonly bus: RealtimeBus,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   onApplicationBootstrap(): void {
     this.unsubscribe = this.bus.subscribe((event) => this.handle(event));
+    this.pruneActivity();
   }
 
   onApplicationShutdown(): void {
@@ -198,6 +207,28 @@ export class ActivityService implements OnApplicationBootstrap, OnApplicationShu
         },
       })
       .run();
+    // Only a finished sequence adds a row that will never be upserted again —
+    // in-progress steps just rewrite the same row, so they can't grow the table.
+    if (record.finishedAt !== null && ++this.finishedSincePrune >= PRUNE_EVERY_N_FINISHED) {
+      this.pruneActivity();
+    }
+  }
+
+  /**
+   * Bounded growth (architecture.md invariant): keep only the newest
+   * ACTIVITY_MAX_ROWS sequences. Ordered by `started_at` — unlike `hits`, the id
+   * here is a uuid and carries no time order — with `rowid` breaking ties so the
+   * "newest N" set is deterministic when two records share a timestamp.
+   */
+  private pruneActivity(): void {
+    this.finishedSincePrune = 0;
+    this.database.run(sql`
+      DELETE FROM activity WHERE rowid NOT IN (
+        SELECT rowid FROM activity
+        ORDER BY started_at DESC, rowid DESC
+        LIMIT ${this.config.ACTIVITY_MAX_ROWS}
+      )
+    `);
   }
 
   listActivity(query: ActivityQuery): ActivityRecord[] {

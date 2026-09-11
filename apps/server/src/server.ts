@@ -23,6 +23,7 @@ export type {
   InputController,
   KeyName,
   UserInputWatcher,
+  SecretKeyStore,
   RawFrame,
   WindowRegion,
   Point,

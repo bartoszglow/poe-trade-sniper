@@ -1,3 +1,4 @@
+import { createKeychainSecretKeyStore } from './keychain-secret-key-store.js';
 import type {
   CaptureSource,
   DesktopPlatform,
@@ -42,6 +43,11 @@ const noopUserInputWatcher: UserInputWatcher = {
  * The platform used whenever no real desktop bridge is supplied. Keeps the
  * server fully functional (and `pnpm verify`-able) without any native addon —
  * capture/vision/input are inert, so a gated action simply finds nothing/no grant.
+ *
+ * The secret key store is the ONE capability that is real here rather than inert:
+ * the standalone server persists a session too, so it must still encrypt it. The
+ * store is lazy (it touches the keychain only on the first save/load), so tests
+ * that never persist a session never reach the OS.
  */
 export function createNoopPlatform(): DesktopPlatform {
   return {
@@ -50,6 +56,7 @@ export function createNoopPlatform(): DesktopPlatform {
     tradeVision: noopTradeVision,
     inputController: noopInputController,
     userInputWatcher: noopUserInputWatcher,
+    secretKeyStore: createKeychainSecretKeyStore(),
   };
 }
 

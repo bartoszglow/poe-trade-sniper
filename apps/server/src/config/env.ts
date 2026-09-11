@@ -255,6 +255,13 @@ export const envSchema = z.object({
   // --- persistence hygiene ---
   /** Hit history is pruned to the newest N rows (bounded growth). */
   HITS_MAX_ROWS: z.coerce.number().int().min(100).default(10_000),
+  /**
+   * Activity timeline is pruned to the newest N sequences (bounded growth).
+   * Lower than HITS_MAX_ROWS on purpose: a row carries a full item + steps JSON
+   * snapshot (multi-KB), and one row is written per travel→buy→return, not per
+   * detection.
+   */
+  ACTIVITY_MAX_ROWS: z.coerce.number().int().min(50).default(2_000),
 
   // --- outbound safety guard (the runaway watchdog) ---
   /** Hard ceiling on ALL GGG HTTP requests per rolling minute. */

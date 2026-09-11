@@ -5,7 +5,7 @@ import { SessionCipher } from './session-cipher.js';
 import { SessionService } from './session.service.js';
 
 // Fixed key — unit tests must never touch the real OS keychain.
-const TEST_CIPHER = new SessionCipher(() => Buffer.alloc(32, 7));
+const TEST_CIPHER = new SessionCipher({ loadKey: () => Buffer.alloc(32, 7) });
 
 function createService() {
   const database = openDatabase(':memory:');

@@ -3,6 +3,7 @@ import {
   CAPTURE_SOURCE,
   INPUT_CONTROLLER,
   PERMISSION_PROBE,
+  SECRET_KEY_STORE,
   TRADE_VISION,
   USER_INPUT_WATCHER,
 } from './platform.tokens.js';
@@ -27,6 +28,7 @@ export class PlatformModule {
         { provide: TRADE_VISION, useValue: platform.tradeVision },
         { provide: INPUT_CONTROLLER, useValue: platform.inputController },
         { provide: USER_INPUT_WATCHER, useValue: platform.userInputWatcher },
+        { provide: SECRET_KEY_STORE, useValue: platform.secretKeyStore },
       ],
       exports: [
         PERMISSION_PROBE,
@@ -34,6 +36,7 @@ export class PlatformModule {
         TRADE_VISION,
         INPUT_CONTROLLER,
         USER_INPUT_WATCHER,
+        SECRET_KEY_STORE,
       ],
     };
   }

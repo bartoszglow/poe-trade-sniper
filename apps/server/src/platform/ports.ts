@@ -128,6 +128,24 @@ export interface UserInputWatcher {
 }
 
 /**
+ * Supplies the 32-byte AES key that encrypts the PoE session at rest (D-7).
+ * An OS capability like the rest of this aggregate, so the shell decides how the
+ * key is protected: the desktop shell wraps it with Electron `safeStorage` (OS
+ * keychain on macOS, DPAPI on Windows, libsecret/kwallet on Linux); the
+ * standalone default uses the macOS `security` CLI and has no equivalent
+ * elsewhere.
+ *
+ * `null` means this machine offers no OS-backed secret store — the session then
+ * falls back to plaintext at rest (loudly warned), so the app stays usable on a
+ * keyring-less box rather than locking the operator out of their own account.
+ */
+export interface SecretKeyStore {
+  /** The 32-byte session-encryption key, created on first use; null when no OS
+   *  secret store exists. Implementations cache — callers may call repeatedly. */
+  loadKey(): Buffer | null;
+}
+
+/**
  * The desktop-platform aggregate the shell injects into the server before
  * `app.listen()`. The no-op default keeps the server cross-platform and testable;
  * the real adapters (Electron `desktopCapturer`, OpenCV-wasm, `nut.js`,
@@ -139,4 +157,5 @@ export interface DesktopPlatform {
   tradeVision: TradeVision;
   inputController: InputController;
   userInputWatcher: UserInputWatcher;
+  secretKeyStore: SecretKeyStore;
 }
